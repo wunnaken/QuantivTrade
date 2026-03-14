@@ -1,0 +1,547 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-accent: var(--accent-color);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+/* Accent color: applied by ThemeProvider from localStorage; smooth transition */
+@property --accent-color {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #00c896;
+}
+
+:root,
+html {
+  --accent-color: #00c896;
+  --accent-color-40: color-mix(in srgb, var(--accent-color) 25%, transparent);
+  --accent-color-10: color-mix(in srgb, var(--accent-color) 6%, transparent);
+  transition: --accent-color 0.2s ease;
+}
+
+/* Theme: default dark; light when data-theme="light" */
+:root,
+html {
+  --app-bg: #0a0e1a;
+  --app-card: #0f1520;
+  --app-card-alt: #050713;
+  --app-text: #e4e4e7;
+  --app-text-muted: #71717a;
+  --app-border: rgba(255, 255, 255, 0.1);
+  --app-navbar-bg: rgba(5, 7, 19, 0.9);
+  --app-navbar-border: rgba(255, 255, 255, 0.05);
+  --app-navbar-text: #e4e4e7;
+  --app-navbar-text-muted: #a1a1aa;
+}
+
+html[data-theme="light"] {
+  --app-bg: #f4f6fa;
+  --app-card: #ffffff;
+  --app-card-alt: #ffffff;
+  --app-text: #0a0e1a;
+  --app-text-muted: #52525b;
+  --app-border: rgba(0, 0, 0, 0.08);
+  --app-navbar-bg: #ffffff;
+  --app-navbar-border: rgba(0, 0, 0, 0.08);
+  --app-navbar-text: #0a0e1a;
+  --app-navbar-text-muted: #71717a;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--app-bg);
+  color: var(--app-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Theme-aware page wrapper: use for root div of any page so theme applies */
+.app-page {
+  background-color: var(--app-bg);
+  color: var(--app-text);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.live-dot {
+  position: relative;
+}
+
+.live-dot::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--accent-color) 30%, transparent);
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 0.2;
+  }
+}
+
+.ticker-marquee-track {
+  display: flex;
+  width: max-content;
+  min-width: max-content;
+  flex-shrink: 0;
+  animation: ticker-scroll 22s linear infinite;
+  will-change: transform;
+}
+
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+/* Plans tab: subtle grabby ping */
+.plans-tab-ping {
+  animation: plans-tab-enter 0.5s ease-out;
+}
+
+.plans-tab-ping::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 40%, transparent);
+  animation: plans-tab-ping 2.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes plans-tab-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes plans-tab-ping {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+.notification-dot {
+  animation: notification-pulse 2s ease-in-out infinite;
+}
+
+@keyframes notification-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { opacity: 0.9; box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+}
+
+@keyframes loading-bar {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
+}
+
+/* Onboarding step transitions */
+.onboarding-step-enter {
+  animation: onboarding-fade-slide-in 0.3s ease-out forwards;
+}
+
+.onboarding-step-enter-prev {
+  animation: onboarding-fade-slide-in-prev 0.3s ease-out forwards;
+}
+
+@keyframes onboarding-fade-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes onboarding-fade-slide-in-prev {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Light mode: force light-colored text to dark for visibility */
+html[data-theme="light"] .text-white,
+html[data-theme="light"] .text-zinc-50,
+html[data-theme="light"] .text-zinc-100,
+html[data-theme="light"] .text-zinc-200,
+html[data-theme="light"] .text-zinc-300,
+html[data-theme="light"] .text-zinc-400 {
+  color: var(--app-text) !important;
+}
+
+html[data-theme="light"] .text-zinc-500 {
+  color: var(--app-text-muted) !important;
+}
+
+/* Keep text light in dark greyish-blue sections so it stays visible and doesn't turn dark */
+html[data-theme="light"] .dark-bg-section .text-zinc-50,
+html[data-theme="light"] .dark-bg-section .text-zinc-100,
+html[data-theme="light"] .dark-bg-section .text-zinc-200,
+html[data-theme="light"] .dark-bg-section .text-zinc-300,
+html[data-theme="light"] .dark-bg-section .text-zinc-400 {
+  color: #d4d4d8 !important;
+}
+
+html[data-theme="light"] .dark-bg-section .text-zinc-500 {
+  color: #a1a1aa !important;
+}
+
+/* Search / AI analysis loading skeleton */
+.search-skeleton {
+  background: linear-gradient(90deg, #1a2030 25%, #2a3040 50%, #1a2030 75%);
+  background-size: 200% 100%;
+  animation: search-shimmer 1.2s ease-in-out infinite;
+}
+
+@keyframes search-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Welcome animation (first-time after onboarding) */
+@keyframes welcome-logo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes welcome-globe-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Slow rotation for Pulse logo on home page (counter-clockwise) */
+@keyframes pulse-logo-rotate {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+.pulse-logo-rotate {
+  animation: pulse-logo-rotate 48s linear infinite;
+}
+
+@keyframes welcome-letter-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes welcome-tagline-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes welcome-bullet-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes welcome-progress-fill {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes welcome-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes welcome-particle-float {
+  from {
+    transform: translateY(100vh) translateX(0);
+    opacity: 0.3;
+  }
+  to {
+    transform: translateY(-20px) translateX(0);
+    opacity: 0;
+  }
+}
+
+/* Journal page: dark theme for selects and options */
+.journal-page select {
+  background-color: #0F1520;
+  color: #e4e4e7;
+}
+.journal-page select option {
+  background-color: #0F1520;
+  color: #e4e4e7;
+}
+
+/* Journal log-trade modal: hide default number spinners so input matches dark theme */
+.journal-modal input[type="number"]::-webkit-inner-spin-button,
+.journal-modal input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.journal-modal input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+  color-scheme: dark;
+}
+.journal-modal input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 1;
+  filter: invert(1);
+  cursor: pointer;
+}
+.journal-modal input[type="date"] {
+  color-scheme: dark;
+}
+
+/* Morning Briefing animation (faster) */
+@keyframes briefing-sweep {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0.3;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh);
+    opacity: 0.3;
+  }
+}
+
+@keyframes briefing-logo-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes briefing-slide-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes briefing-content-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes briefing-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes briefing-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Idle / screensaver */
+@keyframes idle-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes idle-glow-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent-color) 25%, transparent));
+  }
+  50% {
+    filter: drop-shadow(0 0 24px color-mix(in srgb, var(--accent-color) 45%, transparent));
+  }
+}
+
+@keyframes idle-particle-float {
+  from {
+    transform: translateY(100vh) translateX(0);
+    opacity: 0.1;
+  }
+  to {
+    transform: translateY(-20px) translateX(0);
+    opacity: 0;
+  }
+}
+
+/* Idle starfield: slow twinkle (dim → bright → dim) */
+@keyframes idle-star-twinkle {
+  0%, 100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+/* AI Chat: grid background, typing dots, empty logo pulse */
+.ai-chat-grid-bg {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.ai-typing-dot {
+  animation: ai-typing-bounce 0.6s ease-in-out infinite both;
+}
+.ai-typing-dot:nth-child(2) { animation-delay: 0.1s; }
+.ai-typing-dot:nth-child(3) { animation-delay: 0.2s; }
+
+@keyframes ai-typing-bounce {
+  0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+  40% { transform: scale(1); opacity: 1; }
+}
+
+.ai-welcome-logo-pulse {
+  animation: ai-welcome-pulse 2s ease-in-out infinite;
+}
+
+@keyframes ai-welcome-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.03); }
+}
+
+/* Whiteboard: Excalidraw accent matches Xchange */
+.whiteboard-excalidraw-wrap .excalidraw {
+  --color-primary: var(--accent-color) !important;
+}
+

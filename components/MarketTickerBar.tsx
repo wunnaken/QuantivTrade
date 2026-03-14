@@ -1,0 +1,144 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
+const TICKER_CACHE_KEY = "xchange-ticker-cache";
+
+type Ticker = {
+  id: string;
+  name: string;
+  symbol: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  source: "live" | "mock";
+};
+
+function getCachedTickers(): Ticker[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = sessionStorage.getItem(TICKER_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function setCachedTickers(tickers: Ticker[]) {
+  if (typeof window === "undefined") return;
+  try {
+    sessionStorage.setItem(TICKER_CACHE_KEY, JSON.stringify(tickers));
+  } catch {
+    // ignore
+  }
+}
+
+function formatPrice(price: number, symbol: string): string {
+  if (symbol === "BTC" || symbol === "ETH") return price >= 1000 ? `${(price / 1000).toFixed(1)}k` : price.toFixed(0);
+  if (symbol === "EURUSD") return price.toFixed(4);
+  return price >= 1 ? price.toFixed(2) : price.toFixed(4);
+}
+
+function TickerItem({ t }: { t: Ticker }) {
+  const isPositive = t.changePercent >= 0;
+  const isZero = t.changePercent === 0;
+  const dotColor = isZero ? "bg-zinc-500" : isPositive ? "bg-emerald-400" : "bg-red-400";
+  return (
+    <Link
+      href="/news"
+      className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded px-3 py-1 text-xs transition hover:bg-white/5"
+    >
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotColor}`} aria-hidden />
+      <span className="font-medium text-zinc-200">{t.name}</span>
+      <span className="text-zinc-500">{formatPrice(t.price, t.symbol)}</span>
+      <span
+        className={
+          isZero ? "text-zinc-500" : isPositive ? "font-medium text-emerald-400" : "font-medium text-red-400"
+        }
+      >
+        {isPositive ? "+" : ""}
+        {t.changePercent.toFixed(2)}%
+      </span>
+    </Link>
+  );
+}
+
+function TickerSkeleton() {
+  return (
+    <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden px-4" aria-label="Market tickers loading">
+      {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+        <div key={i} className="flex shrink-0 items-center gap-2 rounded px-3 py-1">
+          <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-white/20 animate-pulse" />
+          <div className="h-3 w-16 rounded bg-white/10 animate-pulse" />
+          <div className="h-3 w-10 rounded bg-white/10 animate-pulse" />
+          <div className="h-3 w-8 rounded bg-white/10 animate-pulse" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function MarketTickerBar() {
+  const [tickers, setTickers] = useState<Ticker[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchTickers() {
+      try {
+        const res = await fetch("/api/market-tickers", { cache: "no-store" });
+        if (cancelled) return;
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : [];
+        if (list.length > 0) {
+          setTickers(list);
+          setCachedTickers(list);
+        } else {
+          setTickers(getCachedTickers());
+        }
+      } catch {
+        if (!cancelled) setTickers(getCachedTickers());
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetchTickers();
+    const interval = setInterval(fetchTickers, 60 * 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, []);
+
+  if (loading && tickers.length === 0) {
+    return <TickerSkeleton />;
+  }
+
+  if (tickers.length === 0) {
+    return (
+      <div className="flex min-w-0 flex-1 items-center justify-center overflow-hidden rounded border border-white/10 bg-white/5 px-4 py-2 text-xs text-zinc-500">
+        Data temporarily unavailable — refresh to try again
+      </div>
+    );
+  }
+
+  const list = tickers.slice(0, 8);
+
+  return (
+    <div
+      className="relative min-w-0 flex-1 overflow-hidden px-4"
+      aria-label="Market tickers"
+      aria-live="polite"
+      role="region"
+    >
+      <div className="ticker-marquee-track flex gap-8" style={{ width: "max-content" }}>
+        {[...list, ...list].map((t, i) => (
+          <TickerItem key={`${t.id}-${i}`} t={t} />
+        ))}
+      </div>
+    </div>
+  );
+}

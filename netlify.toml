@@ -1,0 +1,11 @@
+# Netlify build config for Xchange (Next.js)
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Next.js on Netlify: use the Essential Next.js plugin in the Netlify UI
+# (Site settings → Build & deploy → Build plugins), or Netlify may auto-detect.
+# If the default publish doesn't work, the plugin will set the correct output.
