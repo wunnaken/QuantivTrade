@@ -83,6 +83,26 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* Themed scrollbars site-wide */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-text-muted) var(--app-card);
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--app-card);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--app-text-muted);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--app-text);
+}
+
 /* Hide scrollbar but keep scroll behavior */
 .scrollbar-hide {
   overflow-y: auto;
@@ -131,16 +151,18 @@ body {
   width: max-content;
   min-width: max-content;
   flex-shrink: 0;
-  animation: ticker-scroll 22s linear infinite;
+  animation: ticker-scroll 45s linear infinite;
   will-change: transform;
+  contain: layout;
+  backface-visibility: hidden;
 }
 
 @keyframes ticker-scroll {
   0% {
-    transform: translateX(0);
+    transform: translate3d(0, 0, 0);
   }
   100% {
-    transform: translateX(-50%);
+    transform: translate3d(-50%, 0, 0);
   }
 }
 
@@ -553,5 +575,21 @@ html[data-theme="light"] .dark-bg-section .text-zinc-500 {
 /* Whiteboard: Excalidraw accent matches Xchange */
 .whiteboard-excalidraw-wrap .excalidraw {
   --color-primary: var(--accent-color) !important;
+}
+
+/* Legal pages: print-friendly */
+@media print {
+  .legal-page-print {
+    background: #fff !important;
+    color: #111 !important;
+  }
+  .legal-page-print h1,
+  .legal-page-print h2,
+  .legal-page-print h3 {
+    color: #111 !important;
+  }
+  .legal-page-print a {
+    color: #0d9488 !important;
+  }
 }
 

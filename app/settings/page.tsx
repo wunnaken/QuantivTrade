@@ -133,7 +133,7 @@ export default function SettingsPage() {
           style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
         >
           <h2 className="text-sm font-semibold text-zinc-50">Connected Accounts</h2>
-          <p className="mt-1 text-xs text-zinc-500">Your data is encrypted and read-only.</p>
+          <p className="mt-1 text-xs text-zinc-500">Link social or broker accounts. Your data is encrypted and read-only.</p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             {brokerState.connected ? (
               <>
@@ -159,6 +159,23 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
+          <p className="mt-3 text-[11px] text-zinc-500">Link sign-in providers (use one account everywhere):</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => typeof window !== "undefined" && window.alert("Link Google account — coming soon. OAuth must be configured (e.g. Supabase Auth or NextAuth).")}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/10"
+            >
+              Link Google account
+            </button>
+            <button
+              type="button"
+              onClick={() => typeof window !== "undefined" && window.alert("Link Apple account — coming soon. OAuth must be configured (e.g. Supabase Auth or NextAuth).")}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/10"
+            >
+              Link Apple account
+            </button>
+          </div>
         </section>
 
         {/* Risk profile */}
@@ -169,7 +186,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold text-zinc-50">Your risk profile</h2>
             <Link
-              href="/profiles"
+              href="/growth#choose-profile"
               className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-300 transition-colors duration-200 hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)]"
             >
               <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>

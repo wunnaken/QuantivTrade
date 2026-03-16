@@ -29,6 +29,16 @@ const ASSET_CAGRS: Record<string, { rate: number; label: string; warning?: strin
   BTC: { rate: 0.4, label: "Bitcoin (40%)", warning: "High volatility" },
   GLD: { rate: 0.078, label: "Gold GLD (7.8%)" },
 };
+
+type ProfileKey = "passive" | "moderate" | "aggressive";
+const PROFILE_CONFIG: Record<ProfileKey, { label: string; years: number; annualReturn: number; instruments: string[] }> = {
+  passive: { label: "Passive · Long Term", years: 10, annualReturn: 0.06, instruments: ["SPY", "Total Market ETF", "Investment-Grade Bonds", "Gold"] },
+  moderate: { label: "Moderate · Medium Term", years: 7, annualReturn: 0.09, instruments: ["SPY", "QQQ", "Sector ETFs", "Gold"] },
+  aggressive: { label: "Aggressive · Short Term", years: 3, annualReturn: 0.14, instruments: ["QQQ", "High-Beta Stocks", "Futures", "Thematic ETFs"] },
+};
+
+const PROFILE_MONTHLY = 400;
+
 type YtdData = {
   spy: { current: number; jan1: number; ytdPercent: number; label: string };
   qqq: { current: number; jan1: number; ytdPercent: number; label: string };
@@ -101,7 +111,7 @@ function InfoTooltip({ id, children, content }: { id: string; children: React.Re
 
 export default function GrowthPage() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [ytd, setYtd] = useState<YtdData | null>(null);
   const [ytdLoading, setYtdLoading] = useState(true);
   const [inflationAdjusted, setInflationAdjusted] = useState(false);
@@ -110,9 +120,15 @@ export default function GrowthPage() {
   const [initialInvestment] = useState(DEFAULT_INITIAL);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [milestoneHover, setMilestoneHover] = useState<{ label: string; year: number } | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<ProfileKey>("moderate");
+  const [profileHoverIndex, setProfileHoverIndex] = useState<number | null>(null);
   const graphRef = useRef<HTMLDivElement>(null);
 
   const riskProfile = getRiskProfile(user) ?? "moderate";
+  useEffect(() => {
+    const key = user?.riskProfile;
+    if (key === "passive" || key === "moderate" || key === "aggressive") setSelectedProfile(key);
+  }, [user?.riskProfile]);
   const profileLabel = riskProfile === "passive" ? "Conservative" : riskProfile === "moderate" ? "Moderate" : "Aggressive";
   const recommendedCurve = riskProfile === "passive" ? "conservative" : riskProfile === "moderate" ? "moderate" : "aggressive";
 
@@ -191,6 +207,23 @@ export default function GrowthPage() {
     });
     return out;
   }, [curves]);
+
+  const profileConfig = PROFILE_CONFIG[selectedProfile];
+  const { profileGrowth, profileSavings, profileMaxValue } = useMemo(() => {
+    const months = profileConfig.years * 12;
+    const monthlyRate = profileConfig.annualReturn / 12;
+    const savingsRate = 0.02 / 12;
+    const growthValues: number[] = [];
+    const savingsValues: number[] = [];
+    let g = 0, s = 0;
+    for (let m = 1; m <= months; m++) {
+      g = g * (1 + monthlyRate) + PROFILE_MONTHLY;
+      s = s * (1 + savingsRate) + PROFILE_MONTHLY;
+      if (m % 12 === 0) { growthValues.push(g); savingsValues.push(s); }
+    }
+    const maxV = Math.max(...growthValues, ...savingsValues, 1);
+    return { profileGrowth: growthValues, profileSavings: savingsValues, profileMaxValue: maxV };
+  }, [profileConfig.years, profileConfig.annualReturn]);
 
   const finalWithContrib = curves.moderate[YEARS - 1] ?? 0;
   const finalWithoutContrib = noContribCurves.moderate[YEARS - 1] ?? 0;
@@ -287,7 +320,7 @@ export default function GrowthPage() {
             </Link>
             <InfoTooltip
               id="risk-profile"
-              content="Your chosen risk profile. The matching curve is highlighted. You can change it in Settings."
+              content="Your chosen risk profile. The matching curve is highlighted. Change it below or in Settings."
             >
               <span />
             </InfoTooltip>
@@ -641,6 +674,150 @@ export default function GrowthPage() {
         <p className="mt-6 text-[11px] text-zinc-500">
           These projections are illustrative only. Past performance (including S&P 500 historical average) does not guarantee future results. Not financial advice.
         </p>
+
+        {/* Choose your growth profile — merged from /profiles */}
+        <section className="mt-14 border-t border-white/10 pt-10" id="choose-profile">
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-[var(--accent-color)]/80">
+            Choose your growth profile
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-50">
+            How you grow in the markets
+          </h2>
+          <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+            Each profile balances potential return and risk differently. Use these as starting points only — they are <span className="font-semibold text-zinc-300">not financial advice</span> and carry real-world risk, including loss of capital.
+          </p>
+          <p className="mt-4 text-[11px] text-zinc-500">
+            Younger investors with long time horizons often lean toward Conservative or Moderate; those comfortable with large swings may choose Aggressive.
+          </p>
+
+          <div className="mt-6 grid gap-6 md:grid-cols-3">
+            <section
+              className={`relative flex cursor-pointer flex-col rounded-2xl border p-5 transition ${
+                selectedProfile === "passive"
+                  ? "border-[var(--accent-color)]/80 bg-white/10 shadow-[0_0_35px_rgba(0,200,150,0.25)]"
+                  : "border-white/5 bg-white/5 hover:border-[var(--accent-color)]/50"
+              }`}
+              onClick={() => setSelectedProfile("passive")}
+            >
+              <h3 className="text-sm font-semibold text-zinc-50">Passive · Long Term</h3>
+              <p className="text-[11px] uppercase tracking-wider text-emerald-300/80">7–10+ year horizon</p>
+              <p className="mt-3 text-xs text-zinc-400">
+                Diversified, broad-market exposure (index funds, bonds) with lower volatility and steadier growth expectations.
+              </p>
+              <p className="mt-3 text-[11px] text-amber-300/90">Risk: downturns can still cause temporary losses. Requires patience.</p>
+            </section>
+            <section
+              className={`relative flex cursor-pointer flex-col rounded-2xl border p-5 transition ${
+                selectedProfile === "moderate"
+                  ? "border-cyan-300/80 bg-white/10 shadow-[0_0_35px_rgba(56,189,248,0.25)]"
+                  : "border-white/5 bg-white/5 hover:border-cyan-300/50"
+              }`}
+              onClick={() => setSelectedProfile("moderate")}
+            >
+              <h3 className="text-sm font-semibold text-zinc-50">Moderate · Medium Term</h3>
+              <p className="text-[11px] uppercase tracking-wider text-cyan-300/80">3–7 year horizon</p>
+              <p className="mt-3 text-xs text-zinc-400">
+                Mix of diversified core plus selected growth or sector ideas. Balances drawdowns with above-market return potential.
+              </p>
+              <p className="mt-3 text-[11px] text-amber-300/90">Risk: deeper swings than passive; concentration can amplify losses.</p>
+            </section>
+            <section
+              className={`relative flex cursor-pointer flex-col rounded-2xl border p-5 transition ${
+                selectedProfile === "aggressive"
+                  ? "border-amber-400/80 bg-white/10 shadow-[0_0_35px_rgba(250,204,21,0.25)]"
+                  : "border-white/5 bg-white/5 hover:border-amber-400/50"
+              }`}
+              onClick={() => setSelectedProfile("aggressive")}
+            >
+              <h3 className="text-sm font-semibold text-zinc-50">Aggressive · Short Term</h3>
+              <p className="text-[11px] uppercase tracking-wider text-amber-300/80">Days–2 year horizon</p>
+              <p className="mt-3 text-xs text-zinc-400">
+                Concentrated positions, high-beta names, or leverage. Only for experienced traders comfortable with rapid swings.
+              </p>
+              <p className="mt-3 text-[11px] text-amber-300/90">Risk: high probability of sharp drawdowns. Never use money you cannot afford to lose.</p>
+            </section>
+          </div>
+
+          {user && (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={() => updateProfile({ riskProfile: selectedProfile })}
+                className="rounded-full bg-[var(--accent-color)] px-5 py-2 text-xs font-semibold text-[#020308] transition hover:opacity-90"
+              >
+                Save &quot;{profileConfig.label}&quot; to my profile
+              </button>
+            </div>
+          )}
+
+          <div className="mt-8 rounded-2xl border border-white/5 bg-black/30 p-5">
+            <header className="mb-4 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-[var(--accent-color)]/80">Profile example</p>
+                <h3 className="text-sm font-semibold text-zinc-50">{profileConfig.label} – {profileConfig.years} year example</h3>
+                <p className="mt-1 text-[11px] text-zinc-400">
+                  Based on $400/month contribution and simplified average return. Real markets are more volatile.
+                </p>
+              </div>
+              <div className="text-right text-[11px] text-zinc-300">
+                <p>Final profile balance: <span className="font-semibold text-zinc-100">${profileGrowth.length ? profileGrowth[profileGrowth.length - 1].toLocaleString(undefined, { maximumFractionDigits: 0 }) : "0"}</span></p>
+                <p className="mt-1 text-zinc-400">Final savings (2%): <span className="font-semibold text-zinc-200">${profileSavings.length ? profileSavings[profileSavings.length - 1].toLocaleString(undefined, { maximumFractionDigits: 0 }) : "0"}</span></p>
+              </div>
+            </header>
+            <div className="mb-3 flex flex-wrap gap-3 text-[11px] text-zinc-400">
+              <span>Example mix: {profileConfig.instruments.join(" · ")}</span>
+              <span>~{Math.round(profileConfig.annualReturn * 100)}% annualised</span>
+            </div>
+            <div
+              className="relative h-56 w-full rounded-xl border border-white/5 bg-gradient-to-t from-slate-950 via-slate-900 to-slate-800 px-4 py-4"
+              onMouseLeave={() => setProfileHoverIndex(null)}
+            >
+              <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full text-xs text-zinc-500">
+                {profileGrowth.length > 1 && (
+                  <>
+                    <polyline fill="none" stroke="rgba(250,250,250,0.6)" strokeWidth="0.8" points={profileSavings.map((v, i) => `${(i / (profileGrowth.length - 1)) * 100},${100 - (v / profileMaxValue) * 100}`).join(" ")} />
+                    <polyline
+                      fill="none"
+                      stroke={selectedProfile === "passive" ? "var(--accent-color)" : selectedProfile === "moderate" ? "rgb(56,189,248)" : "rgb(250,204,21)"}
+                      strokeWidth="1.2"
+                      points={profileGrowth.map((v, i) => `${(i / (profileGrowth.length - 1)) * 100},${100 - (v / profileMaxValue) * 100}`).join(" ")}
+                    />
+                    {profileHoverIndex != null && profileHoverIndex >= 0 && profileHoverIndex < profileGrowth.length && (
+                      <g>
+                        <line x1={(profileHoverIndex / (profileGrowth.length - 1)) * 100} y1="0" x2={(profileHoverIndex / (profileGrowth.length - 1)) * 100} y2="100" stroke="rgba(148,163,184,0.45)" strokeDasharray="1.5 2" strokeWidth="0.6" />
+                        <circle cx={(profileHoverIndex / (profileGrowth.length - 1)) * 100} cy={100 - (profileGrowth[profileHoverIndex] / profileMaxValue) * 100} r="1.6" fill={selectedProfile === "passive" ? "var(--accent-color)" : selectedProfile === "moderate" ? "rgb(56,189,248)" : "rgb(250,204,21)"} />
+                      </g>
+                    )}
+                  </>
+                )}
+              </svg>
+              <div
+                className="absolute inset-0 cursor-crosshair"
+                onMouseMove={(e) => {
+                  if (!profileGrowth.length) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+                  setProfileHoverIndex(Math.round(ratio * (profileGrowth.length - 1)));
+                }}
+              />
+              {profileHoverIndex != null && profileHoverIndex < profileGrowth.length && (
+                <div className="pointer-events-none absolute left-1/2 top-2 z-10 w-40 -translate-x-1/2 rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-[11px] text-zinc-200 shadow-xl">
+                  <p className="font-medium">Year {profileHoverIndex + 1}</p>
+                  <p>Profile: ${profileGrowth[profileHoverIndex].toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                  <p className="text-zinc-400">Savings: ${profileSavings[profileHoverIndex].toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                </div>
+              )}
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-between px-1 text-[9px] text-zinc-500">
+                {profileGrowth.map((_, i) => (i % (profileConfig.years >= 7 ? 2 : 1) === 0 || i === profileGrowth.length - 1 ? <span key={i}>Y{i + 1}</span> : null))}
+              </div>
+            </div>
+            <p className="mt-3 text-[11px] text-zinc-500">Simplified model only. Not a guarantee of results.</p>
+          </div>
+
+          <p className="mt-6 text-[11px] text-zinc-500">
+            These profiles are illustrative only and do not represent recommendations or personalized investment advice.
+          </p>
+        </section>
       </div>
     </div>
   );

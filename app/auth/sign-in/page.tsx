@@ -119,6 +119,28 @@ function SignInForm() {
             {loading ? "Signing in..." : "Sign in"}
           </button>
 
+          <div className="my-4 flex items-center gap-3">
+            <span className="h-px flex-1 bg-white/10" />
+            <span className="text-[10px] text-zinc-500">or</span>
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => typeof window !== "undefined" && window.alert("Continue with Google — coming soon. Use email/password for now.")}
+              className="w-full rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-medium text-zinc-200 transition hover:bg-white/10"
+            >
+              Continue with Google
+            </button>
+            <button
+              type="button"
+              onClick={() => typeof window !== "undefined" && window.alert("Continue with Apple — coming soon. Use email/password for now.")}
+              className="w-full rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-medium text-zinc-200 transition hover:bg-white/10"
+            >
+              Continue with Apple
+            </button>
+          </div>
+
           <p className="mt-3 text-[11px] text-zinc-400">
             New to Xchange?{" "}
             <Link

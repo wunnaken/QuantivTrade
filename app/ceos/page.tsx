@@ -433,10 +433,17 @@ function CEOGraph({
     []
   );
 
-  if (!ForceGraph2D || !graphData.nodes.length) {
+  if (!ForceGraph2D) {
     return (
       <div ref={containerRef} className="flex h-full w-full items-center justify-center" style={{ background: "radial-gradient(ellipse at center, #0D1B3E 0%, #050B1A 100%)" }}>
         <p className="text-zinc-400">Loading graph…</p>
+      </div>
+    );
+  }
+  if (!graphData.nodes.length) {
+    return (
+      <div ref={containerRef} className="flex h-full w-full items-center justify-center" style={{ background: "radial-gradient(ellipse at center, #0D1B3E 0%, #050B1A 100%)" }}>
+        <p className="text-zinc-400">No CEOs match the current filter</p>
       </div>
     );
   }
@@ -880,8 +887,6 @@ export default function CEOsPage() {
   const [alertsCount, setAlertsCount] = useState(0);
   const graphRef = useRef<{ zoomToFit: (a?: number, b?: number, c?: (n: unknown) => boolean) => void; zoom: (n: number, ms?: number) => void; centerAt: (x?: number, y?: number, ms?: number) => void } | null>(null);
   const shiftRef = useRef(false);
-  const hasAutoSelectedRef = useRef(false);
-
   const [highlightSector, setHighlightSector] = useState<string | null>(null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [chartLocked, setChartLocked] = useState(false);
@@ -991,12 +996,7 @@ export default function CEOsPage() {
     saveCeoMapCamera({ k, x, y });
   }, []);
 
-  // Auto-open the right panel with the first CEO so the user doesn't have to click to see it
-  useEffect(() => {
-    if (pathname !== "/ceos" || filtered.length === 0 || hasAutoSelectedRef.current) return;
-    hasAutoSelectedRef.current = true;
-    setSelected(filtered[0]);
-  }, [pathname, filtered]);
+  // Right panel stays blank until user clicks a CEO (no auto-select)
 
   const handleNodeClick = useCallback((ceo: CEOEntry) => {
     if (shiftRef.current) {

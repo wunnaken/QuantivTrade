@@ -265,7 +265,7 @@ function AIAnalysisCard({ data }: { data: AnalyzeTickerResponse }) {
       <section className="mb-6">
         <h3 className="mb-2 text-sm font-semibold text-zinc-300">Suitable for</h3>
         <Link
-          href="/profiles"
+          href="/growth#choose-profile"
           className="inline-flex items-center gap-1 rounded-full border border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10 px-3 py-1.5 text-sm font-medium text-[var(--accent-color)] hover:bg-[var(--accent-color)]/20"
         >
           {data.suitableFor}

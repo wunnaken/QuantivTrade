@@ -116,17 +116,37 @@ export function MarketTickerBar() {
     try {
       const res = await fetch(url, { cache: "no-store" });
       const data = await res.json();
-      const list = Array.isArray(data) ? data : [];
+      const raw = Array.isArray(data) ? data : [];
+      const list = raw.map((t: Record<string, unknown>) => ({
+        id: (t.id as string) ?? (t.symbol as string)?.toLowerCase() ?? "",
+        name: (t.name as string) ?? (t.symbol as string) ?? "",
+        symbol: (t.symbol as string) ?? "",
+        price: Number(t.price) ?? 0,
+        change: Number(t.change) ?? 0,
+        changePercent: Number(t.changePercent) ?? 0,
+        source: (t.source as "live" | "mock") ?? "live",
+      })) as Ticker[];
       if (list.length > 0) {
-        setTickers(list);
         setCachedTickers(list);
+        setTickers((prev) => {
+          if (prev.length === list.length && prev.every((p, i) => p.symbol === list[i]?.symbol && p.price === list[i]?.price)) return prev;
+          return list;
+        });
       } else {
         const cached = getCachedTickers();
-        setTickers(cached.length > 0 ? cached : FALLBACK_TICKERS);
+        setTickers((prev) => {
+          const next = cached.length > 0 ? cached : FALLBACK_TICKERS;
+          if (prev.length === next.length && prev.every((p, i) => p.symbol === next[i]?.symbol)) return prev;
+          return next;
+        });
       }
     } catch {
       const cached = getCachedTickers();
-      setTickers(cached.length > 0 ? cached : FALLBACK_TICKERS);
+      setTickers((prev) => {
+        const next = cached.length > 0 ? cached : FALLBACK_TICKERS;
+        if (prev.length === next.length && prev.every((p, i) => p.symbol === next[i]?.symbol)) return prev;
+        return next;
+      });
     }
   }, []);
 
@@ -168,9 +188,9 @@ export function MarketTickerBar() {
       aria-live="polite"
       role="region"
     >
-      <div className="ticker-marquee-track flex gap-8" style={{ width: "max-content" }}>
+      <div className="ticker-marquee-track flex gap-8" style={{ width: "max-content" }} key="ticker-track">
         {[...list, ...list].map((t, i) => (
-          <TickerItem key={`${t.id}-${i}`} t={t} />
+          <TickerItem key={t.symbol + "-" + i} t={t} />
         ))}
       </div>
     </div>

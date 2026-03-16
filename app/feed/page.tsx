@@ -8,7 +8,7 @@ import { useAuth } from "../../components/AuthContext";
 import { isSpecialAccount } from "../../lib/special-account";
 import { getInitials as getSuggestedInitials } from "../../lib/suggested-people";
 import { fetchWatchlist, type WatchlistItem } from "../../lib/watchlist-api";
-import { getCachedBriefing } from "../../lib/briefing";
+import { getCachedBriefing, getBriefingDate, setBriefingSeen } from "../../lib/briefing";
 import { MorningBriefing } from "../../components/MorningBriefing";
 import type { User } from "../../components/AuthContext";
 import { loadStreaks, tickBriefingStreak } from "../../lib/engagement/streaks";
@@ -219,6 +219,7 @@ export default function FeedPage() {
 
   const handleBriefingClose = useCallback(() => {
     setShowBriefing(false);
+    setBriefingSeen();
     const { data, milestone } = tickBriefingStreak();
     setStreakData(data);
     if (milestone) {
@@ -428,9 +429,10 @@ export default function FeedPage() {
         }
       }
       if (res.ok && Array.isArray(data.posts) && data.posts.length > 0) {
-        setPosts((prev) => [...prev, ...data.posts]);
-        setReactionCounts((prev) => ({ ...prev, ...(data.reactionCounts ?? {}) }));
-        setUserReactions((prev) => ({ ...prev, ...(data.userReactions ?? {}) }));
+        const postsList = data.posts as FeedPost[];
+        setPosts((prev) => [...prev, ...postsList]);
+        setReactionCounts((prev) => ({ ...prev, ...((data.reactionCounts ?? {}) as Record<string, Record<ReactionKey, number>>) }));
+        setUserReactions((prev) => ({ ...prev, ...((data.userReactions ?? {}) as Record<string, Partial<Record<ReactionKey, boolean>>>) }));
         if (data.posts.length < 5) setHasMore(false);
       } else {
         const start = (loadCountRef.current * 5) % POOL_POSTS.length;
@@ -460,7 +462,7 @@ export default function FeedPage() {
     <>
       {showBriefing && (
         <MorningBriefing
-          skipAnimation={false}
+          skipAnimation={getBriefingDate() === new Date().toISOString().slice(0, 10)}
           cachedFetchedAt={getCachedBriefing()?.fetchedAt ?? null}
           onClose={handleBriefingClose}
         />

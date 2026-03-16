@@ -23,6 +23,7 @@ import {
   setCollaborationBannerDismissed,
   type SavedBoard,
 } from "../../lib/whiteboard-storage";
+import { setLastWorkspaceTab } from "../../lib/workspace-tab";
 
 const TOP_BAR_BG = "#080B14";
 const AI_SHARE_KEY = "xchange-ai-share";
@@ -158,6 +159,7 @@ function BoardListItem({
 export default function WhiteboardPage() {
   const router = useRouter();
   const toast = useToast();
+  useEffect(() => { setLastWorkspaceTab("whiteboard"); }, []);
   const [boardId, setBoardId] = useState<string>(() => `board-${Date.now()}`);
   const [boardName, setBoardName] = useState("My Trading Board");
   const [boards, setBoards] = useState<SavedBoard[]>([]);
@@ -469,13 +471,9 @@ export default function WhiteboardPage() {
         style={{ backgroundColor: TOP_BAR_BG }}
       >
         <div className="flex min-w-0 items-center gap-0 rounded-lg border border-white/10 bg-white/5 p-0.5">
+          <Link href="/ai" className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]">AI Chat</Link>
+          <Link href="/dashboard" className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]" title="Dashboard">Dashboard</Link>
           <span className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-medium text-zinc-100">Whiteboard</span>
-          <Link
-            href="/ai"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]"
-          >
-            AI Chat
-          </Link>
         </div>
 
         <div className="min-w-0 flex-1" />

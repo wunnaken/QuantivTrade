@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { XchangeLogoImage } from "./XchangeLogoImage";
@@ -107,8 +107,22 @@ export function MorningBriefing({
     }
   }, []);
 
+  useLayoutEffect(() => {
+    if (skipAnimation && typeof window !== "undefined") {
+      const cached = getCachedBriefing();
+      if (cached?.data && typeof cached.data === "object" && "headline" in cached.data) {
+        setPhase("content");
+        setBriefing(cached.data as BriefingData);
+        setFetchedAt(cached.fetchedAt);
+        return;
+      }
+    }
+  }, [skipAnimation]);
+
   useEffect(() => {
     if (skipAnimation) {
+      const cached = getCachedBriefing();
+      if (cached?.data && typeof cached.data === "object" && "headline" in cached.data) return;
       fetchBriefing();
       return;
     }

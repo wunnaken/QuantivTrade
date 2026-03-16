@@ -64,7 +64,7 @@ export default function PlansPage() {
   const { user } = useAuth();
   const { showToast } = useToast();
 
-  const handleCtaClick = () => {
+  const handleCtaClick = (_planName?: string) => {
     if (user) {
       showToast("Checkout (Stripe) coming soon. You're already signed in.");
     }

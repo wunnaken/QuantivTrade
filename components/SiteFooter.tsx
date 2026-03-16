@@ -19,7 +19,7 @@ const PLATFORM_LINKS = [
   { label: "Feed", href: "/feed" },
   { label: "Communities", href: "/communities" },
   { label: "Trade Journal", href: "/journal" },
-  { label: "Growth Profiles", href: "/profiles" },
+  { label: "Growth Profiles", href: "/growth#choose-profile" },
   { label: "Morning Briefing", href: "/feed" },
   { label: "Market Map", href: "/map" },
 ];
@@ -28,29 +28,23 @@ const PLANS_LINKS = [
   { label: "Plans", href: "/plans" },
   { label: "Starter · Free", href: "/plans" },
   { label: "Pro · $19/mo", href: "/plans" },
-  { label: "Enterprise", href: "/plans" },
   { label: "Verified Trader · $9/mo", href: "/verify" },
 ];
 
 const RESOURCES_LINKS = [
   { label: "Getting Started (coming soon)", href: "#" },
-  { label: "Risk Profiles Explained", href: "/profiles" },
   { label: "How to Use the Journal (coming soon)", href: "#" },
   { label: "API & Data Sources (coming soon)", href: "#" },
-  { label: "Feedback", href: "/feedback" },
   { label: "Changelog (coming soon)", href: "#" },
   { label: "Trading Ethics & Conduct", href: "/ethics" },
   { label: "Idle", href: "/idle" },
 ];
 
 const COMPANY_LINKS_BASE = [
-  { label: "About Xchange", href: "/about" },
-  { label: "Our Mission", href: "/mission" },
-  { label: "Careers (coming soon)", href: "#" },
-  { label: "Press (coming soon)", href: "#" },
-  { label: "Terms of Service (coming soon)", href: "#" },
-  { label: "Privacy Policy (coming soon)", href: "#" },
-  { label: "Cookie Policy (coming soon)", href: "#" },
+  { label: "About", href: "/about" },
+  { label: "Terms of Service", href: "/terms" },
+  { label: "Privacy Policy", href: "/privacy" },
+  { label: "Feedback", href: "/feedback" },
 ];
 
 function FooterColumn({ title, links }: { title: string; links: { label: string; href: string }[] }) {

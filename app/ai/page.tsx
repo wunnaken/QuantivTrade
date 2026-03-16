@@ -15,6 +15,7 @@ import {
   setPortfolioContext,
   type StoredConversation,
 } from "../../lib/ai-chat-storage";
+import { setLastWorkspaceTab } from "../../lib/workspace-tab";
 
 const QUICK_TOPICS: { label: string; message: string; badge: string }[] = [
   { label: "Markets Overview", message: "Give me a concise markets overview: key indices, sectors, and what’s driving price action lately.", badge: "📈" },
@@ -76,6 +77,7 @@ const AI_SHARE_KEY = "xchange-ai-share";
 export default function AIPage() {
   const router = useRouter();
   const { user } = useAuth();
+  useEffect(() => { setLastWorkspaceTab("ai"); }, []);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
@@ -412,6 +414,7 @@ export default function AIPage() {
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-0 rounded-lg border border-white/10 bg-white/5 p-0.5">
                 <span className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-medium text-zinc-100">AI Chat</span>
+                <Link href="/dashboard" className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]" title="Dashboard">Dashboard</Link>
                 <Link
                   href="/whiteboard"
                   className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]"

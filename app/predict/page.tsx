@@ -115,6 +115,7 @@ function MarketCard({
   onMarkAwaiting,
   isCreator,
   recentBetsCount,
+  traderCount,
 }: {
   market: PredictMarket;
   onBet: (m: PredictMarket, side: "yes" | "no") => void;
@@ -680,7 +681,7 @@ export default function PredictPage() {
                         <Tooltip
                           contentStyle={{ backgroundColor: "#0F1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }}
                           labelStyle={{ color: "#D1D5DB" }}
-                          formatter={(value: number) => [value, "trades"]}
+                          formatter={(value: unknown) => [typeof value === "number" ? value : 0, "trades"]}
                         />
                         <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                           {performanceChartData.map((entry, i) => (
@@ -700,7 +701,7 @@ export default function PredictPage() {
                           <YAxis tick={{ fontSize: 9, fill: "#6B7280" }} width={28} />
                           <Tooltip
                             contentStyle={{ backgroundColor: "#0F1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }}
-                            formatter={(value: number) => [value >= 0 ? `+${value} XP` : `${value} XP`, "Cumulative P/L"]}
+                            formatter={(value: unknown) => [typeof value === "number" ? (value >= 0 ? `+${value} XP` : `${value} XP`) : "", "Cumulative P/L"]}
                             labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ""}
                           />
                           <Line type="monotone" dataKey="pl" stroke="#F59E0B" strokeWidth={2} dot={{ r: 2 }} />

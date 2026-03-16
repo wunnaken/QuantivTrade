@@ -96,23 +96,25 @@ export async function fetchEconomicEvents(
     } else if (data && typeof data === "object" && "data" in data && Array.isArray((data as { data: unknown[] }).data)) {
       rawList = (data as { data: unknown[] }).data;
     }
-    const mapped: EconomicItem[] = rawList.map((e: FMPEvent, i: number) => {
-      const dateIso = (e.date ?? "").toString().trim();
+    const withNulls = rawList.map((e: unknown, i: number): EconomicItem | null => {
+      const ev = e as FMPEvent;
+      const dateIso = (ev.date ?? "").toString().trim();
       const datePart = dateIso.slice(0, 10);
       const timePart = dateIso.includes("T") ? dateIso.split("T")[1]?.slice(0, 5) ?? "" : "";
       if (!datePart || datePart.length < 10) return null;
       return {
-        id: `fmp-${i}-${datePart}-${(e.event ?? "").replace(/\s/g, "-")}`,
-        name: (e.event ?? "Event").toString(),
+        id: `fmp-${i}-${datePart}-${(ev.event ?? "").replace(/\s/g, "-")}`,
+        name: (ev.event ?? "Event").toString(),
         date: datePart,
         dateTimeET: timePart ? `${datePart} ${timePart}` : datePart,
-        impact: mapImpact(e.impact ?? ""),
-        country: (e.country ?? "").toString(),
-        previous: e.previous != null ? String(e.previous) : undefined,
-        estimate: e.estimate != null ? String(e.estimate) : undefined,
-        actual: e.actual != null ? String(e.actual) : undefined,
+        impact: mapImpact(ev.impact ?? ""),
+        country: (ev.country ?? "").toString(),
+        previous: ev.previous != null ? String(ev.previous) : undefined,
+        estimate: ev.estimate != null ? String(ev.estimate) : undefined,
+        actual: ev.actual != null ? String(ev.actual) : undefined,
       };
-    }).filter((x): x is EconomicItem => x != null);
+    });
+    const mapped: EconomicItem[] = withNulls.filter((x): x is EconomicItem => x != null);
 
     const byDate = new Map<string, EconomicItem[]>();
     for (const item of mapped) {

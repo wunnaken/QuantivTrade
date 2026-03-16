@@ -33,7 +33,7 @@ const MAIN_NAV: { href: string; label: string }[] = [
   { href: "/predict", label: "PredictNow" },
   { href: "/datahub", label: "DataHub" },
   { href: "/watchlist", label: "My Watchlist" },
-  { href: "/ai", label: "Workspace" },
+  { href: "/workspace", label: "Workspace" },
 ];
 
 const MAIN_NAV_HREFS = MAIN_NAV.map((i) => i.href);
@@ -264,6 +264,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const isActive = useCallback(
     (href: string) => {
       if (href === "/feed") return pathname === "/feed";
+      if (href === "/workspace") return pathname === "/ai" || pathname === "/dashboard" || pathname === "/whiteboard";
       return pathname === href || pathname.startsWith(href + "/");
     },
     [pathname]
@@ -626,7 +627,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">View Profile</span>
                     </Link>
                     <Link
-                      href="/profiles"
+                      href="/growth#choose-profile"
                       onClick={() => setProfileOpen(false)}
                       className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
                       role="menuitem"
@@ -691,8 +692,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className={pathname === "/ceos" ? "h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden" : "min-h-[calc(100vh-3.5rem)]"}>{children}</main>
-      {pathname !== "/ceos" && <SiteFooter />}
+      <main className={pathname === "/ceos" || pathname === "/dashboard" ? "h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden" : "min-h-[calc(100vh-3.5rem)]"}>{children}</main>
+      {pathname !== "/ceos" && pathname !== "/dashboard" && <SiteFooter />}
     </div>
   );
 }

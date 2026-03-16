@@ -318,17 +318,16 @@ export function resolveMarket(
   resolvedBy: string
 ): { updatedMarkets: PredictMarket[]; updatedBets: PredictBet[] } {
   const now = new Date().toISOString();
-  const updatedMarkets = markets.map((m) => {
+  const updatedMarkets: PredictMarket[] = markets.map((m) => {
     if (m.id !== marketId) return m;
-    return { ...m, status: "resolved", outcome, resolvedAt: now, resolvedBy };
+    return { ...m, status: "resolved" as const, outcome, resolvedAt: now, resolvedBy };
   });
 
-  let totalPayout = 0;
-  const updatedBets = bets.map((b) => {
+  const updatedBets: PredictBet[] = bets.map((b) => {
     if (b.marketId !== marketId || b.status !== "open") return b;
     const won = b.side === outcome;
     const payout = won ? potentialPayout(b.amount, b.oddsAtBet) : 0;
-    return { ...b, status: won ? "won" : "lost", payout: won ? payout : undefined, resolvedAt: now };
+    return { ...b, status: (won ? "won" : "lost") as "won" | "lost", payout: won ? payout : undefined, resolvedAt: now };
   });
   updatedBets.forEach((b) => {
     if (b.marketId === marketId && b.status === "won" && b.payout != null) {

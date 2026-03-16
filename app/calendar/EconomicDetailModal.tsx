@@ -287,7 +287,7 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
                   <Tooltip
                     contentStyle={{ backgroundColor: "#1a2535", border: "1px solid #374151", borderRadius: 8 }}
                     labelStyle={{ color: "#E5E7EB" }}
-                    formatter={(value: number) => [value?.toFixed(2) ?? value, "Value"]}
+                    formatter={(value: unknown) => [typeof value === "number" ? value.toFixed(2) : String(value ?? ""), "Value"]}
                     labelFormatter={(label) => `Date: ${label}`}
                   />
                   <Line type="monotone" dataKey="value" stroke="var(--accent-color)" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: "var(--accent-color)" }} yAxisId="left" />

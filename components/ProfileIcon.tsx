@@ -42,7 +42,7 @@ export function ProfileIcon() {
                 </span>
                 <span className={TEXT_CLASS}>View Profile</span>
               </Link>
-              <Link href="/profiles" className={MENU_CLASS}>
+              <Link href="/growth#choose-profile" className={MENU_CLASS}>
                 <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
                   <span className={DOT_CLASS} />
                 </span>
