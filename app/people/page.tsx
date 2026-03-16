@@ -7,6 +7,8 @@ import { useAuth } from "../../components/AuthContext";
 import { getInitials } from "../../lib/suggested-people";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { isVerified } from "../../lib/verified";
+import { TrackRecordVerifiedBadge } from "../../components/TrackRecordVerifiedBadge";
+import { getBrokerConnection } from "../../lib/broker-connection";
 
 const RISK_STYLES: Record<string, string> = {
   Conservative: "bg-[var(--accent-color)]/20 text-[var(--accent-color)]",
@@ -26,10 +28,12 @@ function UserCard({
   user,
   following,
   onToggle,
+  showTrackVerified,
 }: {
   user: SuggestedProfile;
   following: boolean;
   onToggle: () => void;
+  showTrackVerified?: boolean;
 }) {
   return (
     <div
@@ -51,6 +55,11 @@ function UserCard({
             {user.name}
             {user.verified && <VerifiedBadge size={16} />}
           </Link>
+          {user.verified && showTrackVerified && (
+            <p className="mt-0.5">
+              <TrackRecordVerifiedBadge size={12} showLabel label="Track Verified" />
+            </p>
+          )}
           <p className="text-xs text-zinc-500">@{user.username}</p>
           <span
             className={`mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${RISK_STYLES[user.risk_profile] ?? "bg-zinc-500/20 text-zinc-400"}`}
@@ -99,6 +108,8 @@ async function fetchFollowed(): Promise<string[]> {
 
 function PeopleContent() {
   const { user } = useAuth();
+  const currentUserId = user?.id ?? user?.email ?? "";
+  const brokerConnected = typeof window !== "undefined" && getBrokerConnection().connected;
   const searchParams = useSearchParams();
   const qFromUrl = searchParams.get("q") ?? "";
   const [query, setQuery] = useState(qFromUrl);
@@ -206,12 +217,13 @@ function PeopleContent() {
       ) : (
         <>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            {filtered.map((user) => (
+            {filtered.map((u) => (
               <UserCard
-                key={user.id}
-                user={user}
-                following={followed.includes(user.id)}
-                onToggle={() => handleToggle(user)}
+                key={u.id}
+                user={u}
+                following={followed.includes(u.id)}
+                onToggle={() => handleToggle(u)}
+                showTrackVerified={u.id === currentUserId && brokerConnected}
               />
             ))}
           </div>

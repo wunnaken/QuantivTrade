@@ -26,6 +26,10 @@ import { isEarlyMember, getOrCreateInviteCode, getInvitedCount } from "../../lib
 import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { isVerified } from "../../lib/verified";
 import { getTrades, computePnL, formatPercent } from "../../lib/journal";
+import { getPoints as getPredictPoints } from "../../lib/predict";
+import { getBrokerConnection, disconnectBroker, BROKER_TEAL } from "../../lib/broker-connection";
+import { ConnectBrokerModal } from "../../components/ConnectBrokerModal";
+import { TrackRecordVerifiedBadge } from "../../components/TrackRecordVerifiedBadge";
 
 const POSTS_KEY = "xchange-demo-posts";
 const USERNAME_CHANGED_AT_KEY = "xchange-username-changed-at";
@@ -108,7 +112,7 @@ function getPerformanceFromTrades(timeframe: Timeframe) {
   return { total, winRate, avgReturn, best, worst, loginStreak };
 }
 
-function ProfilePerformanceCard() {
+function ProfilePerformanceCard({ brokerConnected, brokerName, onConnectClick }: { brokerConnected?: boolean; brokerName?: string; onConnectClick?: () => void }) {
   const [timeframe, setTimeframe] = useState<Timeframe>("all");
   const stats = getPerformanceFromTrades(timeframe);
   const hasData = stats.total > 0;
@@ -120,6 +124,7 @@ function ProfilePerformanceCard() {
           <span aria-hidden>📊</span>
           Trader Performance
           <VerifiedBadge size={16} />
+          {brokerConnected && <TrackRecordVerifiedBadge size={14} showLabel />}
           <span className="text-xs font-normal text-zinc-400">Verified Stats</span>
         </h2>
         <div className="flex gap-1">
@@ -133,6 +138,13 @@ function ProfilePerformanceCard() {
       {!hasData ? (
         <p className="mt-3 text-sm text-zinc-500">Log trades in your journal to populate your performance card.</p>
       ) : (
+        <>
+        {brokerConnected && <p className="mt-2 text-xs text-zinc-400">Source: {brokerName ?? "Connected broker"}</p>}
+        {!brokerConnected && (
+          <div className="mt-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-zinc-400">
+            These stats are self-reported. Connect your broker to get &quot;Track Record Verified&quot; badge.
+          </div>
+        )}
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="rounded-lg bg-black/20 p-3">
             <p className="text-xs text-zinc-400">Win Rate</p>
@@ -159,6 +171,7 @@ function ProfilePerformanceCard() {
             <p className="text-lg font-bold text-white">{stats.loginStreak} days</p>
           </div>
         </div>
+        </>
       )}
       {hasData && (
         <button type="button" className="mt-3 rounded-lg border border-[#3B82F6]/50 bg-[#3B82F6]/10 px-3 py-1.5 text-xs font-medium text-[#3B82F6] hover:bg-[#3B82F6]/20">
@@ -223,6 +236,16 @@ export default function ProfilePage() {
   const [verifiedSubmitted, setVerifiedSubmitted] = useState(
     typeof window !== "undefined" && window.localStorage.getItem("xchange-verified-applied") === "true"
   );
+  const [connectBrokerModalOpen, setConnectBrokerModalOpen] = useState(false);
+  const [brokerConnectionState, setBrokerConnectionState] = useState<ReturnType<typeof getBrokerConnection>>({ connected: false });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setBrokerConnectionState(getBrokerConnection());
+    const onStorage = () => setBrokerConnectionState(getBrokerConnection());
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   useEffect(() => {
     setStreakData(loadStreaks());
@@ -761,6 +784,11 @@ export default function ProfilePage() {
                         <VerifiedBadge size={22} />
                       </span>
                     )}
+                    {brokerConnectionState.connected && (
+                      <span className="inline-flex items-center" title="Track record verified via connected brokerage">
+                        <TrackRecordVerifiedBadge size={20} showLabel />
+                      </span>
+                    )}
                     {isEarlyMember() && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400" title="Joined Xchange in the early days">
                         ⭐ Early Member
@@ -794,6 +822,11 @@ export default function ProfilePage() {
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                         {loadXP().total} XP
                       </span>
+                      {typeof window !== "undefined" && (
+                        <span className="inline-flex items-center gap-1 text-amber-400" title="Prediction Markets virtual points">
+                          · {getPredictPoints().toLocaleString()} Predict XP
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs font-medium text-[var(--accent-color)]">{getRankTitle(loadXP().total)}</p>
                   {user.bio ? (
@@ -968,7 +1001,7 @@ export default function ProfilePage() {
 
         {/* Card wrapper for rest of profile — full rounded card with spacing from content above and footer */}
         <div className="mb-12 mt-8 rounded-2xl border px-6 pb-8 pt-6 transition-colors duration-300 sm:rounded-3xl sm:px-8" style={{ backgroundColor: "var(--app-card-alt)", borderColor: "var(--app-border)" }}>
-        {isVerified(user?.email) && <ProfilePerformanceCard />}
+        {isVerified(user?.email) && <ProfilePerformanceCard brokerConnected={brokerConnectionState.connected} brokerName={brokerConnectionState.brokerName} onConnectClick={() => setConnectBrokerModalOpen(true)} />}
         {isVerified(user?.email) && <ProfileMonetizeSection />}
         {/* Your Streaks — aligned with this card, slightly bigger */}
           <section className="mb-6" aria-label="Your streaks">
@@ -1009,6 +1042,66 @@ export default function ProfilePage() {
               })}
             </div>
           </section>
+
+        {/* Connected Broker */}
+          <section className="mb-6 rounded-xl border px-4 py-4" style={{ borderColor: `${BROKER_TEAL}40`, backgroundColor: `${BROKER_TEAL}08` }} aria-label="Connected Broker">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-50">
+              <span aria-hidden>🔗</span>
+              Connected Broker
+            </h2>
+            <p className="mt-0.5 text-xs text-zinc-500">Verify your trades. Build real credibility.</p>
+            {brokerConnectionState.connected ? (
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                  </span>
+                  <span className="font-medium text-emerald-400">Broker Connected</span>
+                </div>
+                <p className="text-sm text-zinc-300">Connected: {brokerConnectionState.brokerName ?? "Broker"}</p>
+                <p className="text-xs text-zinc-500">Since {brokerConnectionState.connectedAt ? new Date(brokerConnectionState.connectedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "—"}</p>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-lg bg-black/20 p-2">
+                    <p className="text-[10px] text-zinc-500">Total Trades</p>
+                    <p className="text-sm font-bold text-zinc-200">{brokerConnectionState.totalTrades ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg bg-black/20 p-2">
+                    <p className="text-[10px] text-zinc-500">Win Rate</p>
+                    <p className="text-sm font-bold text-zinc-200">{brokerConnectionState.winRate ?? 0}%</p>
+                  </div>
+                  <div className="rounded-lg bg-black/20 p-2">
+                    <p className="text-[10px] text-zinc-500">Avg Return</p>
+                    <p className="text-sm font-bold text-zinc-200">{brokerConnectionState.avgReturn ?? 0}%</p>
+                  </div>
+                </div>
+                <p className="text-xs" style={{ color: BROKER_TEAL }}><Link href="/profile" className="hover:underline">View full performance →</Link></p>
+                <button type="button" onClick={() => { disconnectBroker(); setBrokerConnectionState(getBrokerConnection()); }} className="text-xs text-zinc-500 hover:text-zinc-300 underline">Disconnect</button>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <div className="flex items-center justify-center rounded-lg border border-dashed border-white/10 bg-black/20 py-6">
+                  <div className="text-center">
+                    <span className="text-3xl" aria-hidden>🔗</span>
+                    <p className="mt-2 text-sm font-medium text-zinc-300">No broker connected yet</p>
+                    <p className="mt-1 max-w-sm text-xs text-zinc-500">Connect your brokerage account to verify your trade history and unlock your real performance stats.</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {["Robinhood", "Webull", "TD Ameritrade", "Interactive Brokers", "Alpaca", "Tradier"].map((name) => (
+                    <span key={name} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-400">{name}</span>
+                  ))}
+                </div>
+                <button type="button" onClick={() => setConnectBrokerModalOpen(true)} className="mt-4 rounded-lg px-4 py-2 text-sm font-medium text-[#020308] transition hover:opacity-90" style={{ backgroundColor: BROKER_TEAL }}>Connect Broker</button>
+              </div>
+            )}
+          </section>
+
+          {connectBrokerModalOpen && (
+            <ConnectBrokerModal
+              onClose={() => { setConnectBrokerModalOpen(false); setBrokerConnectionState(getBrokerConnection()); }}
+              onConnect={() => setBrokerConnectionState(getBrokerConnection())}
+            />
+          )}
 
         {/* Accent Color (logged-in only; profile is own profile) */}
           <div className="mt-6 pt-5 border-t border-white/10">

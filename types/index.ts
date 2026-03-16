@@ -12,6 +12,8 @@ export type User = {
   bannerImage?: string | null;
   joinedAt?: string;
   riskProfile?: RiskProfileKey;
+  /** If false, trading stats (performance card) are hidden on profile. Default true. */
+  showTradingStats?: boolean;
 };
 
 export type NewsItem = {

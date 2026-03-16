@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { fetchEconomicEvents } from "./economic/route";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -103,119 +104,23 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  function parseEconomicResponse(data: unknown): EconomicItem[] {
-    const out: EconomicItem[] = [];
-    let rawList: unknown[] = [];
-    if (Array.isArray(data)) rawList = data;
-    else if (data && typeof data === "object") {
-      const o = data as Record<string, unknown>;
-      if (Array.isArray(o.economicCalendar)) rawList = o.economicCalendar;
-      else if (Array.isArray(o.economic)) rawList = o.economic;
-      else if (Array.isArray(o.data)) rawList = o.data;
-      else if (Array.isArray(o.calendar)) rawList = o.calendar;
-      else {
-        for (const v of Object.values(o)) {
-          if (Array.isArray(v) && v.length > 0 && typeof v[0] === "object" && v[0] !== null && ("event" in v[0] || "date" in v[0] || "title" in v[0])) {
-            rawList = v;
-            break;
-          }
-        }
-      }
-    }
-    const list = rawList as Array<{ date?: string; time?: string; country?: string; event?: string; title?: string; previous?: string; estimate?: string; actual?: string; impact?: string }>;
-    list.forEach((e, i) => {
-      const eventName = (e.event ?? (e as Record<string, unknown>).name ?? e.title ?? "Event").toString();
-      const eventDate = (e.date ?? "").toString().slice(0, 10);
-      if (!eventDate) return;
-      const impact = (e.impact?.toUpperCase() === "HIGH" ? "HIGH" : e.impact?.toUpperCase() === "LOW" ? "LOW" : "MEDIUM") as "HIGH" | "MEDIUM" | "LOW";
-      out.push({
-        id: `econ-${i}-${eventDate}-${eventName.replace(/\s/g, "-")}`,
-        name: eventName,
-        date: eventDate,
-        dateTimeET: e.time ? `${eventDate} ${e.time}`.trim() : eventDate,
-        impact,
-        country: (e.country ?? "").toString(),
-        previous: e.previous != null ? String(e.previous) : undefined,
-        estimate: e.estimate != null ? String(e.estimate) : undefined,
-        actual: e.actual != null ? String(e.actual) : undefined,
-      });
-    });
-    return out;
-  }
-
-  /** Generate placeholder economic events for the week when API returns nothing */
-  function getPlaceholderEconomicForRange(from: Date, to: Date): EconomicItem[] {
-    const out: EconomicItem[] = [];
-    const events: { name: string; impact: "HIGH" | "MEDIUM" | "LOW" }[] = [
-      { name: "Consumer Price Index (CPI)", impact: "HIGH" },
-      { name: "Non-Farm Payrolls (NFP)", impact: "HIGH" },
-      { name: "FOMC Rate Decision", impact: "HIGH" },
-      { name: "Retail Sales", impact: "MEDIUM" },
-      { name: "Initial Jobless Claims", impact: "LOW" },
-    ];
-    const cur = new Date(from);
-    let idx = 0;
-    while (cur <= to && idx < events.length) {
-      const day = cur.getDay();
-      if (day >= 1 && day <= 5) {
-        const d = cur.toISOString().slice(0, 10);
-        const e = events[idx];
-        out.push({ id: `ph-${idx}-${d}`, name: e.name, date: d, dateTimeET: d, impact: e.impact, country: "US" });
-        idx++;
-      }
-      cur.setDate(cur.getDate() + 1);
-    }
-    return out;
-  }
-
+  let dataSource = "";
+  let economicError: string | undefined;
   if (type !== "earnings") {
     try {
-      const res = await fetch(
-        `https://finnhub.io/api/v1/calendar/economic?from=${fromStr}&to=${toStr}&token=${token}`,
-        { next: { revalidate: 0 } }
-      );
-      const data = await res.json();
-      if (res.ok && data) parseEconomicResponse(data).forEach((e) => economic.push(e));
+      const result = await fetchEconomicEvents(fromStr, toStr);
+      result.economic.forEach((e) => economic.push(e));
+      dataSource = result.dataSource ?? "";
+      if (result.error) economicError = result.error;
     } catch (e) {
-      console.error("[calendar economic]", e);
+      economicError = e instanceof Error ? e.message : "Failed to load economic events";
     }
   }
 
-  let economicFallback = false;
-  if (economic.length === 0) {
-    try {
-      const now = new Date();
-      const latestFrom = new Date(now);
-      latestFrom.setDate(now.getDate() - 60);
-      const latestTo = new Date(now);
-      latestTo.setDate(now.getDate() + 60);
-      const latestFromStr = dateStr(latestFrom);
-      const latestToStr = dateStr(latestTo);
-      const res = await fetch(
-        `https://finnhub.io/api/v1/calendar/economic?from=${latestFromStr}&to=${latestToStr}&token=${token}`,
-        { next: { revalidate: 0 } }
-      );
-      const data = await res.json();
-      if (res.ok && data) {
-        const latest = parseEconomicResponse(data)
-          .filter((e) => e.date)
-          .sort((a, b) => a.date.localeCompare(b.date))
-          .slice(0, 80);
-        latest.forEach((e) => economic.push(e));
-        economicFallback = economic.length > 0;
-      }
-    } catch (e) {
-      console.error("[calendar economic latest fallback]", e);
-    }
-  }
-
-  let economicSample = false;
-  if (economic.length === 0) {
-    const placeholders = getPlaceholderEconomicForRange(fromDate, toDate);
-    placeholders.forEach((e) => economic.push(e));
-    economicFallback = true;
-    economicSample = true;
-  }
-
-  return NextResponse.json({ earnings, economic, economicFallback, economicSample });
+  return NextResponse.json({
+    earnings,
+    economic,
+    dataSource,
+    ...(economicError && { economicError }),
+  });
 }

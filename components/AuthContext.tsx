@@ -52,6 +52,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           joinedAt: new Date().toISOString(),
         };
         if (typeof window !== "undefined") {
+          const pendingRaw = window.localStorage.getItem("xchange-onboarding-pending");
+          if (pendingRaw) {
+            try {
+              const pending = JSON.parse(pendingRaw) as { riskProfile?: "passive" | "moderate" | "aggressive" };
+              if (pending.riskProfile) newUser.riskProfile = pending.riskProfile;
+              window.localStorage.removeItem("xchange-onboarding-pending");
+            } catch {
+              // ignore
+            }
+          }
           window.localStorage.setItem(
             STORAGE_KEY,
             JSON.stringify({ ...newUser, password })

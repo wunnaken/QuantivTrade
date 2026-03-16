@@ -79,7 +79,7 @@ const SYMBOL_NAMES: Record<string, string> = {
 };
 
 async function fetchCustomTickers(symbols: string[], token: string | undefined): Promise<TickerRow[]> {
-  const normalized = symbols.slice(0, 8).map((s) => s.toUpperCase().trim()).filter(Boolean);
+  const normalized = symbols.slice(0, 12).map((s) => s.toUpperCase().trim()).filter(Boolean);
   if (normalized.length === 0) return [];
   const tickers: TickerRow[] = [];
   const crypto = normalized.filter((s) => s === "BTC" || s === "ETH");
@@ -161,10 +161,10 @@ export async function GET(request: NextRequest) {
           setTimeout(() => reject(new Error("timeout")), API_TIMEOUT_MS)
         ),
       ]);
-      const out = result.slice(0, 8);
-      return NextResponse.json(out.length > 0 ? out : MOCK_TICKERS.slice(0, 8));
+      const out = result.slice(0, 12);
+      return NextResponse.json(out.length > 0 ? out : MOCK_TICKERS.slice(0, 12));
     } catch {
-      return NextResponse.json(MOCK_TICKERS.slice(0, 8));
+      return NextResponse.json(MOCK_TICKERS.slice(0, 12));
     }
   }
 
@@ -175,8 +175,8 @@ export async function GET(request: NextRequest) {
         setTimeout(() => reject(new Error("timeout")), API_TIMEOUT_MS)
       ),
     ]);
-    return NextResponse.json(result.slice(0, 8));
+    return NextResponse.json(result.slice(0, 12));
   } catch {
-    return NextResponse.json(MOCK_TICKERS.slice(0, 8));
+    return NextResponse.json(MOCK_TICKERS.slice(0, 12));
   }
 }

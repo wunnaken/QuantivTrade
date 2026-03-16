@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import type { EarningsItem as ApiEarnings, EconomicItem as ApiEconomic } from "../api/calendar/route";
 import { EconomicDetailModal } from "./EconomicDetailModal";
 
@@ -274,8 +274,8 @@ export default function CalendarPage() {
   const [weekOffset, setWeekOffset] = useState(0);
   const [earnings, setEarnings] = useState<EarningsWithDay[]>([]);
   const [economic, setEconomic] = useState<EconomicWithDay[]>([]);
-  const [economicFallback, setEconomicFallback] = useState(false);
-  const [economicSample, setEconomicSample] = useState(false);
+  const [dataSource, setDataSource] = useState<string>("");
+  const [economicError, setEconomicError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const monday = useMemo(() => {
@@ -305,11 +305,17 @@ export default function CalendarPage() {
     return `${y}-${m}-${d}`;
   }, [toFriday]);
 
-  useEffect(() => {
+  const refetchCalendar = useCallback(() => {
     setLoading(true);
+    setEconomicError(null);
     fetch(`/api/calendar?from=${fromStr}&to=${toStr}`, { cache: "no-store" })
       .then((res) => res.json())
-      .then((data: { earnings?: ApiEarnings[]; economic?: ApiEconomic[]; economicFallback?: boolean; economicSample?: boolean }) => {
+      .then((data: {
+        earnings?: ApiEarnings[];
+        economic?: ApiEconomic[];
+        dataSource?: string;
+        economicError?: string;
+      }) => {
         const m = monday;
         const earn: EarningsWithDay[] = (data.earnings ?? []).map((e) => ({
           ...e,
@@ -322,17 +328,21 @@ export default function CalendarPage() {
         }));
         setEarnings(earn.filter((e) => e.dayIndex >= 0 && e.dayIndex < 5));
         setEconomic(econ.filter((e) => e.dayIndex >= 0 && e.dayIndex < 5));
-        setEconomicFallback(Boolean(data.economicFallback));
-        setEconomicSample(Boolean(data.economicSample));
+        setDataSource(data.dataSource ?? "");
+        setEconomicError(data.economicError ?? null);
       })
       .catch(() => {
         setEarnings([]);
         setEconomic([]);
-        setEconomicFallback(false);
-        setEconomicSample(false);
+        setDataSource("");
+        setEconomicError("Unable to load events");
       })
       .finally(() => setLoading(false));
   }, [fromStr, toStr, monday]);
+
+  useEffect(() => {
+    refetchCalendar();
+  }, [refetchCalendar]);
 
   const earningsByDay = useMemo(() => {
     const byDay: EarningsWithDay[][] = [[], [], [], [], []];
@@ -525,7 +535,7 @@ export default function CalendarPage() {
                         earningsByDay[dayIndex].map((item) => (
                           <div
                             key={item.id}
-                            className={`rounded-xl border p-3 transition-all duration-200 hover:border-[var(--accent-color)]/40 ${getEarningsBorderClass(item)}`}
+                            className={`rounded-xl border p-3 transition-all duration-200 ${getEarningsBorderClass(item)}`}
                             style={{ backgroundColor: CARD_BG }}
                           >
                             <div className="flex items-start gap-2">
@@ -588,18 +598,25 @@ export default function CalendarPage() {
 
             {activeTab === "economic" && (
               <div className="space-y-6">
-                {economicFallback && economic.length > 0 && (
-                  <p className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-2 text-center text-xs text-amber-200/90">
-                    {economicSample
-                      ? "Sample events — provider returned no data. Dates are approximate."
-                      : "Showing economic events for this week (fallback date range)."}
-                  </p>
+                {economicError && (
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-4 text-center">
+                    <p className="text-sm text-zinc-200">Unable to load events — please refresh to try again.</p>
+                    <p className="mt-1 text-xs text-zinc-400">{economicError}</p>
+                    <button
+                      type="button"
+                      onClick={refetchCalendar}
+                      className="mt-3 rounded-lg bg-white/10 px-4 py-2 text-sm font-medium text-zinc-100 transition-colors hover:bg-white/20"
+                    >
+                      Refresh
+                    </button>
+                  </div>
                 )}
-                {!loading && economic.length === 0 && (
+                {!economicError && !loading && economic.length === 0 && (
                   <p className="rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-center text-sm text-zinc-400">
                     No economic events scheduled for this week.
                   </p>
                 )}
+                {!economicError && (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 {weekDates.map((d, dayIndex) => {
                   const events = eventsByDay[dayIndex];
@@ -697,6 +714,12 @@ export default function CalendarPage() {
                   );
                 })}
                 </div>
+                )}
+                {dataSource === "Financial Modeling Prep" && (
+                  <p className="mt-4 text-center text-xs text-zinc-500">
+                    Data: Financial Modeling Prep
+                  </p>
+                )}
               </div>
             )}
           </div>

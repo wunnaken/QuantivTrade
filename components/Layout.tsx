@@ -14,6 +14,8 @@ import { SiteFooter } from "./SiteFooter";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { isVerified } from "../lib/verified";
 import { useLoginStreakTick } from "./StreakProvider";
+import { getPredictNotifications, markPredictNotificationsRead } from "../lib/predict";
+import { getBrokerConnection } from "../lib/broker-connection";
 
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_BG = "#0A0E1A";
@@ -28,6 +30,7 @@ const MAIN_NAV: { href: string; label: string }[] = [
   { href: "/ceos", label: "CEOs" },
   { href: "/calendar", label: "Calendar" },
   { href: "/journal", label: "Journal" },
+  { href: "/predict", label: "PredictNow" },
   { href: "/datahub", label: "DataHub" },
   { href: "/watchlist", label: "My Watchlist" },
   { href: "/ai", label: "Workspace" },
@@ -439,11 +442,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
             />
           ))}
           {verified ? (
-            <div className={`group flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 ${collapsed ? "justify-center px-2" : ""}`} title="Verified Trader">
-              <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
-                <VerifiedBadge size={16} />
-              </span>
-              {!collapsed && <span className="truncate">Verified Trader</span>}
+            <div className={`group flex min-w-0 flex-1 flex-col gap-0.5 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 ${collapsed ? "items-center justify-center px-2" : ""}`} title="Verified Trader">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
+                  <VerifiedBadge size={16} />
+                </span>
+                {!collapsed && <span className="truncate">Verified Trader</span>}
+              </div>
+              {!collapsed && typeof window !== "undefined" && !getBrokerConnection().connected && (
+                <a href="/profile" className="text-[11px] font-normal transition hover:opacity-80" style={{ color: "#14B8A6" }}>+ Connect broker</a>
+              )}
             </div>
           ) : (
             <Link
@@ -508,12 +516,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
               >
                 <button
                   type="button"
-                  onClick={() => setNotificationsOpen(false)}
+                  onClick={() => { markPredictNotificationsRead(); setNotificationsOpen(false); }}
                   className="w-full px-4 py-2 text-left text-xs font-medium text-[var(--accent-color)] hover:bg-white/5"
                 >
                   Mark all as read
                 </button>
                 <div className="my-1 h-px bg-white/10" />
+                {typeof window !== "undefined" && getPredictNotifications().length > 0 && (
+                  <>
+                    {getPredictNotifications().slice(0, 4).map((n) => (
+                      <Link key={n.id} href={n.link} onClick={() => setNotificationsOpen(false)} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/5">
+                        <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+                        <div>
+                          <p className="text-sm font-medium text-zinc-200">{n.message}</p>
+                          <p className="text-xs text-zinc-500">{new Date(n.time).toLocaleDateString()}</p>
+                        </div>
+                      </Link>
+                    ))}
+                    <div className="my-1 h-px bg-white/10" />
+                  </>
+                )}
                 <Link href="/messages?with=sarah_macro" onClick={() => setNotificationsOpen(false)} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/5">
                   <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[var(--accent-color)]" />
                   <div>

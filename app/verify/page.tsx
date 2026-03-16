@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState, useCallback, useEffect } from "react";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { setVerified } from "../../lib/verified";
+import { ConnectBrokerModal } from "../../components/ConnectBrokerModal";
+import { BROKER_TEAL } from "../../lib/broker-connection";
 
 const VERIFIED_BLUE = "#3B82F6";
 const STEP_LABELS = ["① Requirements", "② Application", "③ Review"];
@@ -25,6 +27,7 @@ export default function VerifyPage() {
   const [req4, setReq4] = useState(false);
   const [req5, setReq5] = useState(false);
   const allMet = req1 && req2 && req3 && req4 && req5;
+  const [connectBrokerModalOpen, setConnectBrokerModalOpen] = useState(false);
 
   const [experience, setExperience] = useState("");
   const [markets, setMarkets] = useState<string[]>([]);
@@ -161,6 +164,12 @@ export default function VerifyPage() {
                 >
                   All requirements met? Continue →
                 </button>
+                <div className="mt-6 rounded-xl border px-4 py-4" style={{ borderColor: `${BROKER_TEAL}50`, backgroundColor: `${BROKER_TEAL}08` }}>
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">⚡ Fast Track with Broker Connection</h3>
+                  <p className="mt-1 text-xs text-zinc-400">Connect your broker for instant track record verification — skip the manual review process.</p>
+                  <button type="button" onClick={() => setConnectBrokerModalOpen(true)} className="mt-3 rounded-lg px-4 py-2 text-sm font-medium text-[#020308] transition hover:opacity-90" style={{ backgroundColor: BROKER_TEAL }}>Connect Broker →</button>
+                  <p className="mt-2 text-[11px] text-zinc-500">Optional but recommended. Manual review takes 3-5 business days. Broker connection is instant.</p>
+                </div>
               </div>
             )}
 
@@ -238,6 +247,7 @@ export default function VerifyPage() {
           </section>
         </div>
       </div>
+      {connectBrokerModalOpen && <ConnectBrokerModal onClose={() => setConnectBrokerModalOpen(false)} />}
     </div>
   );
 }

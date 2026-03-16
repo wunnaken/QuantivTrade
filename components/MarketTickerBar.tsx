@@ -10,9 +10,10 @@ function getHeaderTickerSymbols(): string[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(HEADER_TICKERS_KEY);
-    if (!raw) return [];
+    if (!raw) return []; // no key = use default tickers
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((s) => typeof s === "string").slice(0, 8) : [];
+    const list = Array.isArray(parsed) ? parsed.filter((s) => typeof s === "string").slice(0, 12) : [];
+    return [...new Set(list)]; // dedupe
   } catch {
     return [];
   }
@@ -158,7 +159,7 @@ export function MarketTickerBar() {
     );
   }
 
-  const list = tickers.slice(0, 8);
+  const list = tickers.slice(0, 12);
 
   return (
     <div

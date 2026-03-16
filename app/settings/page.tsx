@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useState, useEffect } from "react";
 import { useAuth } from "../../components/AuthContext";
 import { useTheme } from "../../components/ThemeContext";
 import type { RiskProfileKey } from "../../components/AuthContext";
+import { getBrokerConnection, disconnectBroker, BROKER_TEAL } from "../../lib/broker-connection";
+import { ConnectBrokerModal } from "../../components/ConnectBrokerModal";
 
 const RISK_PROFILES: Record<
   RiskProfileKey,
@@ -17,6 +20,16 @@ const RISK_PROFILES: Record<
 export default function SettingsPage() {
   const { user, deleteAccount, updateProfile } = useAuth();
   const { theme, setTheme } = useTheme();
+  const [brokerState, setBrokerState] = useState(getBrokerConnection());
+  const [connectModalOpen, setConnectModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setBrokerState(getBrokerConnection());
+    const onStorage = () => setBrokerState(getBrokerConnection());
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   if (!user) {
     return (
@@ -114,6 +127,40 @@ export default function SettingsPage() {
           </div>
         </section>
 
+        {/* Connected Accounts */}
+        <section
+          className="rounded-2xl border p-5 transition-colors duration-300"
+          style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
+        >
+          <h2 className="text-sm font-semibold text-zinc-50">Connected Accounts</h2>
+          <p className="mt-1 text-xs text-zinc-500">Your data is encrypted and read-only.</p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {brokerState.connected ? (
+              <>
+                <span className="rounded-lg border px-3 py-2 text-sm text-zinc-300" style={{ borderColor: `${BROKER_TEAL}40` }}>
+                  Broker: {brokerState.brokerName ?? "Connected"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { disconnectBroker(); setBrokerState(getBrokerConnection()); }}
+                  className="text-sm text-zinc-500 hover:text-zinc-300 underline"
+                >
+                  Disconnect
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConnectModalOpen(true)}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-[#020308] transition hover:opacity-90"
+                style={{ backgroundColor: BROKER_TEAL }}
+              >
+                Connect Broker
+              </button>
+            )}
+          </div>
+        </section>
+
         {/* Risk profile */}
         <section
           className="rounded-2xl border p-5 transition-colors duration-300"
@@ -201,6 +248,7 @@ export default function SettingsPage() {
           </button>
         </section>
       </div>
+      {connectModalOpen && <ConnectBrokerModal onClose={() => { setConnectModalOpen(false); setBrokerState(getBrokerConnection()); }} onConnect={() => setBrokerState(getBrokerConnection())} />}
     </main>
   );
 }

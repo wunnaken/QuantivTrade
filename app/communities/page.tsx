@@ -283,7 +283,7 @@ export default function CommunitiesPage() {
         {/* Verified Only section */}
         <section className="mb-8">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-[#3B82F6]">🔒 Verified Trader Rooms</h2>
-          <p className="mt-1 text-xs text-zinc-400">Exclusive communities for verified traders only.</p>
+          <p className="mt-1 text-xs text-zinc-400">Exclusive communities for verified traders only. Broker-verified traders get priority access and a special badge in this room.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             {[
               { id: "pro-desk", name: "Pro Desk Flow", desc: "Institutional grade flow and ideas", members: "Verified traders only" },

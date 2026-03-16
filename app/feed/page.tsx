@@ -18,6 +18,8 @@ import { triggerConfetti } from "../../lib/confetti";
 import { addXPFromPost, addXPFromReaction } from "../../lib/engagement/xp";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { isVerified } from "../../lib/verified";
+import { TrackRecordVerifiedBadge } from "../../components/TrackRecordVerifiedBadge";
+import { getBrokerConnection } from "../../lib/broker-connection";
 
 const VERIFIED_TOOLTIP_SEEN_KEY = "xchange-verified-badge-tooltip-seen";
 
@@ -683,6 +685,11 @@ export default function FeedPage() {
                       </div>
                       {post.author.verified && (
                         <p className="mt-0.5 text-xs font-medium" style={{ color: "#3B82F6" }}>Verified Trader</p>
+                      )}
+                      {post.author.verified && post.author.handle === (user?.username?.trim() || user?.email || "") && typeof window !== "undefined" && getBrokerConnection().connected && (
+                        <p className="mt-0.5" title="This trader's performance is verified via connected brokerage">
+                          <TrackRecordVerifiedBadge size={12} showLabel label="Verified Track Record" />
+                        </p>
                       )}
                       <p className="mt-1.5 whitespace-pre-wrap text-sm text-zinc-300">{post.content}</p>
                       {post.image && (

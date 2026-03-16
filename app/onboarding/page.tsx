@@ -7,6 +7,7 @@ import { XchangeLogoImage } from "../../components/XchangeLogoImage";
 import { WelcomeAnimation } from "../../components/WelcomeAnimation";
 
 const WELCOMED_KEY = "xchange-welcomed";
+const PENDING_ONBOARDING_KEY = "xchange-onboarding-pending";
 
 const TOTAL_STEPS = 7;
 const BG = "#0A0E1A";
@@ -86,7 +87,7 @@ function getProfile(
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { updateProfile } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [step, setStep] = useState(1);
   const [experience, setExperience] = useState<Experience>(null);
   const [timeHorizon, setTimeHorizon] = useState<TimeHorizon>(null);
@@ -121,17 +122,26 @@ export default function OnboardingPage() {
       moderate: "moderate",
       aggressive: "aggressive",
     };
-    updateProfile({ riskProfile: riskMap[profile] });
-    if (typeof window !== "undefined" && window.localStorage.getItem(WELCOMED_KEY)) {
-      router.push("/feed");
-      return;
+    const riskProfile = riskMap[profile];
+    if (user) {
+      updateProfile({ riskProfile });
+      if (typeof window !== "undefined" && window.localStorage.getItem(WELCOMED_KEY)) {
+        router.push("/feed");
+        return;
+      }
+    } else if (typeof window !== "undefined") {
+      window.localStorage.setItem(PENDING_ONBOARDING_KEY, JSON.stringify({ riskProfile }));
     }
     setShowWelcomeAnimation(true);
   };
 
   const handleWelcomeComplete = () => {
     if (typeof window !== "undefined") window.localStorage.setItem(WELCOMED_KEY, "1");
-    router.push("/feed");
+    if (user) {
+      router.push("/feed");
+    } else {
+      router.push("/auth/sign-up?from=onboarding");
+    }
   };
 
   const canProceedStep2 = experience !== null;
