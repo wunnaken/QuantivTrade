@@ -151,6 +151,9 @@ function OptionsFlowView() {
   const [periodFilter, setPeriodFilter] = useState<"today" | "week">("today");
 
   const allRows = useMemo(() => {
+    // TODO: Replace with Options Flow API
+    // Endpoint: e.g. Unusual Whales https://docs.unusualwhales.com/ or similar vendor (options flow, premium, block trades)
+    // When: before launch
     const base = [
       { time: "09:45", ticker: "NVDA", type: "Call" as const, strike: 140, expiry: "03/21", premium: 2.4, size: 1250, sentiment: "Bullish" },
       { time: "10:12", ticker: "TSLA", type: "Put" as const, strike: 220, expiry: "04/18", premium: 1.8, size: 800, sentiment: "Bearish" },
@@ -280,6 +283,9 @@ function InsiderTradingView() {
 }
 
 function InsiderTradingContent() {
+  // TODO: Replace with Insider Trading (SEC Form 4) API
+  // Endpoint: SEC EDGAR Full-Text Search / company filings, or Quiver Quant https://www.quiverquant.com/ (insider trades)
+  // When: before launch
   const rows = [
     { date: "2025-03-10", executive: "Tim Cook", company: "Apple", ticker: "AAPL", transaction: "Buy", shares: 50000, value: 9.5, type: "Buy" },
     { date: "2025-03-08", executive: "Jensen Huang", company: "NVIDIA", ticker: "NVDA", transaction: "Sell", shares: 120000, value: 18.2, type: "Sell" },
@@ -505,6 +511,9 @@ function IPOCalendarView() {
 }
 
 // ─── Tool 6–7: Placeholder views ────────────────────────────────────────────
+// TODO: Replace with Dividend Calendar API
+// Endpoint: Finnhub /calendar/dividend or similar (ex-dividend dates, yields)
+// When: before launch
 function DividendCalendarView() {
   return (
     <div className="space-y-4">
@@ -531,6 +540,9 @@ function ShortInterestView() {
 }
 
 function ShortInterestContent() {
+  // TODO: Replace with Short Interest API
+  // Endpoint: Finnhub GET /stock/short-interest?symbol= or similar (short interest, days to cover)
+  // When: before launch
   const rows = [
     { rank: 1, ticker: "GME", company: "GameStop", shortPct: 22.5, floatShorted: 18, daysToCover: 4.2, change: 2.1, squeezeScore: 8 },
     { rank: 2, ticker: "AMC", company: "AMC Entertainment", shortPct: 19.2, floatShorted: 15, daysToCover: 3.1, change: -0.5, squeezeScore: 6 },
@@ -696,6 +708,9 @@ function FedDashboardView() {
 }
 
 // ─── Tools 9–11: Placeholders ───────────────────────────────────────────────
+// TODO: Replace with Earnings Whisper API
+// Endpoint: Earnings Whispers (earningswhisper.com) or similar (whisper numbers, implied move, beat rates)
+// When: before launch
 function EarningsWhisperView() {
   return (
     <div className="space-y-4">
@@ -710,6 +725,9 @@ function EarningsWhisperView() {
   );
 }
 
+// TODO: Replace with Congress Trades API
+// Endpoint: Quiver Quant https://www.quiverquant.com/ (congress trades) or Capitol Trades / Senate/House disclosure APIs
+// When: before launch
 function CongressTradesView() {
   return (
     <div className="space-y-4">
@@ -724,6 +742,9 @@ function CongressTradesView() {
   );
 }
 
+// TODO: Replace with Dark Pool / Block Trades API
+// Endpoint: Unusual Whales or similar (dark pool volume, block trades, smart money flow)
+// When: before launch
 function DarkPoolView() {
   return (
     <div className="space-y-4">

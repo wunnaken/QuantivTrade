@@ -16,6 +16,9 @@ type RoomRow = {
   description: string;
 };
 
+// TODO: Replace with Leaderboard API
+// Endpoint: GET /api/leaderboard/rooms?tab=weekly|alltime (or database: communities + activity aggregates)
+// When: before launch
 const MOCK_WEEKLY: RoomRow[] = [
   { id: "w1", name: "Pro Desk Flow", slug: "pro-desk", exclusive: true, members: "2.4k", activity: "1.2k posts", description: "Institutional-grade flow and ideas" },
   { id: "w2", name: "Global Equities Flow", slug: "equities", exclusive: false, members: "1.8k", activity: "890 posts", description: "Large-cap, sectors, index flows" },
@@ -29,6 +32,9 @@ const MOCK_WEEKLY: RoomRow[] = [
   { id: "w10", name: "New Trader Hub", slug: "new-trader", exclusive: false, members: "280", activity: "120 posts", description: "Learning and first steps" },
 ];
 
+// TODO: Replace with Leaderboard API
+// Endpoint: GET /api/leaderboard/rooms?tab=alltime (or database: communities + total activity)
+// When: before launch
 const MOCK_ALL_TIME: RoomRow[] = [
   { id: "a1", name: "Global Equities Flow", slug: "equities", exclusive: false, members: "12.4k", activity: "48k total", description: "Large-cap, sectors, index flows" },
   { id: "a2", name: "Pro Desk Flow", slug: "pro-desk", exclusive: true, members: "8.2k", activity: "32k total", description: "Institutional-grade flow and ideas" },
@@ -52,6 +58,9 @@ type VerifiedTraderRow = {
   bestTrade: string;
 };
 
+// TODO: Replace with Leaderboard API (verified traders)
+// Endpoint: GET /api/leaderboard/verified (or database: users + verified flag + XP/win rate/performance)
+// When: before launch
 const MOCK_VERIFIED_TRADERS: VerifiedTraderRow[] = [
   { id: "v1", name: "Alex R.", handle: "alex_r", winRate: 68, avgReturn: 4.2, totalTrades: 142, bestTrade: "+24% (NVDA)" },
   { id: "v2", name: "Sam C.", handle: "sam_c", winRate: 65, avgReturn: 3.8, totalTrades: 98, bestTrade: "+19% (TSLA)" },

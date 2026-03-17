@@ -21,7 +21,8 @@ export type WidgetId =
   | "xp-rank"
   | "custom-note"
   | "sector-heatmap"
-  | "top-movers";
+  | "top-movers"
+  | "sentiment-radar";
 
 export type DashboardTheme = {
   background?: string;
@@ -126,6 +127,7 @@ export const WIDGET_CONFIG: Record<
   "custom-note": { name: "Custom Note", icon: "", minW: 2, minH: 2, defaultW: 3, defaultH: 3, category: "Custom", description: "Trading notes and reminders" },
   "sector-heatmap": { name: "Sector Heatmap", icon: "", minW: 4, minH: 3, defaultW: 6, defaultH: 4, category: "Market Data", description: "11 sector performance tiles" },
   "top-movers": { name: "Top Movers", icon: "", minW: 2, minH: 3, defaultW: 3, defaultH: 4, category: "Market Data", description: "Top gainers and losers today" },
+  "sentiment-radar": { name: "Sentiment Radar", icon: "", minW: 4, minH: 4, defaultW: 6, defaultH: 5, category: "Market Data", description: "Community and news sentiment by sector" },
 };
 
 function defaultLayout(): LayoutItem[] {

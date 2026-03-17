@@ -28,6 +28,9 @@ export const CEO_SECTORS = [
   "Crypto/Fintech",
 ] as const;
 
+// TODO: Replace with CEO / Company Profile API
+// Endpoint: Finnhub GET /stock/executive?symbol= or company profile API (executives, tenure); augment with news for recentAlert
+// When: before launch
 export const CEOS: CEOEntry[] = [
   // TECHNOLOGY (20)
   { id: "AAPL-Tim Cook", name: "Tim Cook", company: "Apple", ticker: "AAPL", sector: "Technology", tenureStart: 2011, sentiment: "positive", marketCap: 3500, recentAlert: false },

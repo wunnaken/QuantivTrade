@@ -139,6 +139,9 @@ function genId(): string {
   return `pm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// TODO: Replace with Prediction Markets API
+// Endpoint: GET /api/predict/markets (or database: prediction_markets table; seed with curated list or admin-created)
+// When: before launch
 const PRELOADED: Omit<PredictMarket, "id" | "createdAt" | "createdBy" | "yesPoints" | "noPoints" | "status" | "lastBetAt">[] = [
   { question: "Will the S&P 500 close above 5,800 by end of March 2026?", category: "Finance", closeDate: "2026-03-31", initialYesPercent: 58 },
   { question: "Will NVDA hit $1,100 before April 2026?", category: "Finance", closeDate: "2026-04-01", initialYesPercent: 34 },

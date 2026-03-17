@@ -15,6 +15,9 @@ type TickerRow = {
 
 const TICKER_ORDER = ["spy", "qqq", "btc", "eth", "gld", "oil", "dxy", "eurusd"] as const;
 
+// TODO: Replace with real-time quotes API (fallback when Finnhub unavailable or no key)
+// Endpoint: Finnhub GET /quote?symbol= (already used when FINNHUB_API_KEY set); ensure key is set before launch
+// When: before launch
 const MOCK_TICKERS: TickerRow[] = [
   { id: "spy", name: "S&P 500", symbol: "SPY", price: 5850, change: 42.5, changePercent: 0.73, source: "mock" },
   { id: "qqq", name: "Nasdaq", symbol: "QQQ", price: 5250, change: -18.2, changePercent: -0.35, source: "mock" },

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { WidgetId } from "../../lib/dashboard";
+import { SentimentRadarWidget } from "./SentimentRadar";
 import { loadStreaks } from "../../lib/engagement/streaks";
 import { loadXP, getRankTitle } from "../../lib/engagement/xp";
 import { getTrades, computePnL, formatCurrency } from "../../lib/journal";
@@ -725,6 +726,8 @@ export function WidgetContent({ widgetId, onLoaded }: WidgetContentProps) {
       return <CryptoDashboardWidget widgetId={widgetId} onLoaded={onLoaded} />;
     case "community-feed":
       return <CommunityFeedWidget widgetId={widgetId} onLoaded={onLoaded} />;
+    case "sentiment-radar":
+      return <SentimentRadarWidget onLoaded={onLoaded} />;
     default: {
       const p = PLACEHOLDERS[widgetId] as { title: string; href: string; label?: string } | undefined;
       if (p) return <PlaceholderWidget title={p.title} href={p.href} label={p.label} />;

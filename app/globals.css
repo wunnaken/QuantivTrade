@@ -614,3 +614,17 @@ html[data-theme="light"] .dark-bg-section .text-zinc-500 {
   animation: flashRed 0.5s ease-out;
 }
 
+@keyframes pulse-sentiment {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+.sentiment-bubble-pulse {
+  animation: pulse-sentiment 3s ease-in-out infinite;
+}
+

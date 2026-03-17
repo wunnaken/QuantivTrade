@@ -28,6 +28,9 @@ export async function GET() {
   };
 
   if (!token) {
+    // TODO: Replace with real YTD API (fallback when no Finnhub key)
+    // Endpoint: Finnhub /stock/candle or similar for Jan 1 vs current; set FINNHUB_API_KEY before launch
+    // When: before launch
     const mockJan1Spy = 5800;
     const mockCurrentSpy = 6050;
     result.spy = {

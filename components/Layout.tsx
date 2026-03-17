@@ -17,17 +17,17 @@ import { useLoginStreakTick } from "./StreakProvider";
 import { getPredictNotifications, markPredictNotificationsRead } from "../lib/predict";
 import { getInAppNotifications } from "../lib/price-alerts";
 import { usePriceContext } from "../lib/price-context";
-import { getBrokerConnection } from "../lib/broker-connection";
 
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_BG = "#0A0E1A";
 
-const MAIN_NAV: { href: string; label: string }[] = [
+const MAIN_NAV: { href: string; label: string; icon?: "radar" }[] = [
   { href: "/feed", label: "Feed" },
   { href: "/communities", label: "Communities" },
   { href: "/messages", label: "Messages" },
   { href: "/news", label: "News" },
   { href: "/map", label: "Map" },
+  { href: "/sentiment", label: "Sentiment Radar" },
   { href: "/growth", label: "Growth" },
   { href: "/ceos", label: "CEOs" },
   { href: "/calendar", label: "Calendar" },
@@ -73,6 +73,7 @@ function SidebarLogo({ narrow }: { narrow: boolean }) {
 function NavItem({
   href,
   label,
+  icon,
   isActive,
   collapsed,
   onClick,
@@ -87,6 +88,7 @@ function NavItem({
 }: {
   href: string;
   label: string;
+  icon?: "radar";
   isActive: boolean;
   collapsed: boolean;
   onClick?: () => void;
@@ -131,13 +133,19 @@ function NavItem({
         aria-current={isActive ? "page" : undefined}
       >
         <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
-          <span
-            className={`h-1.5 w-1.5 rounded-full transition-transform transition-opacity duration-200 ${
-              isActive
-                ? "scale-125 bg-[var(--accent-color)] opacity-100"
-                : "bg-zinc-500 opacity-40 group-hover:opacity-100 group-hover:scale-125"
-            }`}
-          />
+          {icon === "radar" ? (
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          ) : (
+            <span
+              className={`h-1.5 w-1.5 rounded-full transition-transform transition-opacity duration-200 ${
+                isActive
+                  ? "scale-125 bg-[var(--accent-color)] opacity-100"
+                  : "bg-zinc-500 opacity-40 group-hover:opacity-100 group-hover:scale-125"
+              }`}
+            />
+          )}
         </span>
         {!collapsed && (
           <span className="truncate transform text-sm transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">
@@ -358,6 +366,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 key={item.href}
                 href={item.href}
                 label={item.label}
+                icon={item.icon}
                 isActive={isActive(item.href)}
                 collapsed={collapsed}
                 onClick={() => setSidebarOpen(false)}
@@ -467,9 +476,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </span>
                 {!collapsed && <span className="truncate">Verified Trader</span>}
               </div>
-              {!collapsed && typeof window !== "undefined" && !getBrokerConnection().connected && (
-                <a href="/profile" className="text-[11px] font-normal transition hover:opacity-80" style={{ color: "#14B8A6" }}>+ Connect broker</a>
-              )}
             </div>
           ) : (
             <Link

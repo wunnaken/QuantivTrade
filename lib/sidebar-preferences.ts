@@ -23,9 +23,24 @@ export function getSidebarPrefs(allHrefs: string[]): SidebarPrefs {
     const collapsed = typeof parsed?.collapsed === "boolean" ? parsed.collapsed : false;
     const orderFiltered = order.filter((h) => set.has(h));
     const missing = allHrefs.filter((h) => !orderFiltered.includes(h));
+    const hiddenFiltered = hidden.filter((h) => set.has(h) && !missing.includes(h));
+
+    // If the app adds a new tab, insert it into a sane place for existing users
+    // instead of dumping it at the very bottom (often off-screen).
+    const nextOrder = [...orderFiltered];
+    missing.forEach((href) => {
+      if (href === "/sentiment") {
+        const after = "/map";
+        const idx = nextOrder.indexOf(after);
+        if (idx >= 0) nextOrder.splice(idx + 1, 0, href);
+        else nextOrder.unshift(href);
+      } else {
+        nextOrder.push(href);
+      }
+    });
     return {
-      order: [...orderFiltered, ...missing],
-      hidden: hidden.filter((h) => set.has(h)),
+      order: nextOrder,
+      hidden: hiddenFiltered,
       collapsed,
     };
   } catch {

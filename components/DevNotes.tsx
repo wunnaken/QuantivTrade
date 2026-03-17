@@ -30,6 +30,7 @@ const DEFAULT_NOTES: Omit<DevNote, "id" | "timestamp">[] = [
   { type: "info", title: "WebSocket Pricing", description: "Finnhub free tier WebSocket: max 50 simultaneous symbol subscriptions. If user has large watchlist (50+ tickers) will need to prioritize which to subscribe. Paid Finnhub plan removes this limit. Set NEXT_PUBLIC_FINNHUB_KEY for live prices. News, economic data, and options flow still use polling — no free WebSocket available for these data types.", page: "/" },
   { type: "info", title: "FMP economic calendar uses v4 endpoint", description: "FMP switched from v3 to v4 endpoint in August 2025 — v4 is now the correct URL. See app/api/calendar/economic/route.ts.", page: "/calendar" },
   { type: "info", title: "Broker API connection is placeholder UI only", description: "All broker connection flows show 'coming soon' after broker selection. Real integration needs: Tradier API (stocks), Alpaca API (stocks/crypto), or Plaid for multi-broker support. OAuth flow needed. Backend needs to securely store read-only access tokens in Supabase.", page: "/profile, /verify, /settings" },
+  { type: "warning", title: "Sentiment Radar", description: "Sentiment scores use community posts from localStorage (not database yet) and mock news scores. NewsAPI + Claude for real news sentiment not wired — add app/api/sentiment or similar; Claude API called every 5 min per sector = potentially expensive. Add caching and rate limiting before launch. Switch to database posts when Supabase is fully connected.", page: "/sentiment" },
   { type: "warning", title: "Custom Dashboard", description: "Widget data fetches independently per widget. With many widgets open this could hit Finnhub/NewsAPI rate limits on free tier. Consider debouncing or shared data fetching when database is connected.", page: "/dashboard" },
   { type: "info", title: "Continue with X / Link X account", description: "'Continue with Google' and 'Continue with Apple' on sign-in, and 'Link Google account' / 'Link Apple account' in Settings are placeholder UI. To implement: (1) Supabase: enable Google/Apple in Auth > Providers, add redirect URL, use signInWithOAuth() and link identity in client. (2) Or use NextAuth.js with Google/Apple providers and callbacks to merge accounts. Store provider id in user profile for 'Link account' (link existing email user to OAuth).", page: "/auth/sign-in, /settings" },
 ];
@@ -143,7 +144,7 @@ export function DevNotes() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 left-6 z-[9998] flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium shadow-lg transition-opacity hover:opacity-90"
+        className="fixed bottom-6 left-1/2 z-[9998] flex -translate-x-1/2 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium shadow-lg transition-opacity hover:opacity-90"
         style={{ backgroundColor: ORANGE, color: "#fff" }}
         aria-label="Developer Notes"
       >

@@ -80,6 +80,14 @@ async function fetchCryptoQuote(ticker: string): Promise<TickerQuote | null> {
   }
 }
 
+/** Map display symbols to Finnhub API symbols (forex/commodities). */
+function toFinnhubSymbol(ticker: string): string {
+  const u = ticker.toUpperCase().trim();
+  if (u === "EURUSD") return "OANDA:EUR_USD";
+  if (u === "OIL") return "USO";
+  return u;
+}
+
 export async function GET(request: NextRequest) {
   const ticker = request.nextUrl.searchParams.get("ticker")?.trim().toUpperCase();
   if (!ticker) {
@@ -95,7 +103,8 @@ export async function GET(request: NextRequest) {
   }
   const key = process.env.FINNHUB_API_KEY;
   if (key) {
-    const quote = await fetchFinnhubQuote(ticker, key);
+    const finnhubSymbol = toFinnhubSymbol(ticker);
+    const quote = await fetchFinnhubQuote(finnhubSymbol, key);
     if (quote) return NextResponse.json(quote);
   }
   const empty: TickerQuote = { price: null, change: null, changePercent: null, volume: null, high: null, low: null, open: null, previousClose: null };

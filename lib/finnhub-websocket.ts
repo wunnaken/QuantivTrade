@@ -9,12 +9,16 @@ function toFinnhubSymbol(symbol: string): string {
   const u = symbol.toUpperCase().trim();
   if (u === "BTC") return "BINANCE:BTCUSDT";
   if (u === "ETH") return "BINANCE:ETHUSDT";
+  if (u === "EURUSD") return "OANDA:EUR_USD";
+  if (u === "OIL") return "USO";
   return u;
 }
 
 function fromFinnhubSymbol(finnhubSymbol: string): string {
   if (finnhubSymbol === "BINANCE:BTCUSDT") return "BTC";
   if (finnhubSymbol === "BINANCE:ETHUSDT") return "ETH";
+  if (finnhubSymbol === "OANDA:EUR_USD") return "EURUSD";
+  if (finnhubSymbol === "USO") return "OIL";
   return finnhubSymbol;
 }
 
