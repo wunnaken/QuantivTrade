@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addTrade,
   updateTrade,
   deleteTrade,
+  saveTrades,
   formatCurrency,
   formatPercent,
   getTrades,
   computePnL,
+  JOURNAL_STORAGE_KEY,
   type JournalTrade,
   type Direction,
   type Strategy,
@@ -71,14 +73,24 @@ function getCalendarDays(year: number, month: number): { date: string; day: numb
   return out;
 }
 
+const INSIGHTS_CACHE_KEY = "xchange-journal-insights";
+const INSIGHTS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
 export default function JournalPage() {
   const [activeTab, setActiveTab] = useState<TabId>("trades");
   const [trades, setTrades] = useState<JournalTrade[]>([]);
+  const [tradesLoading, setTradesLoading] = useState(true);
+  const [tradesError, setTradesError] = useState<string | null>(null);
+  const [failedLocalTrades, setFailedLocalTrades] = useState<JournalTrade[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTrade, setEditingTrade] = useState<JournalTrade | null>(null);
   const [insights, setInsights] = useState<JournalInsightsResponse | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
+  const insightsCacheRef = useRef<{ data: JournalInsightsResponse; at: number } | null>(null);
+  const migratedRef = useRef(false);
+  const toast = useToast();
+  const [openPrices, setOpenPrices] = useState<Record<string, number>>({});
 
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const d = new Date();
@@ -94,16 +106,101 @@ export default function JournalPage() {
   const [dateTo, setDateTo] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "pnl" | "asset">("date");
 
-  const loadTrades = useCallback(() => {
-    setTrades(getTrades());
+  const loadTrades = useCallback(async () => {
+    setTradesLoading(true);
+    setTradesError(null);
+    try {
+      const res = await fetch("/api/trades", { cache: "no-store" });
+      if (res.ok) {
+        const data = (await res.json()) as { trades: JournalTrade[] };
+        const list = Array.isArray(data.trades) ? data.trades : [];
+        setTrades(list);
+        if (!migratedRef.current && typeof window !== "undefined") {
+          migratedRef.current = true;
+          const raw = window.localStorage.getItem(JOURNAL_STORAGE_KEY);
+          if (raw) {
+            try {
+              const local = JSON.parse(raw) as JournalTrade[];
+              if (Array.isArray(local) && local.length > 0) {
+                let migrated = 0;
+                for (const t of local) {
+                  const body = {
+                    asset: t.asset,
+                    direction: t.direction,
+                    entry_price: t.entryPrice,
+                    exit_price: t.exitPrice,
+                    position_size: t.positionSize,
+                    entry_date: t.entryDate.slice(0, 10),
+                    exit_date: t.exitDate ? t.exitDate.slice(0, 10) : null,
+                    strategy: t.strategy,
+                    notes: t.notes,
+                    tags: t.tags,
+                  };
+                  const r = await fetch("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                  if (r.ok) migrated++;
+                }
+                window.localStorage.removeItem(JOURNAL_STORAGE_KEY);
+                if (migrated > 0) {
+                  const refetch = await fetch("/api/trades", { cache: "no-store" });
+                  if (refetch.ok) {
+                    const d = (await refetch.json()) as { trades: JournalTrade[] };
+                    setTrades(Array.isArray(d.trades) ? d.trades : []);
+                  }
+                }
+              }
+            } catch {
+              // keep localStorage as fallback
+            }
+          }
+        }
+      } else {
+        const local = getTrades();
+        setTrades(local);
+      }
+    } catch {
+      setTrades(getTrades());
+    } finally {
+      setTradesLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     loadTrades();
   }, [loadTrades]);
 
+  const displayTrades = useMemo(() => {
+    const byId = new Map<string, JournalTrade>();
+    trades.forEach((t) => byId.set(t.id, t));
+    failedLocalTrades.forEach((t) => byId.set(t.id, t));
+    return Array.from(byId.values()).sort((a, b) => (b.entryDate + b.id).localeCompare(a.entryDate + a.id));
+  }, [trades, failedLocalTrades]);
+
+  const openTradeAssets = useMemo(
+    () => [...new Set(displayTrades.filter((t) => t.exitPrice == null).map((t) => t.asset.trim().toUpperCase()).filter(Boolean))].slice(0, 15),
+    [displayTrades]
+  );
+  useEffect(() => {
+    if (openTradeAssets.length === 0) {
+      setOpenPrices({});
+      return;
+    }
+    const map: Record<string, number> = {};
+    let done = 0;
+    openTradeAssets.forEach((symbol) => {
+      fetch(`/api/ticker-quote?ticker=${encodeURIComponent(symbol)}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => {
+          if (d?.price != null) map[symbol] = Number(d.price);
+        })
+        .finally(() => {
+          done++;
+          if (done === openTradeAssets.length) setOpenPrices((prev) => ({ ...prev, ...map }));
+        });
+    });
+  }, [openTradeAssets.join(",")]);
+
   const filteredTrades = useMemo(() => {
-    let list = [...trades];
+    let list = [...displayTrades];
     if (filterStatus === "open") list = list.filter((t) => t.exitPrice == null);
     if (filterStatus === "closed") list = list.filter((t) => t.exitPrice != null);
     if (filterAsset.trim()) {
@@ -131,13 +228,13 @@ export default function JournalPage() {
       });
     }
     return list;
-  }, [trades, filterStatus, filterAsset, filterDirection, filterOutcome, dateFrom, dateTo, sortBy]);
+  }, [displayTrades, filterStatus, filterAsset, filterDirection, filterOutcome, dateFrom, dateTo, sortBy]);
 
-  const closedTrades = useMemo(() => trades.filter((t) => t.exitPrice != null), [trades]);
+  const closedTrades = useMemo(() => displayTrades.filter((t) => t.exitPrice != null), [displayTrades]);
   const analyticsTrades = useMemo(() => closedTrades.slice(0, 100), [closedTrades]);
 
   const stats = useMemo(() => {
-    const total = trades.length;
+    const total = displayTrades.length;
     const closed = closedTrades.length;
     const winners = closedTrades.filter((t) => (computePnL(t)?.pnlDollars ?? 0) >= 0).length;
     const winRate = closed > 0 ? (winners / closed) * 100 : 0;
@@ -154,7 +251,7 @@ export default function JournalPage() {
     });
     const avgReturn = countReturn > 0 ? sumReturn / countReturn : 0;
     return { total, closed, winRate, totalPnl, avgReturn, winners, losers: closed - winners };
-  }, [trades, closedTrades]);
+  }, [displayTrades, closedTrades]);
 
   const cumulativeData = useMemo(() => {
     const sorted = [...closedTrades].sort((a, b) => (a.exitDate || a.entryDate).localeCompare(b.exitDate || b.entryDate));
@@ -242,20 +339,27 @@ export default function JournalPage() {
     return { bestStrategy, bestDay, avgHoldDays, longPnl, shortPnl };
   }, [closedTrades]);
 
-  const fetchInsights = useCallback(async () => {
-    if (trades.length < 5) return;
+  const fetchInsights = useCallback(async (forceRefresh = false) => {
+    if (displayTrades.length < 5) return;
     setInsightsLoading(true);
     setInsightsError(null);
+    if (forceRefresh) insightsCacheRef.current = null;
     try {
-      const last20 = trades.slice(0, 20);
+      const cached = insightsCacheRef.current;
+      if (!forceRefresh && cached && Date.now() - cached.at < INSIGHTS_CACHE_TTL_MS) {
+        setInsights(cached.data);
+        setInsightsLoading(false);
+        return;
+      }
+      const last20 = displayTrades.slice(0, 20);
       const userMessage = `Analyze my trading journal:
-Total trades: ${trades.length}
+Total trades: ${displayTrades.length}
 Win rate: ${stats.winRate.toFixed(1)}%
 Total P&L: $${stats.totalPnl.toFixed(2)}
 Average return: ${stats.avgReturn.toFixed(2)}%
 Best trade: ${bestWorst.best ? `${bestWorst.best.trade.asset} +${bestWorst.best.pnl.pnlPercent.toFixed(2)}%` : "—"}
 Worst trade: ${bestWorst.worst ? `${bestWorst.worst.trade.asset} ${bestWorst.worst.pnl.pnlPercent.toFixed(2)}%` : "—"}
-Most used strategy: ${trades.length ? (() => { const m = new Map<string, number>(); trades.forEach(t => m.set(t.strategy, (m.get(t.strategy) ?? 0) + 1)); let max = 0, out = ""; m.forEach((c, s) => { if (c > max) { max = c; out = s; } }); return out; })() : "—"}
+Most used strategy: ${displayTrades.length ? (() => { const m = new Map<string, number>(); displayTrades.forEach(t => m.set(t.strategy, (m.get(t.strategy) ?? 0) + 1)); let max = 0, out = ""; m.forEach((c, s) => { if (c > max) { max = c; out = s; } }); return out; })() : "—"}
 Trades data: ${JSON.stringify(last20)}`;
 
       const res = await fetch("/api/journal-insights", {
@@ -269,27 +373,46 @@ Trades data: ${JSON.stringify(last20)}`;
       }
       const data = (await res.json()) as JournalInsightsResponse;
       setInsights(data);
+      insightsCacheRef.current = { data, at: Date.now() };
     } catch (e) {
       setInsightsError(e instanceof Error ? e.message : "Failed to load insights");
     } finally {
       setInsightsLoading(false);
     }
-  }, [trades, stats.winRate, stats.totalPnl, stats.avgReturn, bestWorst]);
+  }, [displayTrades, stats.winRate, stats.totalPnl, stats.avgReturn, bestWorst]);
 
   useEffect(() => {
-    if (activeTab === "insights" && trades.length >= 5 && !insights && !insightsLoading && !insightsError) {
+    if (activeTab === "insights" && displayTrades.length >= 5 && !insights && !insightsLoading && !insightsError) {
       queueMicrotask(() => fetchInsights());
     }
-  }, [activeTab, trades.length, insights, insightsLoading, insightsError, fetchInsights]);
+  }, [activeTab, displayTrades.length, insights, insightsLoading, insightsError, fetchInsights]);
 
-  const handleDelete = useCallback((id: string) => {
-    deleteTrade(id);
-    loadTrades();
-    if (insights) setInsights(null);
-  }, [loadTrades, insights]);
+  const handleDelete = useCallback(async (id: string) => {
+    const isLocalId = id.startsWith("tj_");
+    if (isLocalId) {
+      deleteTrade(id);
+      setFailedLocalTrades((prev) => prev.filter((t) => t.id !== id));
+      setTrades((prev) => prev.filter((t) => t.id !== id));
+      if (insights) setInsights(null);
+      toast.showToast("Trade deleted", "default");
+      return;
+    }
+    try {
+      const res = await fetch(`/api/trades?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (res.ok) {
+        setTrades((prev) => prev.filter((t) => t.id !== id));
+        if (insights) setInsights(null);
+        toast.showToast("Trade deleted", "default");
+      } else {
+        toast.showToast("Delete failed", "error");
+      }
+    } catch {
+      toast.showToast("Delete failed", "error");
+    }
+  }, [insights, toast]);
 
   const tabs: { id: TabId; label: string }[] = [
-    { id: "trades", label: "My Trades" },
+    { id: "trades", label: `My Trades (${displayTrades.length})` },
     { id: "analytics", label: "Analytics" },
     { id: "insights", label: "AI Insights" },
   ];
@@ -351,6 +474,21 @@ Trades data: ${JSON.stringify(last20)}`;
         {/* My Trades */}
         {activeTab === "trades" && (
           <div className="mt-6">
+            {tradesLoading ? (
+              <div className="space-y-3">
+                <div className="h-10 w-48 animate-pulse rounded-lg bg-white/10" />
+                <div className="grid gap-2">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="flex h-14 animate-pulse items-center gap-4 rounded-xl bg-white/5 px-4">
+                      <div className="h-4 w-20 rounded bg-white/10" />
+                      <div className="h-4 w-16 rounded bg-white/10" />
+                      <div className="h-4 flex-1 rounded bg-white/10" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+            <>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-wrap items-center gap-2">
                 <select
@@ -491,9 +629,26 @@ Trades data: ${JSON.stringify(last20)}`;
                               const canEdit = entryDateOnly <= today;
                               return (
                                 <li key={t.id} className="group flex items-center justify-between gap-0.5 rounded bg-white/5 px-1 py-0.5 text-[10px]">
-                                  <span className="truncate font-medium text-[var(--accent-color)]">{t.asset}</span>
+                                  <span className="flex items-center gap-1 truncate">
+                                    <span className="font-medium text-[var(--accent-color)]">{t.asset}</span>
+                                    {t.exitPrice == null && (
+                                      <span className="shrink-0 rounded bg-blue-500/20 px-1 py-0.5 text-[9px] font-medium text-blue-400">Open</span>
+                                    )}
+                                  </span>
                                   <span className={`shrink-0 ${pnl != null ? (pnl.pnlDollars >= 0 ? "text-emerald-400" : "text-red-400") : "text-zinc-500"}`}>
-                                    {pnl != null ? formatCurrency(pnl.pnlDollars) : "—"}
+                                    {pnl != null
+                                      ? formatCurrency(pnl.pnlDollars)
+                                      : (() => {
+                                          const cur = openPrices[t.asset.trim().toUpperCase()];
+                                          if (cur == null) return "—";
+                                          const mult = t.direction === "LONG" ? 1 : -1;
+                                          const un = (cur - t.entryPrice) * mult * t.positionSize;
+                                          return (
+                                            <span className={un >= 0 ? "text-emerald-400" : "text-red-400"}>
+                                              Unreal. {formatCurrency(un)}
+                                            </span>
+                                          );
+                                        })()}
                                   </span>
                                   <div className="hidden shrink-0 items-center gap-0.5 group-hover:flex">
                                     {canEdit && (
@@ -533,6 +688,8 @@ Trades data: ${JSON.stringify(last20)}`;
                   </div>
                 </div>
               </div>
+            )}
+            </>
             )}
           </div>
         )}
@@ -677,24 +834,24 @@ Trades data: ${JSON.stringify(last20)}`;
         {/* AI Insights */}
         {activeTab === "insights" && (
           <div className="mt-6">
-            {trades.length < 5 ? (
+            {displayTrades.length < 5 ? (
               <div className="flex flex-col items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] py-16 text-center">
                 <p className="text-lg font-medium text-zinc-200">Log at least 5 trades to unlock AI insights</p>
                 <div className="mt-4 w-64 overflow-hidden rounded-full bg-white/10">
                   <div
                     className="h-2 rounded-full transition-all"
                     style={{
-                      width: `${Math.min(100, (trades.length / 5) * 100)}%`,
+                      width: `${Math.min(100, (displayTrades.length / 5) * 100)}%`,
                       backgroundColor: "var(--accent-color)",
                     }}
                   />
                 </div>
-                <p className="mt-2 text-sm text-zinc-400">{trades.length}/5 trades logged</p>
+                <p className="mt-2 text-sm text-zinc-400">{displayTrades.length}/5 trades logged</p>
               </div>
             ) : insightsLoading ? (
               <div className="flex flex-col items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] py-16">
                 <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent-color)] border-t-transparent" />
-                <p className="mt-4 text-sm text-zinc-400">Analyzing your trades...</p>
+                <p className="mt-4 text-sm text-zinc-400">Analyzing your {displayTrades.length} trades...</p>
               </div>
             ) : insightsError ? (
               <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-center">
@@ -713,7 +870,7 @@ Trades data: ${JSON.stringify(last20)}`;
                   <h2 className="text-lg font-semibold text-zinc-100">Your analysis</h2>
                   <button
                     type="button"
-                    onClick={() => fetchInsights()}
+                    onClick={() => fetchInsights(true)}
                     className="rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-zinc-300 hover:bg-white/5"
                   >
                     Re-analyze my trades
@@ -802,12 +959,67 @@ Trades data: ${JSON.stringify(last20)}`;
             setModalOpen(false);
             setEditingTrade(null);
           }}
-          onSaved={() => {
-            loadTrades();
+          onSaved={(savedTrade) => {
+            if (savedTrade) {
+              if (editingTrade) {
+                setTrades((prev) => prev.map((t) => (t.id === editingTrade.id ? savedTrade : t)));
+                if (editingTrade.id.startsWith("tj_")) {
+                  setFailedLocalTrades((prev) => prev.filter((t) => t.id !== editingTrade.id));
+                }
+              } else {
+                setTrades((prev) => [savedTrade, ...prev]);
+              }
+            }
             setModalOpen(false);
             setEditingTrade(null);
+            if (savedTrade) toast.showToast("Trade saved", "default");
+          }}
+          onSaveFailed={(localTrade) => {
+            setFailedLocalTrades((prev) => [...prev, localTrade]);
+            setModalOpen(false);
+            setEditingTrade(null);
+            toast.showToast("Save failed — trade kept locally", "error");
           }}
         />
+      )}
+
+      {failedLocalTrades.length > 0 && (
+        <div className="fixed bottom-20 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200 shadow-lg">
+          <span>{failedLocalTrades.length} trade(s) saved locally. Save to cloud?</span>
+          <button
+            type="button"
+            onClick={async () => {
+              for (const t of [...failedLocalTrades]) {
+                const body: Record<string, unknown> = {
+                  asset: t.asset,
+                  direction: t.direction,
+                  entry_price: t.entryPrice,
+                  exit_price: t.exitPrice,
+                  position_size: t.positionSize,
+                  entry_date: t.entryDate.slice(0, 10),
+                  exit_date: t.exitDate ? t.exitDate.slice(0, 10) : null,
+                  strategy: t.strategy,
+                  notes: t.notes,
+                  tags: t.tags,
+                };
+                if (t.pnlDollars != null || t.pnlPercent != null) {
+                  body.pnl_dollars = t.pnlDollars ?? undefined;
+                  body.pnl_percent = t.pnlPercent ?? undefined;
+                }
+                const res = await fetch("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                if (res.ok) {
+                  const saved = (await res.json()) as JournalTrade;
+                  setTrades((prev) => [saved, ...prev]);
+                  setFailedLocalTrades((prev) => prev.filter((x) => x.id !== t.id));
+                  deleteTrade(t.id);
+                }
+              }
+            }}
+            className="rounded bg-amber-500 px-3 py-1 text-sm font-medium text-black hover:bg-amber-400"
+          >
+            Retry
+          </button>
+        </div>
       )}
     </div>
   );
@@ -817,12 +1029,15 @@ function LogTradeModal({
   initialTrade,
   onClose,
   onSaved,
+  onSaveFailed,
 }: {
   initialTrade: JournalTrade | null;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (savedTrade?: JournalTrade) => void;
+  onSaveFailed?: (localTrade: JournalTrade) => void;
 }) {
   const toast = useToast();
+  const [saving, setSaving] = useState(false);
   const [asset, setAsset] = useState("");
   const [direction, setDirection] = useState<Direction>("LONG");
   const [entryPrice, setEntryPrice] = useState("");
@@ -836,6 +1051,9 @@ function LogTradeModal({
   const [optionPl, setOptionPl] = useState("");
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [currentPriceLoading, setCurrentPriceLoading] = useState(false);
+  const [manualOutcome, setManualOutcome] = useState(false);
+  const [manualPnlDollars, setManualPnlDollars] = useState("");
+  const [manualPnlPercent, setManualPnlPercent] = useState("");
 
   useEffect(() => {
     const sym = asset.trim().toUpperCase();
@@ -867,6 +1085,10 @@ function LogTradeModal({
       setNotes(initialTrade.notes);
       setTags(initialTrade.tags.join(" "));
       setOptionPl(initialTrade.optionPl != null ? initialTrade.optionPl.toString() : "");
+      const hasManual = initialTrade.pnlDollars != null || initialTrade.pnlPercent != null;
+      setManualOutcome(hasManual);
+      setManualPnlDollars(initialTrade.pnlDollars != null ? Number(initialTrade.pnlDollars).toFixed(2) : "");
+      setManualPnlPercent(initialTrade.pnlPercent != null ? Number(initialTrade.pnlPercent).toFixed(2) : "");
     } else {
       setAsset("");
       setDirection("LONG");
@@ -879,6 +1101,9 @@ function LogTradeModal({
       setNotes("");
       setTags("");
       setOptionPl("");
+      setManualOutcome(false);
+      setManualPnlDollars("");
+      setManualPnlPercent("");
     }
   }, [initialTrade]);
 
@@ -886,7 +1111,21 @@ function LogTradeModal({
   const entryNum = parseFloat(entryPrice);
   const sizeNum = parseFloat(positionSize);
   const optionPlNum = optionPl === "" ? null : parseFloat(optionPl);
+  const manualPnlDollarsNum = manualPnlDollars === "" ? null : parseFloat(manualPnlDollars);
+  const manualPnlPercentNum = manualPnlPercent === "" ? null : parseFloat(manualPnlPercent);
   const pnl = useMemo(() => {
+    if (manualOutcome) {
+      if (Number.isFinite(manualPnlDollarsNum) || Number.isFinite(manualPnlPercentNum)) {
+        const cost = entryNum * sizeNum;
+        const dollars = manualPnlDollarsNum ?? (cost !== 0 && manualPnlPercentNum != null ? (manualPnlPercentNum / 100) * cost : 0);
+        const percent = manualPnlPercentNum ?? (cost !== 0 ? (dollars / cost) * 100 : 0);
+        return {
+          pnlDollars: Math.round(dollars * 100) / 100,
+          pnlPercent: Math.round(percent * 100) / 100,
+        };
+      }
+      return null;
+    }
     let pnlDollars = 0;
     let pnlPercent = 0;
     if (exitNum != null && Number.isFinite(entryNum) && Number.isFinite(sizeNum) && entryNum !== 0) {
@@ -896,10 +1135,24 @@ function LogTradeModal({
     }
     if (optionPlNum != null && Number.isFinite(optionPlNum)) pnlDollars += optionPlNum;
     if (pnlDollars === 0 && pnlPercent === 0 && optionPlNum == null) return null;
-    return { pnlDollars, pnlPercent };
-  }, [exitNum, entryNum, sizeNum, direction, optionPlNum]);
+    return {
+      pnlDollars: Math.round(pnlDollars * 100) / 100,
+      pnlPercent: Math.round(pnlPercent * 100) / 100,
+    };
+  }, [exitNum, entryNum, sizeNum, direction, optionPlNum, manualOutcome, manualPnlDollarsNum, manualPnlPercentNum]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const manualPnlPayload = useMemo(() => {
+    if (!manualOutcome || (!Number.isFinite(manualPnlDollarsNum) && !Number.isFinite(manualPnlPercentNum))) return null;
+    const cost = entryNum * sizeNum;
+    const dollars = manualPnlDollarsNum ?? (cost !== 0 && manualPnlPercentNum != null ? (manualPnlPercentNum / 100) * cost : undefined);
+    const percent = manualPnlPercentNum ?? (cost !== 0 && dollars !== undefined ? (dollars / cost) * 100 : undefined);
+    return {
+      pnl_dollars: dollars !== undefined ? Math.round(dollars * 100) / 100 : undefined,
+      pnl_percent: percent !== undefined ? Math.round(percent * 100) / 100 : undefined,
+    };
+  }, [manualOutcome, manualPnlDollarsNum, manualPnlPercentNum, entryNum, sizeNum]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!asset.trim() || !Number.isFinite(entryNum) || entryNum <= 0 || !Number.isFinite(sizeNum) || sizeNum <= 0) return;
     const input: JournalTradeInput = {
@@ -914,19 +1167,118 @@ function LogTradeModal({
       notes: notes.trim(),
       tags: tags.split(/[\s,#]+/).filter(Boolean).map((t) => t.trim()),
       optionPl: optionPlNum,
+      ...(manualPnlPayload && {
+        pnlDollars: manualPnlPayload.pnl_dollars,
+        pnlPercent: manualPnlPayload.pnl_percent,
+      }),
     };
-    if (initialTrade) {
-      updateTrade(initialTrade.id, input);
-    } else {
-      addTrade(input);
-      const { milestone } = tickJournalStreak();
-      addXPFromTrade();
-      if (milestone) {
-        triggerConfetti({ duration: 2000 });
-        toast.showToast(`📓 ${milestone} Day Journal Streak! Keep logging.`, "celebration");
+    setSaving(true);
+    try {
+      if (initialTrade) {
+        const isLocalId = initialTrade.id.startsWith("tj_");
+        if (isLocalId) {
+          const body: Record<string, unknown> = {
+            asset: input.asset,
+            direction: input.direction,
+            entry_price: input.entryPrice,
+            exit_price: input.exitPrice,
+            position_size: input.positionSize,
+            entry_date: input.entryDate.slice(0, 10),
+            exit_date: input.exitDate ? input.exitDate.slice(0, 10) : null,
+            strategy: input.strategy,
+            notes: input.notes,
+            tags: input.tags,
+          };
+          if (manualPnlPayload) {
+            body.pnl_dollars = manualPnlPayload.pnl_dollars;
+            body.pnl_percent = manualPnlPayload.pnl_percent;
+          }
+          const res = await fetch("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          if (res.ok) {
+            const saved = (await res.json()) as JournalTrade;
+            deleteTrade(initialTrade.id);
+            onSaved(saved);
+          } else {
+            throw new Error("Save failed");
+          }
+        } else {
+          const putBody: Record<string, unknown> = {
+            id: initialTrade.id,
+            asset: input.asset,
+            direction: input.direction,
+            entry_price: input.entryPrice,
+            exit_price: input.exitPrice,
+            position_size: input.positionSize,
+            entry_date: input.entryDate.slice(0, 10),
+            exit_date: input.exitDate ? input.exitDate.slice(0, 10) : null,
+            strategy: input.strategy,
+            notes: input.notes,
+            tags: input.tags,
+          };
+          if (manualPnlPayload) {
+            putBody.pnl_dollars = manualPnlPayload.pnl_dollars;
+            putBody.pnl_percent = manualPnlPayload.pnl_percent;
+          }
+          const res = await fetch("/api/trades", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(putBody),
+          });
+          if (res.ok) {
+            const saved = (await res.json()) as JournalTrade;
+            onSaved(saved);
+          } else {
+            throw new Error("Save failed");
+          }
+        }
+      } else {
+        const body: Record<string, unknown> = {
+          asset: input.asset,
+          direction: input.direction,
+          entry_price: input.entryPrice,
+          exit_price: input.exitPrice,
+          position_size: input.positionSize,
+          entry_date: input.entryDate.slice(0, 10),
+          exit_date: input.exitDate ? input.exitDate.slice(0, 10) : null,
+          strategy: input.strategy,
+          notes: input.notes,
+          tags: input.tags,
+        };
+        if (manualPnlPayload) {
+          body.pnl_dollars = manualPnlPayload.pnl_dollars;
+          body.pnl_percent = manualPnlPayload.pnl_percent;
+        }
+        const res = await fetch("/api/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+        if (res.ok) {
+          const saved = (await res.json()) as JournalTrade;
+          const { milestone } = tickJournalStreak();
+          addXPFromTrade();
+          if (milestone) {
+            triggerConfetti({ duration: 2000 });
+            toast.showToast(`📓 ${milestone} Day Journal Streak! Keep logging.`, "celebration");
+          }
+          onSaved(saved);
+        } else {
+          throw new Error("Save failed");
+        }
       }
+    } catch {
+      const localTrade = initialTrade
+        ? (updateTrade(initialTrade.id, input) as JournalTrade)
+        : addTrade(input);
+      if (!initialTrade) {
+        const { milestone } = tickJournalStreak();
+        addXPFromTrade();
+        if (milestone) {
+          triggerConfetti({ duration: 2000 });
+          toast.showToast(`📓 ${milestone} Day Journal Streak! Keep logging.`, "celebration");
+        }
+      }
+      onSaveFailed?.(localTrade);
+      onSaved();
+    } finally {
+      setSaving(false);
     }
-    onSaved();
   };
 
   return (
@@ -1074,6 +1426,64 @@ function LogTradeModal({
               className="mt-1 w-full rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500"
             />
           </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="manual-outcome"
+              checked={manualOutcome}
+              onChange={(e) => setManualOutcome(e.target.checked)}
+              className="size-4 rounded border-white/30 bg-white/5 accent-[var(--accent-color)]"
+            />
+            <label htmlFor="manual-outcome" className="text-xs font-medium text-zinc-400">
+              Manual outcome (e.g. options) — override calculated P&L
+            </label>
+          </div>
+          {manualOutcome && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-zinc-400">P&L ($)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={manualPnlDollars}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setManualPnlDollars(val);
+                    const num = parseFloat(val);
+                    const cost = entryNum * sizeNum;
+                    if (Number.isFinite(num) && Number.isFinite(cost) && cost !== 0) {
+                      setManualPnlPercent(((num / cost) * 100).toFixed(2));
+                    } else if (val.trim() === "") {
+                      setManualPnlPercent("");
+                    }
+                  }}
+                  placeholder="e.g. 150 or -50"
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-zinc-400">P&L (%)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={manualPnlPercent}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setManualPnlPercent(val);
+                    const num = parseFloat(val);
+                    const cost = entryNum * sizeNum;
+                    if (Number.isFinite(num) && Number.isFinite(cost) && cost !== 0) {
+                      setManualPnlDollars(((num / 100) * cost).toFixed(2));
+                    } else if (val.trim() === "") {
+                      setManualPnlDollars("");
+                    }
+                  }}
+                  placeholder="e.g. 12.5 or -5"
+                  className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500"
+                />
+              </div>
+            </div>
+          )}
           {pnl != null && (
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
               <p className="text-xs text-zinc-500">Outcome</p>
@@ -1113,10 +1523,16 @@ function LogTradeModal({
             </button>
             <button
               type="submit"
-              className="flex-1 rounded-full py-2.5 text-sm font-semibold text-[#020308] transition hover:opacity-90"
+              disabled={saving}
+              className="flex-1 rounded-full py-2.5 text-sm font-semibold text-[#020308] transition hover:opacity-90 disabled:opacity-60"
               style={{ backgroundColor: "var(--accent-color)" }}
             >
-              {initialTrade ? "Save changes" : "Log trade"}
+              {saving ? (
+                <span className="inline-flex items-center gap-2">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-[#020308] border-t-transparent" />
+                  {initialTrade ? "Saving…" : "Logging…"}
+                </span>
+              ) : initialTrade ? "Save changes" : "Log trade"}
             </button>
           </div>
         </form>

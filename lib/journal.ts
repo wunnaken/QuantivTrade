@@ -34,6 +34,9 @@ export type JournalTrade = {
   notes: string;
   tags: string[];
   optionPl: number | null; // optional options P/L (e.g. premium P/L)
+  /** When set, overrides computed P&L (e.g. for options). Persisted to Supabase as pnl_dollars/pnl_percent. */
+  pnlDollars?: number | null;
+  pnlPercent?: number | null;
   createdAt: string; // ISO
 };
 
@@ -92,6 +95,12 @@ export function deleteTrade(id: string): boolean {
 }
 
 export function computePnL(t: JournalTrade): { pnlDollars: number; pnlPercent: number; optionPl: number | null } | null {
+  const cost = t.entryPrice * t.positionSize;
+  if (t.pnlDollars != null || t.pnlPercent != null) {
+    const pnlDollars = t.pnlDollars ?? (typeof t.pnlPercent === "number" && cost !== 0 ? (t.pnlPercent / 100) * cost : 0);
+    const pnlPercent = t.pnlPercent ?? (cost !== 0 ? (pnlDollars / cost) * 100 : 0);
+    return { pnlDollars, pnlPercent, optionPl: t.optionPl ?? null };
+  }
   const mult = t.direction === "LONG" ? 1 : -1;
   let pnlDollars = 0;
   let pnlPercent = 0;
