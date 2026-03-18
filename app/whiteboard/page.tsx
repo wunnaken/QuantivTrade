@@ -80,10 +80,14 @@ async function fetchBoardsFromApi(): Promise<Board[]> {
     const res = await fetch("/api/whiteboard", { cache: "no-store" });
     if (!res.ok) throw new Error("api");
     const data = (await res.json()) as { boards?: Board[] };
-    return Array.isArray(data.boards) ? data.boards : [];
+    const boards = Array.isArray(data.boards) ? data.boards : [];
+    return boards.map((b) => ({
+      ...b,
+      id: String((b as any).id),
+    }));
   } catch {
     return getSavedBoards().map((b) => ({
-      id: b.id,
+      id: b.id.startsWith("board-") ? b.id.slice("board-".length) : b.id,
       name: b.name,
       scene: b.scene,
       updated_at: String(b.updatedAt),
@@ -119,13 +123,14 @@ export default function WhiteboardPage() {
       if (list.length > 0) {
         const first = list[0];
         initialDataRef.current = toInitialData(first.scene);
-        setActiveId(first.id);
+        setActiveId(String(first.id));
         setBoardName(first.name);
         setLastSavedAt(
           first.updated_at ? new Date(first.updated_at).getTime() : null
         );
       } else {
-        const id = `board-${Date.now()}`;
+        // Table `whiteboard_boards.id` is bigint, so keep our client IDs numeric-only.
+        const id = String(Date.now());
         const newBoard: Board = { id, name: "My Trading Board", scene: emptyScene() };
         initialDataRef.current = emptyScene();
         setBoards([newBoard]);
@@ -149,7 +154,7 @@ export default function WhiteboardPage() {
   }, []);
 
   const createNewBoard = useCallback(() => {
-    const id = `board-${Date.now()}`;
+    const id = String(Date.now());
     const newBoard: Board = {
       id,
       name: "My Trading Board",
@@ -177,6 +182,7 @@ export default function WhiteboardPage() {
     const payload = serializeScene(scene);
 
     try {
+      console.log("[whiteboard] Attempting API save");
       const res = await fetch("/api/whiteboard", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -186,7 +192,29 @@ export default function WhiteboardPage() {
           scene: payload,
         }),
       });
-      if (!res.ok) throw new Error("api");
+
+      const response = {
+        ok: res.ok,
+        status: res.status,
+        statusText: res.statusText,
+      };
+
+      // Read server body text to explain why we might fall back.
+      let bodyText = "";
+      try {
+        bodyText = await res.text();
+      } catch {
+        bodyText = "";
+      }
+
+      console.log("[whiteboard] API response:", { ...response, bodyText });
+
+      if (!res.ok) {
+        const reason = bodyText || `HTTP ${res.status}`;
+        console.log("[whiteboard] Falling back to localStorage because:", reason);
+        throw new Error(reason);
+      }
+
       setLastSavedAt(Date.now());
       const updated: Board = { id: activeId, name: boardName, scene: payload, updated_at: new Date().toISOString() };
       setBoards((prev) => {
@@ -195,7 +223,7 @@ export default function WhiteboardPage() {
         return [updated, ...prev];
       });
       toast.showToast("Whiteboard saved", "success");
-    } catch {
+    } catch (err) {
       saveBoard(activeId, boardName, payload);
       setLastSavedAt(Date.now());
       const updated: Board = { id: activeId, name: boardName, scene: payload, updated_at: new Date().toISOString() };
@@ -205,6 +233,7 @@ export default function WhiteboardPage() {
         return [updated, ...prev];
       });
       toast.showToast("Saved locally", "warning");
+      console.log("[whiteboard] Falling back to localStorage because:", err);
     } finally {
       setSaving(false);
     }

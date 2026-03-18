@@ -54,19 +54,56 @@ export async function POST(request: NextRequest) {
     scene?: unknown;
   } | null;
 
-  if (!body?.name?.trim()) return bad("Missing board name");
-  if (!body?.boardId?.trim()) return bad("Missing board id");
+  if (!body?.name) return bad("Missing board name");
+  if (typeof body.name !== "string" || !body.name.trim()) return bad("Missing board name");
+
+  const rawBoardId = (body as any)?.boardId;
+  const boardIdInput =
+    typeof rawBoardId === "string"
+      ? rawBoardId
+      : typeof rawBoardId === "number"
+        ? String(rawBoardId)
+        : rawBoardId != null
+          ? String(rawBoardId)
+          : "";
+  const boardId = boardIdInput.trim();
+  if (!boardId) return bad("Missing board id");
+
+  // Client IDs are sometimes generated as `board-${Date.now()}` even though this column is bigint.
+  // Normalize them here so inserts/upserts succeed.
+  const boardIdForDb = boardId.startsWith("board-") ? boardId.slice("board-".length) : boardId;
+  if (!/^\d+$/.test(boardIdForDb)) {
+    return bad(
+      `Invalid board id for bigint column. Received boardId="${boardId}", normalized="${boardIdForDb}".`,
+      400
+    );
+  }
+
+  const name = body.name.trim();
+
+  console.log("[whiteboard POST] called");
+  console.log("[whiteboard POST] userId:", userId);
+  console.log("[whiteboard POST] boardId:", boardId);
+  console.log("[whiteboard POST] name:", name);
 
   const supabase = createServerClient();
   const scene = normalizeScene(body.scene);
 
-  const { error } = await supabase.from("whiteboard_boards").upsert({
-    id: body.boardId.trim(),
-    user_id: userId,
-    name: body.name.trim(),
-    scene,
-    updated_at: new Date().toISOString(),
-  });
+  const { data, error } = await supabase
+    .from("whiteboard_boards")
+    .upsert(
+      {
+        id: boardIdForDb,
+        user_id: userId,
+        name,
+        scene,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    )
+    .select("id,name,scene,updated_at");
+
+  console.log("[whiteboard POST] upsert result:", { data, error });
 
   if (error) return bad(error.message, 500);
 
@@ -80,11 +117,16 @@ export async function DELETE(request: NextRequest) {
   const boardId = request.nextUrl.searchParams.get("boardId")?.trim();
   if (!boardId) return bad("Missing board id");
 
+  const boardIdForDb = boardId.startsWith("board-") ? boardId.slice("board-".length) : boardId;
+  if (!/^\d+$/.test(boardIdForDb)) {
+    return bad(`Invalid board id for bigint column: "${boardId}".`, 400);
+  }
+
   const supabase = createServerClient();
   const { error } = await supabase
     .from("whiteboard_boards")
     .delete()
-    .eq("id", boardId)
+    .eq("id", boardIdForDb)
     .eq("user_id", userId);
 
   if (error) return bad(error.message, 500);
