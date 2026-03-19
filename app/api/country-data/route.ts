@@ -127,11 +127,10 @@ export async function GET(request: NextRequest) {
 
   let elections: NewsItem[] = [];
   let political: NewsItem[] = [];
-  const trustedSources = process.env.NEWS_SOURCES ?? ""; // e.g. "reuters,associated-press,bbc-news"
   if (full && newsKey) {
     const [electionRes, politicalRes] = await Promise.all([
-      fetchNewsApiSearch(`election ${country}`, newsKey, 4, trustedSources),
-      fetchNewsApiSearch(`politics ${country}`, newsKey, 4, trustedSources),
+      fetchNewsDataSearch(`election ${country}`, newsKey, 4),
+      fetchNewsDataSearch(`politics ${country}`, newsKey, 4),
     ]);
     elections = electionRes;
     political = politicalRes;

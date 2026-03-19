@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { getCurrentProfileId } from "@/lib/api-auth";
+import { getUserId } from "@/lib/api-auth";
 
 export type WatchlistItemRow = {
   id: string;
@@ -11,8 +11,8 @@ export type WatchlistItemRow = {
 };
 
 export async function GET() {
-  const profileId = await getCurrentProfileId();
-  if (!profileId) {
+  const userId = await getUserId();
+  if (!userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -20,7 +20,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from("watchlist")
     .select("id, ticker, name, created_at")
-    .eq("user_id", profileId)
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -36,8 +36,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const profileId = await getCurrentProfileId();
-  if (!profileId) {
+  const userId = await getUserId();
+  if (!userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -54,11 +54,40 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createServerClient();
-  const { error } = await supabase.from("watchlist").insert({
-    user_id: profileId,
+  // Check duplicate first for this user/ticker
+  const { data: existing, error: existingErr } = await supabase
+    .from("watchlist")
+    .select("id, ticker, name, created_at")
+    .eq("user_id", userId)
+    .eq("ticker", ticker)
+    .maybeSingle();
+  if (existingErr) {
+    console.error("[watchlist] POST duplicate-check error:", existingErr);
+    return NextResponse.json({ error: "Failed to add to watchlist" }, { status: 500 });
+  }
+  if (existing) {
+    return NextResponse.json(
+      {
+        item: {
+          id: existing.id,
+          ticker: existing.ticker,
+          name: existing.name ?? undefined,
+          createdAt: existing.created_at ?? null,
+        },
+      },
+      { status: 200 }
+    );
+  }
+
+  const { data: inserted, error } = await supabase
+    .from("watchlist")
+    .insert({
+    user_id: userId,
     ticker,
     name: body.name?.trim() || null,
-  });
+  })
+    .select("id, ticker, name, created_at")
+    .single();
 
   if (error) {
     if (error.code === "23505") {
@@ -68,12 +97,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to add to watchlist" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    item: {
+      id: inserted?.id,
+      ticker: inserted?.ticker ?? ticker,
+      name: inserted?.name ?? body.name ?? undefined,
+      createdAt: inserted?.created_at ?? null,
+    },
+  });
 }
 
 export async function DELETE(request: NextRequest) {
-  const profileId = await getCurrentProfileId();
-  if (!profileId) {
+  const userId = await getUserId();
+  if (!userId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
@@ -86,7 +122,7 @@ export async function DELETE(request: NextRequest) {
   const { error } = await supabase
     .from("watchlist")
     .delete()
-    .eq("user_id", profileId)
+    .eq("user_id", userId)
     .eq("ticker", ticker);
 
   if (error) {

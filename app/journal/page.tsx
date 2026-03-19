@@ -20,7 +20,6 @@ import {
 import { tickJournalStreak } from "../../lib/engagement/streaks";
 import { addXPFromTrade } from "../../lib/engagement/xp";
 import { useToast } from "../../components/ToastContext";
-import { triggerConfetti } from "../../lib/confetti";
 import type { JournalInsightsResponse } from "../api/journal-insights/route";
 import {
   LineChart,
@@ -1254,7 +1253,6 @@ function LogTradeModal({
           const { milestone } = tickJournalStreak();
           addXPFromTrade();
           if (milestone) {
-            triggerConfetti({ duration: 2000 });
             toast.showToast(`📓 ${milestone} Day Journal Streak! Keep logging.`, "celebration");
           }
           onSaved(saved);
@@ -1270,7 +1268,6 @@ function LogTradeModal({
         const { milestone } = tickJournalStreak();
         addXPFromTrade();
         if (milestone) {
-          triggerConfetti({ duration: 2000 });
           toast.showToast(`📓 ${milestone} Day Journal Streak! Keep logging.`, "celebration");
         }
       }

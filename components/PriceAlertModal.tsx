@@ -5,10 +5,9 @@ import {
   type PriceAlert,
   type PriceAlertCondition,
   getPriceAlerts,
-  savePriceAlerts,
-  generateAlertId,
   MAX_ALERTS_FREE,
 } from "../lib/price-alerts";
+import { createPriceAlertCloud, updatePriceAlertCloud } from "../lib/price-alerts-cloud";
 import { addToWatchlistApi } from "../lib/watchlist-api";
 import { useToast } from "./ToastContext";
 
@@ -106,7 +105,7 @@ export function PriceAlertModal({ open, onClose, editingAlert, prefilledTicker, 
       ? ((targetPrice - currentPrice) / currentPrice) * 100
       : null;
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     const sym = ticker.toUpperCase().trim();
     if (!sym) {
       showToast("Enter a ticker symbol", "warning");
@@ -117,52 +116,38 @@ export function PriceAlertModal({ open, onClose, editingAlert, prefilledTicker, 
       return;
     }
     const list = getPriceAlerts();
-    if (!isEdit && list.length >= MAX_ALERTS_FREE) {
+    const usedCount = list.filter((a) => a.status === "active" || a.status === "paused").length;
+    if (!isEdit && usedCount >= MAX_ALERTS_FREE) {
       showToast("Upgrade to Pro for unlimited alerts", "warning");
       return;
     }
-    const now = new Date().toISOString();
     if (isEdit && editingAlert) {
-      const next = list.map((a) =>
-        a.id === editingAlert.id
-          ? {
-              ...a,
-              ticker: sym,
-              company: company.trim() || sym,
-              condition,
-              targetPrice,
-              currentPrice: currentPrice ?? a.currentPrice,
-              name: name.trim() || defaultName,
-              repeat,
-              notifyBrowser,
-              notifyInApp,
-            }
-          : a
-      );
-      savePriceAlerts(next);
-      showToast("Alert updated");
+      const { syncIssue } = await updatePriceAlertCloud(editingAlert.id, {
+        targetPrice,
+        currentPrice: currentPrice ?? editingAlert.currentPrice,
+        name: name.trim() || defaultName,
+        repeat,
+        notifyBrowser,
+        notifyInApp,
+      });
+      showToast(syncIssue ? "Alert saved locally" : "Alert updated", syncIssue ? "warning" : "success");
       onSaved?.();
       onClose();
     } else {
-      const newAlert: PriceAlert = {
-        id: generateAlertId(),
+      const { syncIssue } = await createPriceAlertCloud({
         ticker: sym,
         company: company.trim() || sym,
         condition,
         targetPrice,
         currentPrice: currentPrice ?? 0,
         name: name.trim() || defaultName,
-        createdAt: now,
-        triggeredAt: null,
-        status: "active",
         repeat,
         notifyBrowser,
         notifyInApp,
-      };
-      savePriceAlerts([...list, newAlert]);
+      });
       // Auto-add ticker to watchlist if not already there
       addToWatchlistApi({ ticker: sym, name: company.trim() || sym }).catch(() => {});
-      showToast("Alert created");
+      showToast(syncIssue ? "Alerts saved locally" : "Alert saved", syncIssue ? "warning" : "success");
       onSaved?.();
       onClose();
     }

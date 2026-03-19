@@ -28,7 +28,6 @@ import {
   type PredictCategory,
   type PredictMarket,
 } from "../../lib/predict";
-import { triggerConfetti } from "../../lib/confetti";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from "recharts";
 
 const CATEGORIES: { key: PredictCategory | "Trending"; label: string }[] = [
@@ -514,7 +513,6 @@ export default function PredictPage() {
       toast.showToast(`Market resolved: ${outcome.toUpperCase()} won`, "success");
       const iWon = myBet && myBet.side === outcome;
       if (iWon) {
-        triggerConfetti();
         const payout = myBet ? potentialPayout(myBet.amount, myBet.oddsAtBet) : 0;
         addPredictNotification(`You predicted correctly! +${payout} XP added to your balance`, "/predict");
       }

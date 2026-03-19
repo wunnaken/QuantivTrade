@@ -3,50 +3,40 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  fetchWatchlist,
+  fetchWatchlistWithStatus,
+  migrateLocalWatchlistToApi,
   removeFromWatchlistApi,
+  getWatchlistSyncIssue,
   type WatchlistItem,
 } from "../../lib/watchlist-api";
 import {
-  getPriceAlerts,
-  savePriceAlerts,
-  getAlertForTicker,
   isNearTrigger,
-  isAlertTriggered,
   addInAppNotification,
   type PriceAlert,
   MAX_ALERTS_FREE,
 } from "../../lib/price-alerts";
+import {
+  fetchPriceAlertsCloud,
+  migrateLocalAlertsToCloud,
+  updatePriceAlertCloud,
+  deletePriceAlertCloud,
+  getPriceAlertSyncIssue,
+} from "../../lib/price-alerts-cloud";
 import { PriceAlertModal } from "../../components/PriceAlertModal";
 import { useToast } from "../../components/ToastContext";
 import { useLivePrices } from "../../lib/hooks/useLivePrice";
 import { getFinnhubWS } from "../../lib/finnhub-websocket";
 import { PriceDisplay } from "../../components/PriceDisplay";
+import {
+  DEFAULT_TICKERS,
+  fetchTickerBarConfig,
+  saveTickerBarConfig,
+} from "../../lib/ticker-bar-api";
 
-const HEADER_TICKERS_KEY = "xchange-header-tickers";
 const MAX_HEADER_TICKERS = 12;
 
-function getHeaderTickerSymbols(): string[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(HEADER_TICKERS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((s) => typeof s === "string").slice(0, MAX_HEADER_TICKERS) : [];
-  } catch {
-    return [];
-  }
-}
-
-function setHeaderTickerSymbols(symbols: string[]) {
-  const list = [...new Set(symbols)].slice(0, MAX_HEADER_TICKERS);
-  localStorage.setItem(HEADER_TICKERS_KEY, JSON.stringify(list));
-  window.dispatchEvent(new Event("xchange-header-tickers-changed"));
-}
-
-function useDefaultHeaderTickers() {
-  localStorage.removeItem(HEADER_TICKERS_KEY);
-  window.dispatchEvent(new Event("xchange-header-tickers-changed"));
+function normalizeHeaderSymbols(symbols: string[]) {
+  return [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))].slice(0, MAX_HEADER_TICKERS);
 }
 
 function BellIcon({ className }: { className?: string }) {
@@ -63,10 +53,12 @@ function formatPrice(p: number) {
 
 export default function WatchlistPage() {
   const { showToast } = useToast();
+  const toastRef = useRef(showToast);
   const [activeTab, setActiveTab] = useState<"watchlist" | "alerts">("watchlist");
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [headerSymbols, setHeaderSymbols] = useState<string[]>([]);
+  const [headerUseWatchlist, setHeaderUseWatchlist] = useState(false);
   const watchlistTickers = items.map((i) => i.ticker);
   const liveQuotes = useLivePrices(watchlistTickers);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
@@ -76,32 +68,88 @@ export default function WatchlistPage() {
   const [modalPrefillTicker, setModalPrefillTicker] = useState<string | undefined>();
   const [editingAlert, setEditingAlert] = useState<PriceAlert | null>(null);
   const [notificationsGranted, setNotificationsGranted] = useState(false);
+  const [syncIssue, setSyncIssue] = useState(false);
+  const [alertsSyncIssue, setAlertsSyncIssue] = useState(false);
 
-  const refreshAlerts = useCallback(() => {
-    setAlerts(getPriceAlerts());
+  useEffect(() => {
+    toastRef.current = showToast;
+  }, [showToast]);
+
+  const refreshAlerts = useCallback(async () => {
+    const result = await fetchPriceAlertsCloud();
+    setAlerts(result.alerts);
+    setAlertsSyncIssue(result.syncIssue);
   }, []);
 
   const refresh = useCallback(async () => {
     try {
-      const list = await fetchWatchlist();
-      setItems(list);
+      const result = await fetchWatchlistWithStatus();
+      setItems(result.items);
+      setSyncIssue(result.syncIssue);
     } catch {
       setItems([]);
+      setSyncIssue(getWatchlistSyncIssue());
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    refresh();
+    let mounted = true;
+    const run = async () => {
+      await refresh();
+      // First load migration: move existing localStorage watchlist into Supabase when possible.
+      const migration = await migrateLocalWatchlistToApi();
+      if (!mounted) return;
+      if (migration.syncIssue) {
+        setSyncIssue(true);
+      } else if (migration.attempted > 0) {
+        await refresh();
+      }
+    };
+    void run();
+    const onChanged = () => {
+      void refresh();
+    };
+    window.addEventListener("xchange-watchlist-changed", onChanged);
+    return () => {
+      mounted = false;
+      window.removeEventListener("xchange-watchlist-changed", onChanged);
+    };
   }, [refresh]);
 
   useEffect(() => {
-    setHeaderSymbols(getHeaderTickerSymbols());
+    const load = async () => {
+      const cfg = await fetchTickerBarConfig();
+      setHeaderSymbols(normalizeHeaderSymbols(cfg.config.tickers));
+      setHeaderUseWatchlist(cfg.config.useWatchlist);
+    };
+    void load();
   }, []);
 
   useEffect(() => {
-    refreshAlerts();
+    let mounted = true;
+    const run = async () => {
+      await refreshAlerts();
+      const migration = await migrateLocalAlertsToCloud();
+      if (!mounted) return;
+      if (migration.migrated > 0 && !migration.syncIssue) {
+        toastRef.current(`${migration.migrated} alerts synced to cloud`, "success");
+      }
+      if (migration.syncIssue) {
+        setAlertsSyncIssue(true);
+      } else if (migration.attempted > 0) {
+        await refreshAlerts();
+      }
+    };
+    void run();
+    const retry = setInterval(() => {
+      if (getPriceAlertSyncIssue()) void refreshAlerts();
+    }, 5 * 60 * 1000);
+    return () => {
+      mounted = false;
+      clearInterval(retry);
+    };
   }, [refreshAlerts]);
 
   useEffect(() => {
@@ -113,7 +161,7 @@ export default function WatchlistPage() {
   // Price alerts: subscribe to WebSocket for each active alert ticker; check conditions on every price update
   const lastPricesRef = useRef<Record<string, number>>({});
   useEffect(() => {
-    const list = getPriceAlerts().filter((a) => a.status === "active");
+    const list = alerts.filter((a) => a.status === "active");
     const tickers = [...new Set(list.map((a) => a.ticker))];
     if (tickers.length === 0) return;
 
@@ -133,10 +181,9 @@ export default function WatchlistPage() {
 
       const unsub = ws.onPrice(ticker, (price, _change, _changePercent) => {
         setAlertQuotes((prev) => ({ ...prev, [ticker]: price }));
-        const alertsForTicker = getPriceAlerts().filter((a) => a.status === "active" && a.ticker === ticker);
         const now = new Date().toISOString();
         let updated = false;
-        const nextList = getPriceAlerts().map((a) => {
+        const nextList = alerts.map((a) => {
           if (a.status !== "active" || a.ticker !== ticker) return a;
           const lastPrice = lastPricesRef.current[ticker];
           const crossed =
@@ -165,7 +212,7 @@ export default function WatchlistPage() {
               link: `/search/${a.ticker}`,
             });
           }
-          showToast(
+          toastRef.current(
             `${a.ticker} hit ${formatPrice(price)} — your target price`,
             a.condition === "above" ? "success" : "error",
             5000
@@ -178,8 +225,18 @@ export default function WatchlistPage() {
           };
         });
         if (updated) {
-          savePriceAlerts(nextList);
           setAlerts(nextList);
+          nextList
+            .filter((a) => a.ticker === ticker)
+            .forEach((a) => {
+              void updatePriceAlertCloud(a.id, {
+                status: a.status,
+                currentPrice: a.currentPrice,
+                triggeredAt: a.triggeredAt,
+              }).then((r) => {
+                if (r.syncIssue) setAlertsSyncIssue(true);
+              });
+            });
         }
       });
       unsubs.push(unsub);
@@ -188,23 +245,13 @@ export default function WatchlistPage() {
     return () => {
       unsubs.forEach((u) => u());
     };
-  }, [alerts.length, alerts.map((a) => a.id).join(","), showToast]);
-
-  const addTickerToHeader = (ticker: string) => {
-    const sym = ticker.toUpperCase().trim();
-    if (!sym) return;
-    setHeaderSymbols((prev) => {
-      if (prev.includes(sym)) return prev;
-      const next = [...prev, sym].slice(0, MAX_HEADER_TICKERS);
-      setHeaderTickerSymbols(next);
-      return next;
-    });
-  };
+  }, [alerts]);
 
   const removeTickerFromHeader = (sym: string) => {
     setHeaderSymbols((prev) => {
       const next = prev.filter((s) => s !== sym);
-      setHeaderTickerSymbols(next);
+      void saveTickerBarConfig({ tickers: next, useWatchlist: false });
+      setHeaderUseWatchlist(false);
       return next;
     });
   };
@@ -212,25 +259,30 @@ export default function WatchlistPage() {
   const toggleHeaderTicker = (ticker: string) => {
     const sym = ticker.toUpperCase();
     setHeaderSymbols((prev) => {
-      const next = prev.includes(sym) ? prev.filter((s) => s !== sym) : [...prev, sym].slice(0, MAX_HEADER_TICKERS);
-      setHeaderTickerSymbols(next);
+      const next = prev.includes(sym) ? prev.filter((s) => s !== sym) : normalizeHeaderSymbols([...prev, sym]);
+      void saveTickerBarConfig({ tickers: next, useWatchlist: false });
+      setHeaderUseWatchlist(false);
       return next;
     });
   };
 
   const useDefault = () => {
-    useDefaultHeaderTickers();
-    setHeaderSymbols([]);
+    const defaults = [...DEFAULT_TICKERS].slice(0, MAX_HEADER_TICKERS);
+    setHeaderSymbols(defaults);
+    setHeaderUseWatchlist(false);
+    void saveTickerBarConfig({ tickers: defaults, useWatchlist: false });
   };
 
   const handleRemove = async (ticker: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     try {
-      await removeFromWatchlistApi(ticker);
+      const result = await removeFromWatchlistApi(ticker);
+      setSyncIssue(result.syncIssue);
       setItems((prev) => prev.filter((i) => i.ticker.toUpperCase() !== ticker.toUpperCase()));
+      if (result.syncIssue) showToast("Saved locally (sync issue)", "warning");
     } catch {
-      // ignore
+      showToast("Could not update watchlist", "warning");
     }
   };
 
@@ -253,16 +305,21 @@ export default function WatchlistPage() {
   };
 
   const handlePauseResume = (alert: PriceAlert) => {
-    const list = getPriceAlerts().map((a) =>
+    const list = alerts.map((a) =>
       a.id === alert.id ? { ...a, status: (a.status === "paused" ? "active" : "paused") as PriceAlert["status"] } : a
     );
-    savePriceAlerts(list);
-    refreshAlerts();
+    setAlerts(list);
+    const status = list.find((a) => a.id === alert.id)?.status;
+    void updatePriceAlertCloud(alert.id, { status }).then((r) => {
+      if (r.syncIssue) setAlertsSyncIssue(true);
+    });
   };
 
   const handleDeleteAlert = (id: string) => {
-    savePriceAlerts(getPriceAlerts().filter((a) => a.id !== id));
-    refreshAlerts();
+    setAlerts((prev) => prev.filter((a) => a.id !== id));
+    void deletePriceAlertCloud(id).then((r) => {
+      if (r.syncIssue) setAlertsSyncIssue(true);
+    });
   };
 
   if (loading) {
@@ -278,6 +335,7 @@ export default function WatchlistPage() {
   const activeCount = alerts.filter((a) => a.status === "active").length;
   const triggeredCount = alerts.filter((a) => a.status === "triggered").length;
   const pausedCount = alerts.filter((a) => a.status === "paused").length;
+  const freeTierUsed = alerts.filter((a) => a.status === "active" || a.status === "paused").length;
 
   const filteredAlerts =
     alertsFilter === "all"
@@ -330,23 +388,25 @@ export default function WatchlistPage() {
           </button>
         </div>
       </div>
+      {syncIssue && (
+        <p className="mt-2 text-xs text-amber-400">Sync issue: using local backup. Changes will sync when API is available.</p>
+      )}
+      {alertsSyncIssue && (
+        <p className="mt-1 text-xs text-amber-400">Alerts saved locally. Retrying cloud sync every 5 minutes.</p>
+      )}
 
       {activeTab === "watchlist" && (
         <>
           <section className="mt-6 rounded-lg border border-white/10 bg-white/5 p-4">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-sm font-semibold text-zinc-200">Header bar tickers</h2>
-              <button
-                type="button"
-                onClick={() => openAlertModal()}
-                className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/10"
-              >
-                New Alert
-              </button>
             </div>
             <p className="mt-1 text-xs text-zinc-500">
               Tickers shown in the top rotating bar. Use the icon on each watchlist card to add. Remove any below with ×. Default = SPY, QQQ, BTC, etc.
             </p>
+            {headerUseWatchlist && (
+              <p className="mt-2 text-xs text-emerald-400">Ticker bar is currently following your watchlist.</p>
+            )}
             {headerSymbols.length === 0 ? (
               <p className="mt-3 text-sm text-zinc-400">Using default tickers (SPY, QQQ, BTC, ETH, GLD, OIL, DXY, EUR/USD).</p>
             ) : (
@@ -381,8 +441,12 @@ export default function WatchlistPage() {
               {items.map((item) => {
                 const q = liveQuotes[item.ticker];
                 const inHeader = isInHeader(item.ticker);
-                const alertForTicker = getAlertForTicker(item.ticker);
-                const near = alertForTicker && q?.price != null && isNearTrigger(alertForTicker, q.price);
+                const tickerAlerts = alerts.filter((a) => a.ticker.toUpperCase() === item.ticker.toUpperCase());
+                const alertForTicker =
+                  tickerAlerts.find((a) => a.status === "active") ??
+                  tickerAlerts.find((a) => a.status === "paused") ??
+                  null;
+                const near = alertForTicker && q?.price != null && alertForTicker.status === "active" && isNearTrigger(alertForTicker, q.price);
                 const bellColor = alertForTicker ? (near ? "text-amber-400" : "text-emerald-400") : "text-zinc-400";
                 return (
                   <li key={item.ticker}>
@@ -427,7 +491,7 @@ export default function WatchlistPage() {
                           aria-label={inHeader ? "Remove from header bar" : "Add to header bar"}
                         >
                           {inHeader ? (
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
                           ) : (
                             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
                           )}
@@ -467,14 +531,14 @@ export default function WatchlistPage() {
               <button
                 type="button"
                 onClick={() => { setEditingAlert(null); setModalPrefillTicker(undefined); setModalOpen(true); }}
-                disabled={alerts.length >= MAX_ALERTS_FREE}
+                disabled={freeTierUsed >= MAX_ALERTS_FREE}
                 className="rounded-full bg-[var(--accent-color)] px-4 py-2 text-sm font-semibold text-[#020308] hover:opacity-90 disabled:opacity-50"
               >
                 New Alert
               </button>
             </div>
           </div>
-          {alerts.length >= MAX_ALERTS_FREE && (
+          {freeTierUsed >= MAX_ALERTS_FREE && (
             <p className="mt-2 text-xs text-amber-400">Upgrade to Pro for unlimited alerts.</p>
           )}
 
@@ -619,7 +683,9 @@ export default function WatchlistPage() {
         onClose={closeAlertModal}
         editingAlert={editingAlert}
         prefilledTicker={modalPrefillTicker}
-        onSaved={refreshAlerts}
+        onSaved={() => {
+          void refreshAlerts();
+        }}
       />
     </div>
   );

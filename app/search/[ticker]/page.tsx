@@ -6,7 +6,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AnalyzeTickerResponse } from "../../api/analyze-ticker/route";
 import {
   addToWatchlistApi,
-  fetchWatchlist,
+  fetchWatchlistWithStatus,
+  getWatchlistSyncIssue,
   isTickerInWatchlist,
   removeFromWatchlistApi,
 } from "../../../lib/watchlist-api";
@@ -62,6 +63,30 @@ type QuoteData = {
   low: number | null;
 };
 
+function buildFallbackChartFromPrice(price: number): ChartPoint[] {
+  const now = Math.floor(Date.now() / 1000);
+  return [
+    {
+      time: now - 3600,
+      date: new Date((now - 3600) * 1000).toISOString(),
+      open: price * 0.998,
+      high: price * 1.002,
+      low: price * 0.996,
+      close: price * 0.999,
+      volume: 0,
+    },
+    {
+      time: now,
+      date: new Date(now * 1000).toISOString(),
+      open: price * 0.999,
+      high: price * 1.003,
+      low: price * 0.997,
+      close: price,
+      volume: 0,
+    },
+  ];
+}
+
 function TickerDataPanel({
   ticker,
   inWatchlist,
@@ -76,6 +101,7 @@ function TickerDataPanel({
   chartRange,
   onChartRangeChange,
   isLive,
+  watchlistSaving,
 }: {
   ticker: string;
   inWatchlist: boolean;
@@ -90,6 +116,7 @@ function TickerDataPanel({
   chartRange: ChartRangeKey;
   onChartRangeChange: (r: ChartRangeKey) => void;
   isLive?: boolean;
+  watchlistSaving: boolean;
 }) {
   const name = ticker.length <= 4 ? `${ticker}` : ticker;
   const price = quote?.price ?? null;
@@ -100,11 +127,22 @@ function TickerDataPanel({
     ? chartData[chartData.length - 1]?.volume ?? chartData.reduce((s, d) => s + d.volume, 0)
     : null;
   const volume = volumeFromQuote ?? (volumeFromChart != null && volumeFromChart > 0 ? volumeFromChart : null);
-  const high = quote?.high;
-  const low = quote?.low;
   const hasPrice = price != null && !Number.isNaN(price);
   const hasChange = changePercent != null && !Number.isNaN(changePercent);
   const hasVolume = chartData.length > 0 && chartData.some((d) => d.volume > 0);
+  const effectiveChartData =
+    chartData.length > 0
+      ? chartData
+      : hasPrice && typeof price === "number" && price > 0
+        ? buildFallbackChartFromPrice(price)
+        : [];
+  // High/low should reflect the currently selected chart timeframe.
+  const rangeHigh =
+    effectiveChartData.length > 0 ? effectiveChartData.reduce((max, d) => Math.max(max, d.high), Number.NEGATIVE_INFINITY) : null;
+  const rangeLow =
+    effectiveChartData.length > 0 ? effectiveChartData.reduce((min, d) => Math.min(min, d.low), Number.POSITIVE_INFINITY) : null;
+  const high = rangeHigh != null && Number.isFinite(rangeHigh) ? rangeHigh : quote?.high ?? null;
+  const low = rangeLow != null && Number.isFinite(rangeLow) ? rangeLow : quote?.low ?? null;
   return (
     <div className="space-y-6">
       <div>
@@ -166,9 +204,9 @@ function TickerDataPanel({
             <div className="flex h-56 w-full items-center justify-center">
               <p className="text-sm text-zinc-500">Loading chart…</p>
             </div>
-          ) : chartData.length > 0 ? (
+          ) : effectiveChartData.length > 0 ? (
             <CandlestickChart
-              data={chartData}
+              data={effectiveChartData}
               showVolume={hasVolume}
               height={280}
               className="w-full rounded-xl"
@@ -179,10 +217,10 @@ function TickerDataPanel({
             </div>
           )}
         </div>
-        {chartData.length > 0 && !hasVolume && (
+        {effectiveChartData.length > 0 && !hasVolume && (
           <p className="text-[10px] text-zinc-500">Volume not available for this range</p>
         )}
-        {chartData.length > 0 && chartData.length <= 2 && (
+        {effectiveChartData.length > 0 && effectiveChartData.length <= 2 && (
           <p className="text-[10px] text-zinc-500">Limited history for this symbol/range</p>
         )}
       </div>
@@ -207,14 +245,15 @@ function TickerDataPanel({
       <div className="flex gap-2">
         <button
           type="button"
+          disabled={watchlistSaving}
           onClick={onWatchlistChange}
           className={`flex-1 rounded-full py-2.5 text-sm font-semibold transition-colors ${
             inWatchlist
               ? "border border-red-500/50 bg-red-500/10 text-red-400 hover:bg-red-500/20"
               : "bg-[var(--accent-color)] text-[#020308] hover:opacity-90"
-          }`}
+          } disabled:opacity-60`}
         >
-          {inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
+          {watchlistSaving ? (inWatchlist ? "Removing..." : "Adding...") : inWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
         </button>
         <button
           type="button"
@@ -381,6 +420,8 @@ export default function TickerPage() {
   const watchingCount = useWatchingCount(ticker || "");
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [alertRefresh, setAlertRefresh] = useState(0);
+  const [watchlistSaving, setWatchlistSaving] = useState(false);
+  const [watchlistSyncIssue, setWatchlistSyncIssue] = useState(false);
   const alertForTicker = getAlertForTicker(ticker);
   const live = useLivePrice(ticker);
   const { isConnected } = usePriceContext();
@@ -398,10 +439,13 @@ export default function TickerPage() {
 
   const refreshWatchlist = useCallback(async () => {
     try {
-      const items = await fetchWatchlist();
+      const result = await fetchWatchlistWithStatus();
+      const items = result.items;
       setInWatchlist(isTickerInWatchlist(items, ticker));
+      setWatchlistSyncIssue(result.syncIssue);
     } catch {
       setInWatchlist(false);
+      setWatchlistSyncIssue(getWatchlistSyncIssue());
     }
   }, [ticker]);
 
@@ -478,17 +522,22 @@ export default function TickerPage() {
 
   const toast = useToast();
   const handleWatchlistToggle = async () => {
+    setWatchlistSaving(true);
     try {
       if (inWatchlist) {
-        await removeFromWatchlistApi(ticker);
-        toast.showToast("Removed from watchlist", "success");
+        const result = await removeFromWatchlistApi(ticker);
+        setWatchlistSyncIssue(result.syncIssue);
+        toast.showToast(result.syncIssue ? "Removed locally (sync issue)" : "Removed from watchlist", result.syncIssue ? "warning" : "success");
       } else {
-        await addToWatchlistApi({ ticker, name: ticker });
-        toast.showToast("Added to watchlist", "success");
+        const result = await addToWatchlistApi({ ticker, name: ticker });
+        setWatchlistSyncIssue(result.syncIssue);
+        toast.showToast(result.syncIssue ? "Saved locally (sync issue)" : "Added to watchlist", result.syncIssue ? "warning" : "success");
       }
       await refreshWatchlist();
     } catch {
       toast.showToast("Could not update watchlist", "warning");
+    } finally {
+      setWatchlistSaving(false);
     }
   };
 
@@ -505,17 +554,6 @@ export default function TickerPage() {
 
   return (
     <div className="min-h-screen app-page font-[&quot;Times_New_Roman&quot;,serif]">
-      <div className="border-b border-white/5 px-4 py-3">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <Link href="/search" className="text-sm text-zinc-400 hover:text-[var(--accent-color)]">
-            ← Search
-          </Link>
-          <Link href="/feed" className="text-sm text-zinc-400 hover:text-[var(--accent-color)]">
-            Feed
-          </Link>
-        </div>
-      </div>
-
       <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="grid gap-8 lg:grid-cols-[1fr,1.1fr]">
           <div
@@ -536,7 +574,11 @@ export default function TickerPage() {
               chartRange={chartRange}
               onChartRangeChange={setChartRange}
               isLive={isConnected}
+              watchlistSaving={watchlistSaving}
             />
+            {watchlistSyncIssue && (
+              <p className="mt-3 text-xs text-amber-400">Sync issue: watchlist is currently using local backup.</p>
+            )}
           </div>
 
           <div>

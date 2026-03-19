@@ -11,7 +11,15 @@ import { getTrades, computePnL, formatCurrency } from "../../lib/journal";
 import { getPoints, loadBets, loadMarkets, type PredictMarket } from "../../lib/predict";
 import { getStoredConversations, saveConversation, getPortfolioContext } from "../../lib/ai-chat-storage";
 import { useAuth } from "../AuthContext";
-import { fetchWatchlist, addToWatchlistApi, type WatchlistItem } from "../../lib/watchlist-api";
+import {
+  fetchWatchlistWithStatus,
+  addToWatchlistApi,
+  removeFromWatchlistApi,
+  getWatchlistSyncIssue,
+  type WatchlistItem,
+} from "../../lib/watchlist-api";
+import { fetchPriceAlertsCloud } from "../../lib/price-alerts-cloud";
+import type { PriceAlert } from "../../lib/price-alerts";
 import { useLivePrices } from "../../lib/hooks/useLivePrice";
 import { PriceDisplay } from "../PriceDisplay";
 
@@ -21,11 +29,16 @@ export function WatchlistWidget({ onLoaded }: WidgetContentProps) {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [addInput, setAddInput] = useState("");
+  const [syncIssue, setSyncIssue] = useState(false);
+  const quotes = useLivePrices(items.map((i) => i.ticker));
 
   const refresh = useCallback(async () => {
     try {
-      const list = await fetchWatchlist();
-      setItems(list);
+      const result = await fetchWatchlistWithStatus();
+      setItems(result.items);
+      setSyncIssue(result.syncIssue);
+    } catch {
+      setSyncIssue(getWatchlistSyncIssue());
     } finally {
       setLoading(false);
       onLoaded?.();
@@ -33,8 +46,13 @@ export function WatchlistWidget({ onLoaded }: WidgetContentProps) {
   }, [onLoaded]);
 
   useEffect(() => {
-    refresh();
-  }, [onLoaded]);
+    void refresh();
+    const onChanged = () => {
+      void refresh();
+    };
+    window.addEventListener("xchange-watchlist-changed", onChanged);
+    return () => window.removeEventListener("xchange-watchlist-changed", onChanged);
+  }, [refresh]);
 
   const addTicker = useCallback(async () => {
     const ticker = addInput.trim().toUpperCase();
@@ -50,9 +68,24 @@ export function WatchlistWidget({ onLoaded }: WidgetContentProps) {
     }
   }, [addInput, refresh]);
 
+  const removeTicker = useCallback(
+    async (ticker: string) => {
+      setLoading(true);
+      try {
+        await removeFromWatchlistApi(ticker);
+      } catch {
+        // Local fallback is handled in helper.
+      } finally {
+        await refresh();
+      }
+    },
+    [refresh]
+  );
+
   if (loading) return null;
   return (
     <div className="flex h-full min-h-0 flex-col p-2">
+      {syncIssue && <p className="mb-1 text-[10px] text-amber-400">Sync issue: local backup in use</p>}
       <div className="min-h-0 flex-1 overflow-y-auto space-y-1">
         {items.map((i) => (
           <Link
@@ -61,14 +94,39 @@ export function WatchlistWidget({ onLoaded }: WidgetContentProps) {
             className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-xs hover:bg-white/5"
           >
             <span className="min-w-0 truncate font-medium text-zinc-200">{i.ticker}</span>
-            <span
-              className={
-                typeof i.change === "number" && i.change >= 0 ? "text-emerald-400" : "text-red-400"
-              }
-            >
-              {i.price != null ? String(i.price) : "—"}{" "}
-              {i.change != null ? `${i.change >= 0 ? "+" : ""}${i.change}%` : ""}
-            </span>
+            <div className="flex items-center gap-2">
+              <span
+                className={
+                  typeof (quotes[i.ticker]?.changePercent ?? i.change) === "number" &&
+                  Number(quotes[i.ticker]?.changePercent ?? i.change) >= 0
+                    ? "text-emerald-400"
+                    : "text-red-400"
+                }
+              >
+                {quotes[i.ticker]?.price != null
+                  ? `${quotes[i.ticker]!.price! >= 1 ? quotes[i.ticker]!.price!.toFixed(2) : quotes[i.ticker]!.price!.toFixed(4)}`
+                  : i.price != null
+                    ? String(i.price)
+                    : "—"}{" "}
+                {quotes[i.ticker]?.changePercent != null
+                  ? `${quotes[i.ticker]!.changePercent! >= 0 ? "+" : ""}${quotes[i.ticker]!.changePercent!.toFixed(2)}%`
+                  : i.change != null
+                    ? `${i.change >= 0 ? "+" : ""}${i.change}%`
+                    : ""}
+              </span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  void removeTicker(i.ticker);
+                }}
+                className="rounded px-1.5 py-0.5 text-[10px] text-zinc-400 hover:bg-red-500/10 hover:text-red-400"
+                aria-label={`Remove ${i.ticker} from watchlist`}
+              >
+                Remove
+              </button>
+            </div>
           </Link>
         ))}
       </div>
@@ -156,6 +214,103 @@ export function MarketOverviewWidget({ onLoaded }: WidgetContentProps) {
       <p className="mt-2 shrink-0 text-[10px] text-zinc-500">
         Market Open · Live
       </p>
+    </div>
+  );
+}
+
+export function PriceAlertsWidget({ onLoaded }: WidgetContentProps) {
+  const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [syncIssue, setSyncIssue] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      const result = await fetchPriceAlertsCloud();
+      setAlerts(result.alerts);
+      setSyncIssue(result.syncIssue);
+    } catch {
+      setSyncIssue(true);
+    } finally {
+      setLoading(false);
+      onLoaded?.();
+    }
+  }, [onLoaded]);
+
+  useEffect(() => {
+    void refresh();
+    const id = window.setInterval(() => {
+      void refresh();
+    }, 60 * 1000);
+    return () => window.clearInterval(id);
+  }, [refresh]);
+
+  if (loading) return null;
+
+  const active = alerts.filter((a) => a.status === "active");
+  const paused = alerts.filter((a) => a.status === "paused");
+  const triggered = alerts.filter((a) => a.status === "triggered");
+  const top = [...alerts]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col p-2">
+      {syncIssue && <p className="mb-1 text-[10px] text-amber-400">Sync issue: local backup in use</p>}
+      <div className="mb-2 grid shrink-0 grid-cols-3 gap-1">
+        <div className="rounded border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-center">
+          <p className="text-xs font-semibold text-emerald-300">{active.length}</p>
+          <p className="text-[10px] text-zinc-500">Active</p>
+        </div>
+        <div className="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-center">
+          <p className="text-xs font-semibold text-amber-300">{paused.length}</p>
+          <p className="text-[10px] text-zinc-500">Paused</p>
+        </div>
+        <div className="rounded border border-zinc-500/20 bg-zinc-500/10 px-2 py-1 text-center">
+          <p className="text-xs font-semibold text-zinc-300">{triggered.length}</p>
+          <p className="text-[10px] text-zinc-500">Triggered</p>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+        {top.length === 0 ? (
+          <p className="text-xs text-zinc-500">No alerts yet.</p>
+        ) : (
+          top.map((a) => (
+            <Link
+              key={a.id}
+              href="/watchlist"
+              className="block rounded border border-white/10 bg-white/5 px-2 py-1.5 text-xs hover:bg-white/10"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-zinc-200">{a.ticker}</span>
+                <span
+                  className={
+                    a.status === "active"
+                      ? "text-emerald-400"
+                      : a.status === "paused"
+                        ? "text-amber-400"
+                        : "text-zinc-400"
+                  }
+                >
+                  {a.status}
+                </span>
+              </div>
+              <p className="mt-0.5 text-[10px] text-zinc-500">
+                {a.condition === "above" ? "Above" : "Below"} ${a.targetPrice >= 1 ? a.targetPrice.toFixed(2) : a.targetPrice.toFixed(4)}
+              </p>
+            </Link>
+          ))
+        )}
+      </div>
+
+      <div className="mt-2 flex shrink-0 items-center justify-between">
+        <Link href="/watchlist" className="text-[11px] text-[var(--accent-color)] hover:underline">
+          Manage alerts
+        </Link>
+        <Link href="/watchlist" className="rounded bg-[var(--accent-color)] px-2 py-1 text-[10px] font-medium text-[#020308]">
+          + New
+        </Link>
+      </div>
     </div>
   );
 }
@@ -995,6 +1150,8 @@ export function WidgetContent({ widgetId, onLoaded }: WidgetContentProps) {
   switch (widgetId) {
     case "watchlist":
       return <WatchlistWidget widgetId={widgetId} onLoaded={onLoaded} />;
+    case "price-alerts":
+      return <PriceAlertsWidget widgetId={widgetId} onLoaded={onLoaded} />;
     case "market-overview":
       return <MarketOverviewWidget widgetId={widgetId} onLoaded={onLoaded} />;
     case "fear-greed":

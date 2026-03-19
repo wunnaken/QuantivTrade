@@ -6,6 +6,7 @@ export type LayoutItem = { i: string; x: number; y: number; w: number; h: number
 
 export type WidgetId =
   | "watchlist"
+  | "price-alerts"
   | "market-overview"
   | "live-chart"
   | "news-feed"
@@ -111,6 +112,7 @@ export const WIDGET_CONFIG: Record<
   { name: string; icon: string; minW: number; minH: number; defaultW: number; defaultH: number; category: string; description: string }
 > = {
   watchlist: { name: "Watchlist", icon: "", minW: 3, minH: 3, defaultW: 4, defaultH: 4, category: "Market Data", description: "Your watchlist tickers with prices and sparklines" },
+  "price-alerts": { name: "Price Alerts", icon: "", minW: 3, minH: 3, defaultW: 4, defaultH: 4, category: "Tools", description: "Active, paused, and triggered price alerts" },
   "market-overview": { name: "Market Overview", icon: "", minW: 3, minH: 3, defaultW: 4, defaultH: 4, category: "Market Data", description: "Major indices: SPY, QQQ, DXY, VIX, BTC" },
   "live-chart": { name: "Live Chart", icon: "", minW: 4, minH: 4, defaultW: 6, defaultH: 5, category: "Market Data", description: "TradingView-style chart with timeframe toggles" },
   "news-feed": { name: "News Feed", icon: "", minW: 3, minH: 4, defaultW: 6, defaultH: 6, category: "Social", description: "Latest headlines with source and time" },

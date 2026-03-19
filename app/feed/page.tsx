@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../components/AuthContext";
 import { isSpecialAccount } from "../../lib/special-account";
 import { getInitials as getSuggestedInitials } from "../../lib/suggested-people";
-import { fetchWatchlist, type WatchlistItem } from "../../lib/watchlist-api";
+import { fetchWatchlistWithStatus, getWatchlistSyncIssue, type WatchlistItem } from "../../lib/watchlist-api";
 import { getPriceAlerts, getAlertsForTicker, isNearTrigger } from "../../lib/price-alerts";
 import { useLivePrices } from "../../lib/hooks/useLivePrice";
 import { PriceDisplay } from "../../components/PriceDisplay";
@@ -17,7 +17,6 @@ import type { User } from "../../components/AuthContext";
 import { loadStreaks, tickBriefingStreak } from "../../lib/engagement/streaks";
 import { StreakDetailModal } from "../../components/StreakDetailModal";
 import { useToast } from "../../components/ToastContext";
-import { triggerConfetti } from "../../lib/confetti";
 import { addXPFromPost, addXPFromReaction } from "../../lib/engagement/xp";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { isVerified } from "../../lib/verified";
@@ -132,6 +131,7 @@ export default function FeedPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [watchlistLoading, setWatchlistLoading] = useState(true);
+  const [watchlistSyncIssue, setWatchlistSyncIssue] = useState(false);
   const watchlistSymbols = watchlist.map((i) => i.ticker);
   const watchlistQuotes = useLivePrices(watchlistSymbols);
   type FollowedProfile = { id: string; name: string; username: string };
@@ -229,7 +229,6 @@ export default function FeedPage() {
     const { data, milestone } = tickBriefingStreak();
     setStreakData(data);
     if (milestone) {
-      triggerConfetti({ duration: 2000 });
       toast.showToast(`📋 ${milestone} Day Briefing Streak! Keep learning.`, "celebration");
     }
   }, [toast]);
@@ -313,19 +312,31 @@ export default function FeedPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setWatchlistLoading(true);
-    fetchWatchlist()
-      .then((list) => {
-        if (!cancelled) setWatchlist(list);
-      })
-      .catch(() => {
-        if (!cancelled) setWatchlist([]);
-      })
-      .finally(() => {
+    const load = async () => {
+      setWatchlistLoading(true);
+      try {
+        const result = await fetchWatchlistWithStatus();
+        if (!cancelled) {
+          setWatchlist(result.items);
+          setWatchlistSyncIssue(result.syncIssue);
+        }
+      } catch {
+        if (!cancelled) {
+          setWatchlist([]);
+          setWatchlistSyncIssue(getWatchlistSyncIssue());
+        }
+      } finally {
         if (!cancelled) setWatchlistLoading(false);
-      });
+      }
+    };
+    void load();
+    const onChanged = () => {
+      void load();
+    };
+    window.addEventListener("xchange-watchlist-changed", onChanged);
     return () => {
       cancelled = true;
+      window.removeEventListener("xchange-watchlist-changed", onChanged);
     };
   }, [pathname]);
 
@@ -759,6 +770,9 @@ export default function FeedPage() {
                 </p>
               ) : (
                 <>
+                  {watchlistSyncIssue && (
+                    <p className="mb-1 text-[10px] text-amber-400">Sync issue: local backup in use</p>
+                  )}
                   <ul className="mt-3 space-y-2">
                     {watchlist.map((item) => {
                       const q = watchlistQuotes[item.ticker];
@@ -954,6 +968,9 @@ export default function FeedPage() {
               </p>
             ) : (
               <>
+                {watchlistSyncIssue && (
+                  <p className="mb-1 text-[10px] text-amber-400">Sync issue: local backup in use</p>
+                )}
                 <ul className="mt-3 space-y-2">
                   {watchlist.map((item) => {
                     const q = watchlistQuotes[item.ticker];

@@ -648,7 +648,6 @@ export default function DashboardPage() {
             <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition left-1 ${editMode ? "translate-x-5" : ""}`} />
           </button>
           {editMode && <span className="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-400">Editing</span>}
-          {apiSaving && <span className="text-[10px] text-zinc-500">saving...</span>}
         </div>
 
         <div className="flex shrink-0 items-center gap-2">

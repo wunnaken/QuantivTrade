@@ -12,6 +12,29 @@ export type WatchlistItem = {
   change?: number;
 };
 
+export type WatchlistFetchResult = {
+  items: WatchlistItem[];
+  source: "api" | "local";
+  syncIssue: boolean;
+};
+
+let lastSyncIssue = false;
+
+function setSyncIssue(v: boolean) {
+  lastSyncIssue = v;
+}
+
+export function getWatchlistSyncIssue(): boolean {
+  return lastSyncIssue;
+}
+
+function emitWatchlistChanged(syncIssue: boolean) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent("xchange-watchlist-changed", { detail: { syncIssue } })
+  );
+}
+
 function getLocalWatchlist(): WatchlistItem[] {
   if (typeof window === "undefined") return [];
   try {
@@ -33,16 +56,65 @@ function setLocalWatchlist(items: WatchlistItem[]): void {
   }
 }
 
-export async function fetchWatchlist(): Promise<WatchlistItem[]> {
+export async function fetchWatchlistWithStatus(): Promise<WatchlistFetchResult> {
   try {
     const res = await fetch("/api/watchlist", { credentials: "include" });
-    if (res.status === 401) return getLocalWatchlist();
+    if (res.status === 401) {
+      const local = getLocalWatchlist();
+      setSyncIssue(true);
+      return { items: local, source: "local", syncIssue: true };
+    }
     if (!res.ok) throw new Error("Failed to load watchlist");
     const data = await res.json();
-    return Array.isArray(data.items) ? data.items : [];
+    const items = Array.isArray(data.items) ? data.items : [];
+    // Mirror latest server state locally so fallback never loses data.
+    setLocalWatchlist(items);
+    setSyncIssue(false);
+    return { items, source: "api", syncIssue: false };
   } catch {
-    return getLocalWatchlist();
+    const local = getLocalWatchlist();
+    setSyncIssue(true);
+    return { items: local, source: "local", syncIssue: true };
   }
+}
+
+export async function fetchWatchlist(): Promise<WatchlistItem[]> {
+  const { items } = await fetchWatchlistWithStatus();
+  return items;
+}
+
+export async function migrateLocalWatchlistToApi(): Promise<{
+  attempted: number;
+  migrated: number;
+  syncIssue: boolean;
+}> {
+  const local = getLocalWatchlist();
+  if (local.length === 0) return { attempted: 0, migrated: 0, syncIssue: false };
+  let migrated = 0;
+  for (const item of local) {
+    const ticker = String(item?.ticker ?? "").trim().toUpperCase();
+    if (!ticker) continue;
+    try {
+      const res = await fetch("/api/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ticker, name: item.name }),
+      });
+      if (res.ok || res.status === 409) migrated += 1;
+    } catch {
+      // keep going, retain local backup if migration incomplete
+    }
+  }
+  const allMigrated = migrated >= local.length;
+  if (allMigrated) {
+    setLocalWatchlist([]);
+    setSyncIssue(false);
+    emitWatchlistChanged(false);
+  } else {
+    setSyncIssue(true);
+  }
+  return { attempted: local.length, migrated, syncIssue: !allMigrated };
 }
 
 function addToLocalWatchlist(ticker: string, name?: string): void {
@@ -51,7 +123,7 @@ function addToLocalWatchlist(ticker: string, name?: string): void {
   setLocalWatchlist([...list, { ticker: ticker.toUpperCase(), name: name ?? ticker }]);
 }
 
-export async function addToWatchlistApi(item: WatchlistItem): Promise<void> {
+export async function addToWatchlistApi(item: WatchlistItem): Promise<{ syncIssue: boolean }> {
   const ticker = String(item.ticker || "").trim().toUpperCase();
   if (!ticker) throw new Error("ticker is required");
   try {
@@ -61,42 +133,61 @@ export async function addToWatchlistApi(item: WatchlistItem): Promise<void> {
       credentials: "include",
       body: JSON.stringify({ ticker, name: item.name }),
     });
-    if (res.status === 409) return; // already in list
-    if (res.ok) return;
+    if (res.status === 409 || res.ok) {
+      // Keep local backup in sync with server success.
+      addToLocalWatchlist(ticker, item.name);
+      setSyncIssue(false);
+      emitWatchlistChanged(false);
+      return { syncIssue: false };
+    }
     if (res.status === 401 || res.status === 500) {
       addToLocalWatchlist(ticker, item.name);
-      return;
+      setSyncIssue(true);
+      emitWatchlistChanged(true);
+      return { syncIssue: true };
     }
     const err = await res.json().catch(() => ({}));
     throw new Error((err as { error?: string }).error || "Failed to add to watchlist");
   } catch (e) {
     if (e instanceof TypeError || (e instanceof Error && e.message.includes("fetch"))) {
       addToLocalWatchlist(ticker, item.name);
-      return;
+      setSyncIssue(true);
+      emitWatchlistChanged(true);
+      return { syncIssue: true };
     }
     throw e;
   }
 }
 
-export async function removeFromWatchlistApi(ticker: string): Promise<void> {
+export async function removeFromWatchlistApi(ticker: string): Promise<{ syncIssue: boolean }> {
   const upper = ticker.trim().toUpperCase();
   try {
     const res = await fetch(`/api/watchlist?ticker=${encodeURIComponent(ticker)}`, {
       method: "DELETE",
       credentials: "include",
     });
-    if (res.ok) return;
+    if (res.ok) {
+      const list = getLocalWatchlist().filter((i) => i.ticker.toUpperCase() !== upper);
+      setLocalWatchlist(list);
+      setSyncIssue(false);
+      emitWatchlistChanged(false);
+      return { syncIssue: false };
+    }
     if (res.status === 401 || res.status === 500) {
       const list = getLocalWatchlist().filter((i) => i.ticker.toUpperCase() !== upper);
       setLocalWatchlist(list);
-      return;
+      setSyncIssue(true);
+      emitWatchlistChanged(true);
+      return { syncIssue: true };
     }
     throw new Error("Failed to remove from watchlist");
   } catch (e) {
     if (e instanceof TypeError) {
       const list = getLocalWatchlist().filter((i) => i.ticker.toUpperCase() !== upper);
       setLocalWatchlist(list);
-      return;
+      setSyncIssue(true);
+      emitWatchlistChanged(true);
+      return { syncIssue: true };
     }
     throw e;
   }

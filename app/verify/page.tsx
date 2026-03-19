@@ -19,7 +19,6 @@ export default function VerifyPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [success, setSuccess] = useState(false);
-  const [confetti, setConfetti] = useState(false);
 
   const [req1, setReq1] = useState(false);
   const [req2, setReq2] = useState(false);
@@ -41,32 +40,12 @@ export default function VerifyPage() {
 
   const handleActivateDev = useCallback(() => {
     setVerified(true);
-    setConfetti(true);
     setSuccess(true);
   }, []);
 
   if (success) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0A0E1A] p-6">
-        {confetti && (
-          <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-            {Array.from({ length: 60 }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute animate-[confettiFall_2s_ease-out_forwards]"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: "-10px",
-                  width: 8,
-                  height: 8,
-                  backgroundColor: [VERIFIED_BLUE, "#60A5FA", "#93C5FD", "#BFDBFE", "#fff"][i % 5],
-                  transform: `rotate(${Math.random() * 360}deg)`,
-                  animationDelay: `${Math.random() * 0.5}s`,
-                }}
-              />
-            ))}
-          </div>
-        )}
         <div className="relative z-10 flex flex-col items-center text-center">
           <div className="animate-[scaleIn_0.5s_ease-out]">
             <VerifiedBadge size={80} />
@@ -82,7 +61,6 @@ export default function VerifyPage() {
           </Link>
         </div>
         <style dangerouslySetInnerHTML={{ __html: `
-          @keyframes confettiFall { to { transform: translateY(100vh) rotate(720deg); } }
           @keyframes scaleIn { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
         `}} />
       </div>

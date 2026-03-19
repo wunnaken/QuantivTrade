@@ -57,9 +57,9 @@ export function WidgetWrapper({
               <button type="button" onClick={() => setMinimized((m) => !m)} className="rounded p-1.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300" title={minimized ? "Expand" : "Minimize"} aria-label={minimized ? "Expand" : "Minimize"}>
                 {minimized ? "+" : "−"}
               </button>
-              <button type="button" onClick={onRefresh} className="rounded p-1.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300" title="Refresh" aria-label="Refresh">↻</button>
-              <button type="button" onClick={onSettings} className="rounded p-1.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300" title="Settings" aria-label="Settings">⚙</button>
-              <button type="button" onClick={onRemove} className="rounded p-1.5 text-zinc-500 hover:bg-white/5 hover:text-red-400" title="Remove" aria-label="Remove">×</button>
+              <button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={onRefresh} className="rounded p-1.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300" title="Refresh" aria-label="Refresh">↻</button>
+              <button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={onSettings} className="rounded p-1.5 text-zinc-500 hover:bg-white/5 hover:text-zinc-300" title="Settings" aria-label="Settings">⚙</button>
+              <button type="button" onMouseDown={(e) => e.stopPropagation()} onClick={onRemove} className="rounded p-1.5 text-zinc-500 hover:bg-white/5 hover:text-red-400" title="Remove" aria-label="Remove">×</button>
             </>
           )}
         </div>
