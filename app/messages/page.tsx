@@ -1,205 +1,486 @@
 "use client";
 
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { getInitials } from "../../lib/suggested-people";
-import { SAMPLE_DMS, SAMPLE_GROUPS, type Message } from "../../lib/messages-data";
-import { VerifiedBadge } from "../../components/VerifiedBadge";
+import { createClient } from "@/lib/supabase/client";
+import { getInitials } from "@/lib/suggested-people";
+import { VerifiedBadge } from "@/components/VerifiedBadge";
 
-const CARD_BG = "#0F1520";
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-function formatMessageTime(iso: string) {
+type ConvType = "community" | "dm" | "group";
+
+type Conversation = {
+  id: string;
+  type: ConvType;
+  name: string | null;
+  room_id: string | null;
+  last_message_at: string;
+  last_message_preview: string | null;
+  other_user?: { user_id: string; name: string; username: string } | null;
+  unread: number;
+};
+
+type Message = {
+  id: string;
+  user_id: string | null;
+  content: string;
+  created_at: string;
+  is_mine: boolean;
+  author: { name: string; username: string } | null;
+};
+
+type SearchProfile = { user_id: string; name: string; username: string };
+
+type ActiveTab = "community" | "dms" | "groups";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function fmtTime(iso: string) {
   const d = new Date(iso);
-  const now = new Date();
-  const diff = (now.getTime() - d.getTime()) / 60000;
+  const diff = (Date.now() - d.getTime()) / 60000;
   if (diff < 1) return "Now";
   if (diff < 60) return `${Math.floor(diff)}m`;
   if (diff < 1440) return `${Math.floor(diff / 60)}h`;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-const TYPING_REPLY_MSG: Record<string, string> = {
-  sarah_macro: "Yeah could see that. I'll add if we break.",
-  torres_flow: "Makes sense. Good luck with the week.",
-  alex_fx: "Agreed, data dependency is key.",
-  lee_crypto: "Watching that level too.",
-  priya_etf: "Thanks, will take a look!",
-};
+function convDisplayName(c: Conversation): string {
+  if (c.type === "dm") return c.other_user?.name ?? "Unknown";
+  return c.name ?? c.room_id ?? "Chat";
+}
+
+function convAvatar(c: Conversation): string {
+  const name = convDisplayName(c);
+  return getInitials(name) || name.slice(0, 2).toUpperCase();
+}
+
+// ─── New DM Modal ─────────────────────────────────────────────────────────────
+
+function NewDmModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<SearchProfile[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    if (q.length < 2) { setResults([]); return; }
+    const t = setTimeout(async () => {
+      setSearching(true);
+      const res = await fetch(`/api/profiles/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json() as { profiles: SearchProfile[] };
+      setResults(data.profiles ?? []);
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const startDm = async (profile: SearchProfile) => {
+    setCreating(true);
+    const res = await fetch("/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "dm", other_user_id: profile.user_id }),
+    });
+    const data = await res.json() as { id: string };
+    setCreating(false);
+    onCreated(data.id);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0F1520] p-5 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-semibold text-zinc-100">New Message</h2>
+          <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300">✕</button>
+        </div>
+        <input
+          type="search"
+          placeholder="Search by name or username..."
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
+        />
+        <ul className="mt-3 space-y-1">
+          {searching && <li className="py-2 text-center text-xs text-zinc-500">Searching…</li>}
+          {!searching && q.length >= 2 && results.length === 0 && (
+            <li className="py-2 text-center text-xs text-zinc-500">No users found</li>
+          )}
+          {results.map((p) => (
+            <li key={p.user_id}>
+              <button
+                type="button"
+                disabled={creating}
+                onClick={() => startDm(p)}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/5"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-[var(--accent-color)]">
+                  {getInitials(p.name)}
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-zinc-100">{p.name}</p>
+                  <p className="text-xs text-zinc-500">@{p.username}</p>
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+// ─── New Group Modal ──────────────────────────────────────────────────────────
+
+function NewGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
+  const [name, setName] = useState("");
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<SearchProfile[]>([]);
+  const [members, setMembers] = useState<SearchProfile[]>([]);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    if (q.length < 2) { setResults([]); return; }
+    const t = setTimeout(async () => {
+      const res = await fetch(`/api/profiles/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json() as { profiles: SearchProfile[] };
+      setResults((data.profiles ?? []).filter((p) => !members.some((m) => m.user_id === p.user_id)));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q, members]);
+
+  const addMember = (p: SearchProfile) => {
+    setMembers((prev) => [...prev, p]);
+    setQ("");
+    setResults([]);
+  };
+
+  const removeMember = (uid: string) => setMembers((prev) => prev.filter((m) => m.user_id !== uid));
+
+  const create = async () => {
+    if (!name.trim()) return;
+    setCreating(true);
+    const res = await fetch("/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "group", name: name.trim(), member_ids: members.map((m) => m.user_id) }),
+    });
+    const data = await res.json() as { id: string };
+    setCreating(false);
+    onCreated(data.id);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0F1520] p-5 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-semibold text-zinc-100">New Group</h2>
+          <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300">✕</button>
+        </div>
+        <input
+          type="text"
+          placeholder="Group name…"
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="mb-3 w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
+        />
+        {members.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-1.5">
+            {members.map((m) => (
+              <span key={m.user_id} className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-zinc-300">
+                {m.name}
+                <button type="button" onClick={() => removeMember(m.user_id)} className="ml-0.5 text-zinc-500 hover:text-zinc-200">✕</button>
+              </span>
+            ))}
+          </div>
+        )}
+        <input
+          type="search"
+          placeholder="Add members…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
+        />
+        {results.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {results.map((p) => (
+              <li key={p.user_id}>
+                <button type="button" onClick={() => addMember(p)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-white/5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-[var(--accent-color)]">
+                    {getInitials(p.name)}
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-zinc-100">{p.name}</p>
+                    <p className="text-xs text-zinc-500">@{p.username}</p>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <button
+          type="button"
+          onClick={create}
+          disabled={!name.trim() || creating}
+          className="mt-4 w-full rounded-xl bg-[var(--accent-color)] py-2.5 text-sm font-semibold text-[#020308] transition hover:opacity-90 disabled:opacity-40"
+        >
+          {creating ? "Creating…" : "Create Group"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 function MessagesContent() {
   const searchParams = useSearchParams();
   const withHandle = searchParams.get("with");
-  const [activeTab, setActiveTab] = useState<"dms" | "groups">("dms");
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>("community");
+  const [conversations, setConversations] = useState<{
+    community: Conversation[];
+    dms: Conversation[];
+    groups: Conversation[];
+  }>({ community: [], dms: [], groups: [] });
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedIsGroup, setSelectedIsGroup] = useState(false);
-  const [dmMessages, setDmMessages] = useState<Record<string, Message[]>>(() =>
-    Object.fromEntries(SAMPLE_DMS.map((c) => [c.id, [...c.messages]]))
-  );
-  const [groupMessages, setGroupMessages] = useState<Record<string, Message[]>>(() =>
-    Object.fromEntries(SAMPLE_GROUPS.map((c) => [c.id, [...c.messages]]))
-  );
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [typing, setTyping] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [msgLoading, setMsgLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [showNewDm, setShowNewDm] = useState(false);
+  const [showNewGroup, setShowNewGroup] = useState(false);
+  const [search, setSearch] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messageIdRef = useRef(0);
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
 
-  useEffect(() => {
-    if (!withHandle) return;
-    const dm = SAMPLE_DMS.find((d) => d.handle === withHandle);
-    if (!dm) return;
-    queueMicrotask(() => {
-      setSelectedId(dm.id);
-      setSelectedIsGroup(false);
-      setActiveTab("dms");
-    });
-  }, [withHandle]);
-  const hasAnyConversations = SAMPLE_DMS.length > 0 || SAMPLE_GROUPS.length > 0;
-
-  const scrollToBottom = useCallback(() => {
-    queueMicrotask(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }));
+  // Load conversations
+  const loadConversations = useCallback(async () => {
+    const res = await fetch("/api/conversations");
+    if (!res.ok) return;
+    const data = await res.json() as typeof conversations;
+    setConversations(data);
+    setLoading(false);
   }, []);
 
+  useEffect(() => { void loadConversations(); }, [loadConversations]);
+
+  // Handle ?with= param (navigate to existing DM)
   useEffect(() => {
-    scrollToBottom();
-  }, [dmMessages, groupMessages, typing, scrollToBottom]);
+    if (!withHandle || loading) return;
+    const dm = conversations.dms.find((d) => d.other_user?.username === withHandle);
+    if (dm) { setActiveTab("dms"); setSelectedId(dm.id); }
+  }, [withHandle, loading, conversations.dms]);
 
-  const currentDm = selectedId && !selectedIsGroup ? SAMPLE_DMS.find((d) => d.id === selectedId) : null;
-  const currentGroup = selectedId && selectedIsGroup ? SAMPLE_GROUPS.find((g) => g.id === selectedId) : null;
-  const displayName = currentDm?.name ?? currentGroup?.name ?? "";
-  const displayHandle = currentDm?.handle ?? "";
-  const isOnline = currentDm?.online ?? false;
+  // Load messages + realtime subscription
+  useEffect(() => {
+    if (!selectedId) { setMessages([]); return; }
 
-  const messages = selectedId
-    ? selectedIsGroup
-      ? groupMessages[selectedId] ?? []
-      : dmMessages[selectedId] ?? []
-    : [];
+    setMsgLoading(true);
+    fetch(`/api/conversations/${selectedId}/messages`)
+      .then((r) => r.json())
+      .then((data: { messages: Message[] }) => {
+        setMessages(data.messages ?? []);
+        setMsgLoading(false);
+      })
+      .catch(() => setMsgLoading(false));
 
-  const sendMessage = () => {
+    // Realtime
+    const supabase = createClient();
+    if (channelRef.current) { void channelRef.current.unsubscribe(); }
+
+    channelRef.current = supabase
+      .channel(`conv-${selectedId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` },
+        (payload) => {
+          const incoming = payload.new as Message & { is_mine?: boolean };
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === incoming.id)) return prev;
+            return [...prev, { ...incoming, is_mine: false, author: null }];
+          });
+        }
+      )
+      .subscribe();
+
+    return () => { void channelRef.current?.unsubscribe(); };
+  }, [selectedId]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessage = async () => {
     const text = input.trim();
-    if (!text || !selectedId) return;
-    messageIdRef.current += 1;
-    const at = new Date().toISOString();
-    const newMsg: Message = { id: `new-${messageIdRef.current}`, from: "me", text, at };
-    if (selectedIsGroup) {
-      setGroupMessages((prev) => ({
-        ...prev,
-        [selectedId]: [...(prev[selectedId] ?? []), newMsg],
-      }));
-    } else {
-      setDmMessages((prev) => ({
-        ...prev,
-        [selectedId]: [...(prev[selectedId] ?? []), newMsg],
-      }));
-    }
+    if (!text || !selectedId || sending) return;
+    setSending(true);
     setInput("");
-    setTyping(true);
-    const replyText = selectedIsGroup ? "Thanks for sharing." : (TYPING_REPLY_MSG[selectedId] ?? "Got it.");
-    setTimeout(() => {
-      messageIdRef.current += 1;
-      const reply: Message = {
-        id: `reply-${messageIdRef.current}`,
-        from: selectedIsGroup ? (currentGroup?.messages?.[0]?.from ?? "member") : selectedId,
-        text: replyText ?? "Got it.",
-        at: new Date().toISOString(),
-      };
-      if (selectedIsGroup) {
-        setGroupMessages((prev) => ({
-          ...prev,
-          [selectedId]: [...(prev[selectedId] ?? []), reply],
-        }));
+
+    const tempId = `opt-${Date.now()}`;
+    const optimistic: Message = { id: tempId, user_id: "me", content: text, created_at: new Date().toISOString(), is_mine: true, author: null };
+    setMessages((prev) => [...prev, optimistic]);
+
+    try {
+      const res = await fetch(`/api/conversations/${selectedId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: text }),
+      });
+      if (res.ok) {
+        const { message } = await res.json() as { message: Message };
+        setMessages((prev) => prev.map((m) => m.id === tempId ? message : m));
+        // Update preview in conversation list
+        setConversations((prev) => {
+          const update = (list: Conversation[]) =>
+            list.map((c) => c.id === selectedId ? { ...c, last_message_preview: text, last_message_at: new Date().toISOString() } : c);
+          return { community: update(prev.community), dms: update(prev.dms), groups: update(prev.groups) };
+        });
       } else {
-        setDmMessages((prev) => ({
-          ...prev,
-          [selectedId]: [...(prev[selectedId] ?? []), reply],
-        }));
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
       }
-      setTyping(false);
-    }, 1000);
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+    } finally {
+      setSending(false);
+    }
   };
 
+  const openConversation = (id: string) => { setSelectedId(id); };
+
+  const handleNewConvCreated = (id: string, tab: ActiveTab) => {
+    setShowNewDm(false);
+    setShowNewGroup(false);
+    setActiveTab(tab);
+    setSelectedId(id);
+    void loadConversations();
+  };
+
+  const selectedConv = selectedId
+    ? [...conversations.community, ...conversations.dms, ...conversations.groups].find((c) => c.id === selectedId) ?? null
+    : null;
+
+  const filteredList = (list: Conversation[]) =>
+    search ? list.filter((c) => convDisplayName(c).toLowerCase().includes(search.toLowerCase())) : list;
+
+  const tabList = activeTab === "community" ? filteredList(conversations.community)
+    : activeTab === "dms" ? filteredList(conversations.dms)
+    : filteredList(conversations.groups);
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] bg-[#0A0E1A]">
-      {/* Left: conversation list */}
-      <aside
-        className={`flex w-full flex-col border-r border-white/10 md:w-[300px] ${selectedId ? "hidden md:flex" : ""}`}
-        style={{ backgroundColor: CARD_BG }}
-      >
-        <div className="border-b border-white/10 p-3">
-          <input
-            type="search"
-            placeholder="Search messages..."
-            className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
-          />
-        </div>
-        <div className="flex border-b border-white/10 p-1">
-          <button
-            type="button"
-            onClick={() => setActiveTab("dms")}
-            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
-              activeTab === "dms" ? "bg-[var(--accent-color)]/20 text-[var(--accent-color)]" : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            DMs
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("groups")}
-            className={`flex-1 rounded-md py-2 text-sm font-medium transition-colors ${
-              activeTab === "groups" ? "bg-[var(--accent-color)]/20 text-[var(--accent-color)]" : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            Groups
-          </button>
-        </div>
-        <ul className="flex-1 overflow-y-auto p-2">
-          {!hasAnyConversations && (
-            <li className="px-3 py-6 text-center text-sm text-zinc-500">
-              No conversations yet.
-              <Link href="/people" className="mt-2 block text-[var(--accent-color)] hover:underline">
-                Find people to start a chat
-              </Link>
-            </li>
+    <>
+      {showNewDm && (
+        <NewDmModal
+          onClose={() => setShowNewDm(false)}
+          onCreated={(id) => handleNewConvCreated(id, "dms")}
+        />
+      )}
+      {showNewGroup && (
+        <NewGroupModal
+          onClose={() => setShowNewGroup(false)}
+          onCreated={(id) => handleNewConvCreated(id, "groups")}
+        />
+      )}
+
+      <div className="flex h-[calc(100vh-3.5rem)] bg-[#0A0E1A]">
+        {/* ── Sidebar ─────────────────────────────────────────────────── */}
+        <aside className={`flex w-full flex-col border-r border-white/10 bg-[#0F1520] md:w-[300px] ${selectedId ? "hidden md:flex" : ""}`}>
+          {/* Search */}
+          <div className="border-b border-white/10 p-3">
+            <input
+              type="search"
+              placeholder="Search…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
+            />
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-white/10 p-1">
+            {(["community", "dms", "groups"] as ActiveTab[]).map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 rounded-md py-2 text-xs font-medium capitalize transition-colors ${
+                  activeTab === tab ? "bg-[var(--accent-color)]/20 text-[var(--accent-color)]" : "text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                {tab === "community" ? "Community" : tab === "dms" ? "DMs" : "Groups"}
+              </button>
+            ))}
+          </div>
+
+          {/* New DM / Group buttons */}
+          {(activeTab === "dms" || activeTab === "groups") && (
+            <div className="border-b border-white/10 p-2">
+              <button
+                type="button"
+                onClick={() => activeTab === "dms" ? setShowNewDm(true) : setShowNewGroup(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-400 transition hover:bg-white/10 hover:text-zinc-200"
+              >
+                <span className="text-lg leading-none">+</span>
+                {activeTab === "dms" ? "New Message" : "New Group"}
+              </button>
+            </div>
           )}
-          {activeTab === "dms" &&
-            SAMPLE_DMS.map((c) => {
-              const msgs = dmMessages[c.id] ?? c.messages;
-              const last = msgs[msgs.length - 1];
-              const isActive = selectedId === c.id && !selectedIsGroup;
+
+          {/* Conversation list */}
+          <ul className="flex-1 overflow-y-auto p-2">
+            {loading && (
+              <li className="space-y-2 p-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex gap-3 rounded-lg p-3">
+                    <div className="h-10 w-10 shrink-0 animate-pulse rounded-full bg-white/10" />
+                    <div className="flex-1 space-y-2 pt-1">
+                      <div className="h-3 w-1/2 animate-pulse rounded bg-white/10" />
+                      <div className="h-2.5 w-3/4 animate-pulse rounded bg-white/10" />
+                    </div>
+                  </div>
+                ))}
+              </li>
+            )}
+            {!loading && tabList.length === 0 && (
+              <li className="px-3 py-8 text-center text-sm text-zinc-500">
+                {activeTab === "dms" ? (
+                  <>No messages yet.<br />
+                    <Link href="/people" className="mt-2 inline-block text-[var(--accent-color)] hover:underline">Find people to message</Link>
+                  </>
+                ) : activeTab === "groups" ? "No groups yet. Create one above." : "No community rooms found."}
+              </li>
+            )}
+            {!loading && tabList.map((c) => {
+              const isActive = selectedId === c.id;
+              const name = convDisplayName(c);
               return (
                 <li key={c.id}>
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedId(c.id);
-                      setSelectedIsGroup(false);
-                    }}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
+                    onClick={() => openConversation(c.id)}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
                       isActive ? "bg-[var(--accent-color)]/10 text-[var(--accent-color)]" : "hover:bg-white/5"
                     }`}
                   >
-                    <div className="relative shrink-0">
-                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-[var(--accent-color)]">
-                        {getInitials(c.name)}
-                      </span>
-                      {c.online && (
-                        <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0F1520] bg-[var(--accent-color)]" />
-                      )}
-                    </div>
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                      isActive ? "bg-[var(--accent-color)]/20 text-[var(--accent-color)]" : "bg-white/10 text-zinc-400"
+                    }`}>
+                      {convAvatar(c)}
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-1.5 truncate text-sm font-medium text-zinc-200">
-                        {c.name}
-                        {c.verified && <VerifiedBadge size={14} />}
-                      </p>
-                      <p className="truncate text-xs text-zinc-500">{last?.text ?? c.lastMessage}</p>
+                      <p className="truncate text-sm font-medium text-zinc-200">{name}</p>
+                      <p className="truncate text-xs text-zinc-500">{c.last_message_preview ?? (c.type === "community" ? "Public room" : "No messages yet")}</p>
                     </div>
                     <div className="shrink-0 text-right">
-                      <p className="text-xs text-zinc-500">{formatMessageTime(last?.at ?? c.lastAt)}</p>
+                      <p className="text-[10px] text-zinc-600">{fmtTime(c.last_message_at)}</p>
                       {c.unread > 0 && (
                         <span className="mt-1 flex justify-end">
-                          <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--accent-color)] px-1.5 text-[10px] font-bold text-[#020308]">
+                          <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[var(--accent-color)] px-1 text-[9px] font-bold text-[#020308]">
                             {c.unread}
                           </span>
                         </span>
@@ -209,158 +490,125 @@ function MessagesContent() {
                 </li>
               );
             })}
-          {activeTab === "groups" &&
-            SAMPLE_GROUPS.map((g) => {
-              const msgs = groupMessages[g.id] ?? g.messages;
-              const last = msgs[msgs.length - 1];
-              const isActive = selectedId === g.id && selectedIsGroup;
-              return (
-                <li key={g.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedId(g.id);
-                      setSelectedIsGroup(true);
-                    }}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors ${
-                      isActive ? "bg-[var(--accent-color)]/10 text-[var(--accent-color)]" : "hover:bg-white/5"
-                    }`}
-                  >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-zinc-400">
-                      {g.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-zinc-200">{g.name}</p>
-                      <p className="truncate text-xs text-zinc-500">{last?.text ?? g.lastMessage}</p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-xs text-zinc-500">{formatMessageTime(last?.at ?? g.lastAt)}</p>
-                      {g.unread > 0 && (
-                        <span className="mt-1 flex justify-end">
-                          <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--accent-color)] px-1.5 text-[10px] font-bold text-[#020308]">
-                            {g.unread}
-                          </span>
-                        </span>
-                      )}
-                    </div>
-                  </button>
-                </li>
-              );
-            })}
-        </ul>
-      </aside>
+          </ul>
+        </aside>
 
-      {/* Right: active conversation */}
-      <main
-        className={`flex flex-1 flex-col bg-[#0A0E1A] ${!selectedId ? "hidden md:flex" : ""}`}
-      >
-        {selectedId ? (
-          <>
-            <header className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3">
-              <button
-                type="button"
-                onClick={() => setSelectedId(null)}
-                className="rounded p-2 text-zinc-400 hover:bg-white/5 hover:text-zinc-200 md:hidden"
-                aria-label="Back to list"
-              >
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)]">
-                {currentGroup ? displayName.slice(0, 2).toUpperCase() : getInitials(displayName)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center gap-1.5 font-medium text-zinc-100">
-                  {displayName}
-                  {currentDm?.verified && <VerifiedBadge size={14} />}
-                </p>
-                <p className="text-xs text-zinc-500">
-                  {currentGroup ? `${currentGroup.memberCount} members` : `@${displayHandle}`}
-                  {!currentGroup && (
-                    <span className={isOnline ? "text-[var(--accent-color)]" : "text-zinc-500"}>
-                      {" "}
-                      · {isOnline ? "Online" : "Offline"}
-                    </span>
-                  )}
-                </p>
-              </div>
-            </header>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-[85%] rounded-2xl px-4 py-2 ${
-                      msg.from === "me"
-                        ? "bg-[var(--accent-color)] text-[#020308]"
-                        : "bg-[#0F1520] text-zinc-200 border border-white/10"
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap text-sm">{msg.text}</p>
-                    <p className={`mt-1 text-[10px] ${msg.from === "me" ? "text-[#020308]/70" : "text-zinc-500"}`}>
-                      {formatMessageTime(msg.at)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {typing && (
-                <div className="flex justify-start">
-                  <div className="rounded-2xl border border-white/10 bg-[#0F1520] px-4 py-3">
-                    <span className="flex gap-1">
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-500 [animation-delay:0ms]" />
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-500 [animation-delay:150ms]" />
-                      <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-500 [animation-delay:300ms]" />
-                    </span>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            <div className="shrink-0 border-t border-white/10 p-4">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
-                  placeholder={currentGroup ? `Message ${displayName}...` : `Message @${displayHandle}...`}
-                  className="flex-1 rounded-xl border border-white/10 bg-[#0F1520] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
-                />
+        {/* ── Chat area ───────────────────────────────────────────────── */}
+        <main className={`flex flex-1 flex-col bg-[#0A0E1A] ${!selectedId ? "hidden md:flex" : ""}`}>
+          {selectedConv ? (
+            <>
+              {/* Header */}
+              <header className="flex shrink-0 items-center gap-3 border-b border-white/10 px-4 py-3">
                 <button
                   type="button"
-                  onClick={sendMessage}
-                  disabled={!input.trim()}
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-color)] text-[#020308] transition-opacity hover:opacity-90 disabled:opacity-50"
-                  aria-label="Send"
+                  onClick={() => setSelectedId(null)}
+                  className="rounded p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-200 md:hidden"
+                  aria-label="Back"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)]">
+                  {convAvatar(selectedConv)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-zinc-100">{convDisplayName(selectedConv)}</p>
+                  <p className="text-xs text-zinc-500 capitalize">
+                    {selectedConv.type === "dm"
+                      ? `@${selectedConv.other_user?.username ?? ""}`
+                      : selectedConv.type === "community"
+                      ? "Community room · open to all"
+                      : "Private group"}
+                  </p>
+                </div>
+              </header>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {msgLoading && (
+                  <div className="flex justify-center py-8">
+                    <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-[var(--accent-color)]" />
+                  </div>
+                )}
+                {!msgLoading && messages.length === 0 && (
+                  <p className="py-12 text-center text-sm text-zinc-600">No messages yet. Say hello!</p>
+                )}
+                {!msgLoading && messages.map((msg, i) => {
+                  const prevMsg = messages[i - 1];
+                  const showAuthor = !msg.is_mine && selectedConv.type !== "dm" && msg.author && prevMsg?.user_id !== msg.user_id;
+                  return (
+                    <div key={msg.id} className={`flex ${msg.is_mine ? "justify-end" : "justify-start"}`}>
+                      <div className={`flex max-w-[80%] flex-col ${msg.is_mine ? "items-end" : "items-start"}`}>
+                        {showAuthor && (
+                          <p className="mb-1 px-1 text-[10px] text-zinc-500">{msg.author?.name}</p>
+                        )}
+                        <div className={`rounded-2xl px-4 py-2.5 ${
+                          msg.is_mine
+                            ? "bg-[var(--accent-color)] text-[#020308]"
+                            : "border border-white/10 bg-[#0F1520] text-zinc-200"
+                        }`}>
+                          <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+                          <p className={`mt-1 text-[10px] ${msg.is_mine ? "text-[#020308]/60" : "text-zinc-600"}`}>
+                            {fmtTime(msg.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
               </div>
+
+              {/* Input */}
+              <div className="shrink-0 border-t border-white/10 p-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }}
+                    placeholder={`Message ${convDisplayName(selectedConv)}…`}
+                    className="flex-1 rounded-xl border border-white/10 bg-[#0F1520] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void sendMessage()}
+                    disabled={!input.trim() || sending}
+                    className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-color)] text-[#020308] transition hover:opacity-90 disabled:opacity-40"
+                    aria-label="Send"
+                  >
+                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+              <div className="rounded-full bg-white/5 p-4">
+                <svg className="h-8 w-8 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <p className="text-sm text-zinc-500">Select a conversation to start chatting</p>
+              <Link href="/people" className="text-xs text-[var(--accent-color)] hover:underline">Find people to message</Link>
             </div>
-          </>
-        ) : (
-          <div className="flex flex-1 items-center justify-center p-8 text-center">
-            <p className="text-zinc-500">Select a conversation or start a new message.</p>
-            <Link href="/people" className="mt-2 block text-sm text-[var(--accent-color)] hover:underline">
-              Find people to message
-            </Link>
-          </div>
-        )}
-      </main>
-    </div>
+          )}
+        </main>
+      </div>
+    </>
   );
 }
 
 export default function MessagesPage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#0A0E1A]"><div className="h-8 w-8 animate-pulse rounded-full bg-white/10" /></div>}>
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-[#0A0E1A]">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-[var(--accent-color)]" />
+      </div>
+    }>
       <MessagesContent />
     </Suspense>
   );

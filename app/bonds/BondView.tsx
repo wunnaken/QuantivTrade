@@ -212,7 +212,7 @@ export default function BondView() {
 
   useEffect(() => {
     void fetchBonds(false);
-    const id = setInterval(() => void fetchBonds(true), 3600000);
+    const id = setInterval(() => void fetchBonds(true), 1800000);
     const clock = setInterval(() => setNowTick(Date.now()), 60000);
     return () => {
       clearInterval(id);
@@ -578,8 +578,11 @@ export default function BondView() {
                   <div key={key} className="mb-2 rounded-xl border border-white/10 bg-[#050713] p-2.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs text-zinc-300">{name}</p>
-                      <span className={`flex shrink-0 items-baseline gap-1.5 ${vixLevelClass(item.value)}`}>
-                        <span className="inline-block h-2 w-2 shrink-0 rounded-full bg-current opacity-90" aria-hidden />
+                      <span className={`flex shrink-0 items-center gap-1.5 ${vixLevelClass(item.value)}`}>
+                        <span className="relative flex h-2 w-2 shrink-0" aria-hidden>
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-50" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
+                        </span>
                         <span>{fmtVix(item.value)}</span>
                       </span>
                     </div>
@@ -632,8 +635,8 @@ export default function BondView() {
               {Object.values(data.centralBankRates).map((r) => (
                 <div key={r.label} className="flex items-center justify-between rounded-lg border border-white/10 bg-[#050713] px-2.5 py-2">
                   <div>
-                    <p className="text-xs text-zinc-200">{r.label}</p>
-                    <p className="text-[10px] text-zinc-500">{r.source}</p>
+                    <p className="text-xs font-semibold text-zinc-200">{r.label}</p>
+                    <p className="text-[11px] text-zinc-400">{r.source}</p>
                     <p className="text-[10px] text-zinc-500">
                       {r.lastUpdated ? `Updated ${new Date(r.lastUpdated).toLocaleDateString()}` : (r.note ?? "Data unavailable")}
                     </p>

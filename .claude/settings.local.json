@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"https://financialmodelingprep.com/api/v3/historical-price-full/ETHUSD?from=2026-02-20&to=2026-03-22&apikey=BkyqXsIWmXidrG1FlC7USozuI9kCSERq\")",
+      "Bash(curl -s \"https://financialmodelingprep.com/api/v3/historical-chart/5min/ETHUSD?from=2026-03-21&to=2026-03-22&apikey=BkyqXsIWmXidrG1FlC7USozuI9kCSERq\")",
+      "Bash(curl -s \"https://financialmodelingprep.com/stable/historical-price-eod/full?symbol=ETHUSD&apikey=BkyqXsIWmXidrG1FlC7USozuI9kCSERq\")",
+      "Bash(curl -s \"https://financialmodelingprep.com/stable/historical-price-eod/full?symbol=AAPL&apikey=BkyqXsIWmXidrG1FlC7USozuI9kCSERq\")",
+      "Bash(curl -s \"https://financialmodelingprep.com/stable/historical-chart/5min?symbol=ETHUSD&from=2026-03-21&to=2026-03-22&apikey=BkyqXsIWmXidrG1FlC7USozuI9kCSERq\")",
+      "Bash(curl -s \"https://financialmodelingprep.com/stable/historical-price-eod/full?symbol=ETHUSD&from=2026-02-20&to=2026-03-22&apikey=BkyqXsIWmXidrG1FlC7USozuI9kCSERq\")",
+      "Bash(curl -s \"https://financialmodelingprep.com/stable/historical-chart/1hour?symbol=ETHUSD&from=2026-03-15&to=2026-03-22&apikey=BkyqXsIWmXidrG1FlC7USozuI9kCSERq\")",
+      "Bash(curl -s \"https://financialmodelingprep.com/stable/historical-chart/4hour?symbol=ETHUSD&from=2026-03-15&to=2026-03-22&apikey=BkyqXsIWmXidrG1FlC7USozuI9kCSERq\")",
+      "Bash(node -e \"let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\(''''type:'''',Array.isArray\\(j\\)?''''array'''':''''object'''',''''len:'''',j.length??''''N/A''''\\);console.log\\(''''first:'''',JSON.stringify\\(j[0]\\)\\)}\\)\")",
+      "Bash(curl -s \"https://api.coingecko.com/api/v3/coins/ethereum/market_chart?vs_currency=usd&days=1\")",
+      "Bash(node -e \"let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\(''''prices count:'''',j.prices?.length,''''first:'''',JSON.stringify\\(j.prices?.[0]\\),''''error:'''',j.error\\)}\\)\")",
+      "Bash(curl -s \"https://finnhub.io/api/v1/stock/candle?symbol=AAPL&resolution=60&from=1742428800&to=1742860800&token=d6t2onhr01qoqois1050d6t2onhr01qoqois105g\")",
+      "Bash(node -e \"let d='''''''';process.stdin.on\\(''''data'''',c=>d+=c\\);process.stdin.on\\(''''end'''',\\(\\)=>{const j=JSON.parse\\(d\\);console.log\\(''''status:'''',j.s,''''count:'''',j.t?.length,''''first t:'''',j.t?.[0],''''first c:'''',j.c?.[0]\\)}\\)\")",
+      "Bash(node:*)",
+      "Skill(update-config)",
+      "Bash(npx tsc:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(find G:/xchange/app -type d -name auth -o -type f -name *sign-in* -o -type f -name *sign-up*)",
+      "Bash(xargs grep:*)",
+      "Bash(find G:/xchange -type f \\\\\\(-name *.sql -o -name schema* -o -name migration* \\\\\\))",
+      "Bash(find G:/xchange -maxdepth 2 -type f \\\\\\(-name .env* -o -name README* -o -name SETUP* \\\\\\))"
+    ]
+  }
+}

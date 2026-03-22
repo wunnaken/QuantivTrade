@@ -1,4 +1,4 @@
-export const revalidate = 3600;
+export const revalidate = 1800;
 
 import { NextResponse } from "next/server";
 
@@ -59,6 +59,14 @@ const TREASURY_FIELD_BY_CURVE_LABEL: Record<(typeof CURVE_ORDER)[number], string
 const TREASURY_CURVE_LABELS = [...CURVE_ORDER] as const;
 
 const RATE_UNAVAILABLE_NOTE = "Rate temporarily unavailable — check central bank website";
+
+const BIS_COUNTRY_SOURCE: Record<string, string> = {
+  US: "Federal Reserve",
+  XM: "European Central Bank",
+  JP: "Bank of Japan",
+  GB: "Bank of England",
+  CN: "People's Bank of China",
+};
 
 const ECB_MAIN_REFINANCING_URL =
   "https://data-api.ecb.europa.eu/service/data/FM/B.U2.EUR.4F.KR.MRR_FR.LEV?format=jsondata&lastNObservations=12";
@@ -180,7 +188,7 @@ async function fetchBisPolicyRateFromStats(refArea: string): Promise<PolicyRateR
   return {
     value: parsed.value,
     lastUpdated,
-    source: `BIS WS_CBPOL (${refArea})`,
+    source: BIS_COUNTRY_SOURCE[refArea] ?? `BIS (${refArea})`,
   };
 }
 
@@ -201,7 +209,7 @@ async function fetchBisPolicyRate(countryCode: string): Promise<PolicyRateResult
             : parsed.period.length >= 10
               ? parsed.period.slice(0, 10)
               : parsed.period;
-          return { value: parsed.value, lastUpdated, source: `BIS WS_CBPOL (${countryCode})` };
+          return { value: parsed.value, lastUpdated, source: BIS_COUNTRY_SOURCE[countryCode] ?? `BIS (${countryCode})` };
         }
       }
     }
@@ -219,7 +227,7 @@ async function fetchFedEffectiveRate(): Promise<{ value: number | null; date: st
   const bis = await fetchBisPolicyRate("US");
   if (bis != null && bis.value != null && Number.isFinite(bis.value)) {
     console.log("[bonds] fed rate (BIS WS_CBPOL US):", bis.value, "as of", bis.lastUpdated);
-    return { value: bis.value, date: bis.lastUpdated, source: "BIS WS_CBPOL (US)" };
+    return { value: bis.value, date: bis.lastUpdated, source: "Bank for International Settlements" };
   }
   console.error("[bonds] fed rate unavailable — all sources failed");
   return { value: null, date: null, source: null };
@@ -308,7 +316,7 @@ function parseBoePlotResponse(text: string): PolicyRateResult | null {
         const x = last.x;
         if (y != null && x) {
           const lastUpdated = /^\d{4}-\d{2}-\d{2}/.test(x) ? x.slice(0, 10) : x;
-          return { value: y, lastUpdated, source: "Bank of England chart API (IUMBEDR)" };
+          return { value: y, lastUpdated, source: "Bank of England" };
         }
       }
     } catch {
@@ -327,7 +335,7 @@ function parseBoePlotResponse(text: string): PolicyRateResult | null {
     return {
       value: nums[nums.length - 1],
       lastUpdated: new Date().toISOString().slice(0, 10),
-      source: "Bank of England chart API (IUMBEDR)",
+      source: "Bank of England",
     };
   }
   return null;
@@ -699,8 +707,29 @@ function parseYahooVixCloses(json: unknown): { current: number | null; previous:
 
 async function fetchVixFromYahoo(): Promise<{ value: number | null; change: number | null }> {
   try {
+    // Use quote endpoint for real-time price + day change (avoids same-day close giving 0 delta)
+    const res = await fetch("https://query1.finance.yahoo.com/v8/finance/quote?symbols=%5EVIX", {
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+      headers: { "User-Agent": "xchange-bonds/1.0" },
+    });
+    if (res.ok) {
+      const json = (await res.json()) as { quoteResponse?: { result?: { regularMarketPrice?: number; regularMarketChange?: number }[] } };
+      const q = json?.quoteResponse?.result?.[0];
+      if (q?.regularMarketPrice != null && Number.isFinite(q.regularMarketPrice)) {
+        return {
+          value: q.regularMarketPrice,
+          change: q.regularMarketChange != null && Number.isFinite(q.regularMarketChange) ? q.regularMarketChange : null,
+        };
+      }
+    }
+  } catch (e) {
+    console.error("[bonds] VIX quote fetch failed:", e);
+  }
+  // Fallback: historical daily closes
+  try {
     const res = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=5d", {
-      next: { revalidate: 3600 },
+      cache: "no-store",
       signal: AbortSignal.timeout(10000),
       headers: { "User-Agent": "xchange-bonds/1.0" },
     });
@@ -708,8 +737,7 @@ async function fetchVixFromYahoo(): Promise<{ value: number | null; change: numb
     const json: unknown = await res.json();
     const { current, previous } = parseYahooVixCloses(json);
     if (current == null) return { value: null, change: null };
-    const change = previous != null ? current - previous : null;
-    return { value: current, change };
+    return { value: current, change: previous != null ? current - previous : null };
   } catch (e) {
     console.error("[bonds] VIX fetch failed:", e);
     return { value: null, change: null };
@@ -1105,7 +1133,7 @@ export async function GET() {
     };
 
     const centralBankRates = {
-      fed: centralBankCard("Fed", fedPolicy),
+      fed: centralBankCard("FED", fedPolicy),
       ecb: centralBankCard("ECB", ecbPolicy),
       boj: centralBankCard("BOJ", bojPolicy),
       boe: centralBankCard("BOE", boePolicy),

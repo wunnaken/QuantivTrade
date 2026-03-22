@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   ReferenceLine,
@@ -12,8 +11,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-
-const PALETTE = ["#3b82f6", "#22c55e", "#f59e0b", "#e879f9", "#f87171", "#34d399", "#60a5fa", "#fbbf24"];
 
 type Timeframe = "1D" | "1W" | "1M" | "1Y";
 
@@ -34,6 +31,14 @@ function pctColor(v: number | null | undefined): string {
   if (v > 0) return "text-emerald-400";
   if (v < 0) return "text-red-400";
   return "text-zinc-400";
+}
+
+/** Plain label for tooltip: gain / loss vs period start. */
+function gainLossLabel(v: number | null | undefined): string | null {
+  if (v == null || !Number.isFinite(v)) return null;
+  if (v > 0) return "Gain";
+  if (v < 0) return "Loss";
+  return "Flat";
 }
 
 /** Stable identity for watchlist symbols so parent re-renders (new array refs) do not retrigger fetch. */
@@ -60,15 +65,11 @@ export default function WatchlistChart({ tickers }: { tickers: string[] }) {
       return;
     }
 
-    const ac = new AbortController();
-    setLoading(true);
+    const q = new URLSearchParams({ tickers: list.join(","), timeframe });
+    let ac = new AbortController();
 
-    const q = new URLSearchParams({
-      tickers: list.join(","),
-      timeframe,
-    });
-
-    void (async () => {
+    const fetchData = async (showLoading: boolean) => {
+      if (showLoading) setLoading(true);
       try {
         const res = await fetch(`/api/watchlist-history?${q}`, {
           cache: "no-store",
@@ -83,24 +84,33 @@ export default function WatchlistChart({ tickers }: { tickers: string[] }) {
         }
       } catch {
         if (ac.signal.aborted) return;
-        setPayload({ dates: [], series: {}, error: "Failed to load" });
+        if (showLoading) setPayload({ dates: [], series: {}, error: "Failed to load" });
       } finally {
-        if (!ac.signal.aborted) setLoading(false);
+        if (!ac.signal.aborted && showLoading) setLoading(false);
       }
-    })();
+    };
 
-    return () => ac.abort();
+    void fetchData(true);
+    const interval = setInterval(() => void fetchData(false), 30_000);
+
+    return () => {
+      ac.abort();
+      ac = new AbortController();
+      clearInterval(interval);
+    };
   }, [tickersKey, timeframe]);
 
   const chartData = useMemo(() => {
     const dates = payload?.dates ?? [];
+    const ser = payload?.series ?? {};
+    const avg = ser.average ?? [];
     if (dates.length === 0) return [];
     return dates.map((date, i) => {
-      const row: Record<string, string | number | null> = { date };
+      const row: Record<string, string | number | null> = { date, average: avg[i] ?? null };
       for (const tk of symbols) {
-        row[tk] = payload?.series?.[tk]?.[i] ?? null;
+        const arr = ser[tk];
+        row[tk] = Array.isArray(arr) ? (arr[i] ?? null) : null;
       }
-      row.average = payload?.series?.average?.[i] ?? null;
       return row;
     });
   }, [payload, symbols]);
@@ -120,7 +130,13 @@ export default function WatchlistChart({ tickers }: { tickers: string[] }) {
   return (
     <div className="mt-8 rounded-xl border border-white/10 bg-[#050713] p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">WATCHLIST PERFORMANCE</p>
+        <div>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">WATCHLIST PERFORMANCE</p>
+          <p className="mt-0.5 text-[10px] text-zinc-600">
+            Average % change vs period start, across {symbols.length} symbol{symbols.length === 1 ? "" : "s"} in your watchlist
+            {symbols.length <= 8 ? ` (${symbols.join(", ")})` : ""}
+          </p>
+        </div>
         <span className={`text-2xl font-semibold tabular-nums ${pctColor(lastAverageReturn)}`}>
           {fmtPct(lastAverageReturn)}
         </span>
@@ -148,7 +164,7 @@ export default function WatchlistChart({ tickers }: { tickers: string[] }) {
         </p>
       ) : (
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <LineChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.05)" />
             <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" minTickGap={24} />
             <YAxis
@@ -160,49 +176,62 @@ export default function WatchlistChart({ tickers }: { tickers: string[] }) {
             <Tooltip
               content={({ active, label, payload: rows }) => {
                 if (!active || !rows?.length) return null;
+                const pt = rows[0]?.payload as Record<string, unknown> | undefined;
+                if (!pt) return null;
+                const avgVal = pt.average != null ? Number(pt.average) : null;
+                const hasAny =
+                  (avgVal != null && Number.isFinite(avgVal)) ||
+                  symbols.some((tk) => {
+                    const x = pt[tk];
+                    return x != null && Number.isFinite(Number(x));
+                  });
+                if (!hasAny) return null;
+                const avgGl = gainLossLabel(avgVal);
                 return (
-                  <div className="rounded-lg border border-white/10 bg-[#0c1222] px-3 py-2 text-xs shadow-xl">
-                    <p className="mb-1.5 font-medium text-zinc-300">{label}</p>
-                    <ul className="space-y-0.5">
-                      {rows
-                        .filter((e) => e.dataKey !== "date" && e.value != null && Number.isFinite(Number(e.value)))
-                        .map((e) => {
-                          const v = Number(e.value);
-                          const name = String(e.dataKey) === "average" ? "Watchlist Avg" : String(e.dataKey);
-                          return (
-                            <li key={String(e.dataKey)} className={`flex justify-between gap-4 ${pctColor(v)}`}>
-                              <span className="text-zinc-500">{name}</span>
-                              <span className="font-mono tabular-nums">{fmtPct(v)}</span>
-                            </li>
-                          );
-                        })}
+                  <div className="max-h-[min(320px,70vh)] overflow-y-auto rounded-lg border border-white/10 bg-[#0c1222] px-3 py-2 text-xs shadow-xl">
+                    <p className="mb-2 font-medium text-zinc-300">{label}</p>
+                    <p className="mb-2 text-[10px] text-zinc-600">% change vs start of period</p>
+                    {avgVal != null && Number.isFinite(avgVal) ? (
+                      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-white/10 pb-2">
+                        <span className="text-zinc-500">Watchlist avg</span>
+                        <span className="flex items-baseline gap-2 font-mono tabular-nums">
+                          <span className={pctColor(avgVal)}>{fmtPct(avgVal)}</span>
+                          {avgGl ? (
+                            <span className={`text-[10px] font-semibold uppercase tracking-wide ${pctColor(avgVal)}`}>
+                              {avgGl}
+                            </span>
+                          ) : null}
+                        </span>
+                      </div>
+                    ) : null}
+                    <ul className="space-y-1">
+                      {symbols.map((tk) => {
+                        const raw = pt[tk];
+                        const v = raw != null ? Number(raw) : null;
+                        const gl = gainLossLabel(v);
+                        return (
+                          <li key={tk} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 font-mono tabular-nums">
+                            <span className="text-zinc-500">{tk}</span>
+                            <span className="flex items-baseline gap-2">
+                              <span className={pctColor(v)}>{fmtPct(v)}</span>
+                              {gl ? (
+                                <span className={`text-[10px] font-semibold uppercase tracking-wide ${pctColor(v)}`}>
+                                  {gl}
+                                </span>
+                              ) : null}
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 );
               }}
             />
-            <Legend
-              verticalAlign="bottom"
-              height={36}
-              formatter={(value) => (value === "average" ? "Watchlist Avg" : value)}
-            />
-            {symbols.map((tk, i) => (
-              <Line
-                key={tk}
-                type="monotone"
-                dataKey={tk}
-                name={tk}
-                stroke={PALETTE[i % PALETTE.length]}
-                strokeWidth={1.5}
-                dot={false}
-                connectNulls
-                isAnimationActive={false}
-              />
-            ))}
             <Line
               type="monotone"
               dataKey="average"
-              name="Watchlist Avg"
+              name="Watchlist average"
               stroke="var(--accent-color)"
               strokeWidth={2.5}
               dot={false}
