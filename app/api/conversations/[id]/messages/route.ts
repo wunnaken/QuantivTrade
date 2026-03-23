@@ -11,7 +11,10 @@ type DbMessage = {
   content: string;
   reply_to_id: string | null;
   created_at: string;
+  edited_at: string | null;
+  is_pinned: boolean | null;
 };
+type DbReaction = { message_id: string; user_id: string; emoji: string };
 
 async function getConvType(supabase: ReturnType<typeof createServerClient>, convId: string) {
   const { data } = await supabase
@@ -54,7 +57,7 @@ export async function GET(
 
   const { data: messages } = await supabase
     .from("messages")
-    .select("id, user_id, content, reply_to_id, created_at")
+    .select("id, user_id, content, reply_to_id, created_at, edited_at, is_pinned")
     .eq("conversation_id", convId)
     .order("created_at", { ascending: true })
     .limit(100);
@@ -70,10 +73,47 @@ export async function GET(
     for (const p of (profs ?? []) as DbProfile[]) profileMap[p.user_id] = p;
   }
 
+  // Fetch reply-to message previews
+  const replyToIds = [...new Set((messages ?? []).map((m: DbMessage) => m.reply_to_id).filter(Boolean))] as string[];
+  const replyToMap: Record<string, { content: string; author_name: string }> = {};
+  if (replyToIds.length > 0) {
+    const { data: replyMsgs } = await supabase
+      .from("messages")
+      .select("id, content, user_id")
+      .in("id", replyToIds);
+    const replyAuthorIds = [...new Set((replyMsgs ?? []).map((m: { user_id: string | null }) => m.user_id).filter(Boolean))] as string[];
+    const replyAuthorMap: Record<string, string> = {};
+    if (replyAuthorIds.length > 0) {
+      const { data: replyAuthors } = await supabase.from("profiles").select("user_id, name").in("user_id", replyAuthorIds);
+      for (const a of (replyAuthors ?? []) as { user_id: string; name: string }[]) replyAuthorMap[a.user_id] = a.name;
+    }
+    for (const m of (replyMsgs ?? []) as { id: string; content: string; user_id: string | null }[]) {
+      replyToMap[m.id] = { content: m.content, author_name: m.user_id ? (replyAuthorMap[m.user_id] ?? "Trader") : "Trader" };
+    }
+  }
+
+  // Fetch reactions grouped by message
+  const messageIds = (messages ?? []).map((m: DbMessage) => m.id);
+  const reactionsMap: Record<string, { emoji: string; count: number; by_me: boolean }[]> = {};
+  if (messageIds.length > 0) {
+    const { data: allReactions } = await supabase
+      .from("message_reactions")
+      .select("message_id, user_id, emoji")
+      .in("message_id", messageIds);
+    for (const r of (allReactions ?? []) as DbReaction[]) {
+      if (!reactionsMap[r.message_id]) reactionsMap[r.message_id] = [];
+      const existing = reactionsMap[r.message_id].find((x) => x.emoji === r.emoji);
+      if (existing) { existing.count++; if (r.user_id === userId) existing.by_me = true; }
+      else reactionsMap[r.message_id].push({ emoji: r.emoji, count: 1, by_me: r.user_id === userId });
+    }
+  }
+
   const enriched = (messages ?? []).map((m: DbMessage) => ({
     ...m,
     is_mine: m.user_id === userId,
     author: m.user_id ? profileMap[m.user_id] ?? { name: "Trader", username: "unknown" } : null,
+    reply_to: m.reply_to_id ? (replyToMap[m.reply_to_id] ?? null) : null,
+    reactions: reactionsMap[m.id] ?? [],
   }));
 
   // Update last_read_at
@@ -123,7 +163,7 @@ export async function POST(
       content,
       reply_to_id: body.reply_to_id ?? null,
     })
-    .select("id, user_id, content, reply_to_id, created_at")
+    .select("id, user_id, content, reply_to_id, created_at, edited_at, is_pinned")
     .single();
 
   if (error || !message) return NextResponse.json({ error: "Failed to send" }, { status: 500 });
@@ -143,11 +183,28 @@ export async function POST(
     .eq("user_id", userId)
     .single();
 
+  // Fetch reply_to preview if present
+  let reply_to = null;
+  if (body.reply_to_id) {
+    const { data: replyMsg } = await supabase
+      .from("messages")
+      .select("content, user_id")
+      .eq("id", body.reply_to_id)
+      .single();
+    if (replyMsg) {
+      const { data: replyAuthor } = await supabase
+        .from("profiles").select("name").eq("user_id", replyMsg.user_id).single();
+      reply_to = { content: replyMsg.content, author_name: replyAuthor?.name ?? "Trader" };
+    }
+  }
+
   return NextResponse.json({
     message: {
       ...message,
       is_mine: true,
       author: profile ? { name: profile.name, username: profile.username } : { name: "Trader", username: "unknown" },
+      reply_to,
+      reactions: [],
     },
   });
 }

@@ -24,6 +24,8 @@ type Conversation = {
   unread: number;
 };
 
+type Reaction = { emoji: string; count: number; by_me: boolean };
+
 type Message = {
   id: string;
   user_id: string | null;
@@ -31,6 +33,11 @@ type Message = {
   created_at: string;
   is_mine: boolean;
   author: { name: string; username: string } | null;
+  reply_to_id?: string | null;
+  reply_to?: { content: string; author_name: string } | null;
+  reactions?: Reaction[];
+  is_pinned?: boolean;
+  edited_at?: string | null;
 };
 
 type SearchProfile = { user_id: string; name: string; username: string; is_verified?: boolean; is_founder?: boolean };
@@ -281,6 +288,11 @@ function MessagesContent() {
   const presenceChannelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const currentUserIdRef = useRef<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ id: string; content: string; author_name: string } | null>(null);
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [hoveredMsgId, setHoveredMsgId] = useState<string | null>(null);
+  const [emojiPickerMsgId, setEmojiPickerMsgId] = useState<string | null>(null);
 
   useEffect(() => { currentUserIdRef.current = user?.id ?? null; }, [user?.id]);
 
@@ -394,8 +406,22 @@ function MessagesContent() {
           setTypingUsers((prev) => prev.filter((n) => n !== (incoming as { author_name?: string }).author_name));
           setMessages((prev) => {
             if (prev.some((m) => m.id === incoming.id)) return prev;
-            return [...prev, { ...incoming, is_mine: false, author: null }];
+            return [...prev, { ...incoming, is_mine: false, author: null, reactions: [] }];
           });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` },
+        (payload) => {
+          const updated = payload.new as { id: string; content: string; edited_at: string | null; is_pinned: boolean | null };
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === updated.id
+                ? { ...m, content: updated.content, edited_at: updated.edited_at, is_pinned: updated.is_pinned ?? false }
+                : m
+            )
+          );
         }
       )
       .on("broadcast", { event: "read" }, (payload: { payload?: { userId?: string; at?: string } }) => {
@@ -443,15 +469,28 @@ function MessagesContent() {
     setSending(true);
     setInput("");
 
+    const replyRef = replyingTo;
+    setReplyingTo(null);
+
     const tempId = `opt-${Date.now()}`;
-    const optimistic: Message = { id: tempId, user_id: "me", content: text, created_at: new Date().toISOString(), is_mine: true, author: null };
+    const optimistic: Message = {
+      id: tempId,
+      user_id: "me",
+      content: text,
+      created_at: new Date().toISOString(),
+      is_mine: true,
+      author: null,
+      reply_to_id: replyRef?.id ?? null,
+      reply_to: replyRef ? { content: replyRef.content, author_name: replyRef.author_name } : null,
+      reactions: [],
+    };
     setMessages((prev) => [...prev, optimistic]);
 
     try {
       const res = await fetch(`/api/conversations/${selectedId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: text }),
+        body: JSON.stringify({ content: text, reply_to_id: replyRef?.id ?? null }),
       });
       if (res.ok) {
         const { message } = await res.json() as { message: Message };
@@ -474,6 +513,58 @@ function MessagesContent() {
     } finally {
       setSending(false);
     }
+  };
+
+  const saveEdit = async (msgId: string) => {
+    const content = editContent.trim();
+    if (!content || !selectedId) { setEditingMsgId(null); return; }
+    setEditingMsgId(null);
+    const res = await fetch(`/api/conversations/${selectedId}/messages/${msgId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    });
+    if (res.ok) {
+      const { message } = await res.json() as { message: { id: string; content: string; edited_at: string } };
+      setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, content: message.content, edited_at: message.edited_at } : m));
+    }
+  };
+
+  const toggleReaction = async (msgId: string, emoji: string) => {
+    if (!selectedId) return;
+    // Optimistic update
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== msgId) return m;
+        const reactions = m.reactions ?? [];
+        const existing = reactions.find((r) => r.emoji === emoji);
+        let next: Reaction[];
+        if (existing) {
+          next = existing.by_me
+            ? existing.count <= 1 ? reactions.filter((r) => r.emoji !== emoji) : reactions.map((r) => r.emoji === emoji ? { ...r, count: r.count - 1, by_me: false } : r)
+            : reactions.map((r) => r.emoji === emoji ? { ...r, count: r.count + 1, by_me: true } : r);
+        } else {
+          next = [...reactions, { emoji, count: 1, by_me: true }];
+        }
+        return { ...m, reactions: next };
+      })
+    );
+    await fetch(`/api/conversations/${selectedId}/messages/${msgId}/reactions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ emoji }),
+    });
+  };
+
+  const togglePin = async (msg: Message) => {
+    if (!selectedId) return;
+    const newPinned = !msg.is_pinned;
+    setMessages((prev) => prev.map((m) => m.id === msg.id ? { ...m, is_pinned: newPinned } : m));
+    await fetch(`/api/conversations/${selectedId}/messages/${msg.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_pinned: newPinned }),
+    });
   };
 
   const openConversation = (id: string) => { setSelectedId(id); };
@@ -744,8 +835,24 @@ Find a Community
                 </div>
               </header>
 
+              {/* Pinned message banner */}
+              {(() => {
+                const pinned = messages.filter((m) => m.is_pinned && !m.id.startsWith("opt-"));
+                const lastPinned = pinned[pinned.length - 1];
+                if (!lastPinned) return null;
+                return (
+                  <div className="flex items-center gap-2 border-b border-white/10 bg-[#0F1520]/80 px-4 py-2 text-xs text-zinc-400">
+                    <svg className="h-3.5 w-3.5 shrink-0 text-[var(--accent-color)]" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+                    </svg>
+                    <span className="truncate text-zinc-300">{lastPinned.content}</span>
+                    <button type="button" onClick={() => togglePin(lastPinned)} className="ml-auto shrink-0 text-zinc-600 hover:text-zinc-300">✕</button>
+                  </div>
+                );
+              })()}
+
               {/* Messages */}
-              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-1" onClick={() => setEmojiPickerMsgId(null)}>
                 {msgLoading && (
                   <div className="flex justify-center py-8">
                     <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-[var(--accent-color)]" />
@@ -764,7 +871,6 @@ Find a Community
                   <p className="py-6 text-center text-sm text-zinc-600">No messages yet. Say hello!</p>
                 )}
                 {!msgLoading && (() => {
-                  // Find index of last sent (is_mine) non-optimistic message for receipt
                   const lastSentIdx = messages.reduce((acc, m, i) => m.is_mine && !m.id.startsWith("opt-") ? i : acc, -1);
                   return messages.map((msg, i) => {
                     const prevMsg = messages[i - 1];
@@ -772,23 +878,150 @@ Find a Community
                     const isLastSent = msg.is_mine && i === lastSentIdx;
                     const isSeen = isLastSent && otherLastRead != null && otherLastRead >= msg.created_at;
                     const isDelivered = isLastSent && !isSeen && !msg.id.startsWith("opt-");
+                    const isOptimistic = msg.id.startsWith("opt-");
+                    const canEdit = msg.is_mine && !isOptimistic && (Date.now() - new Date(msg.created_at).getTime()) < 5 * 60 * 1000;
+                    const isEditing = editingMsgId === msg.id;
+
                     return (
-                      <div key={msg.id} className={`flex flex-col ${msg.is_mine ? "items-end" : "items-start"}`}>
+                      <div
+                        key={msg.id}
+                        className={`group relative flex flex-col py-0.5 ${msg.is_mine ? "items-end" : "items-start"}`}
+                        onMouseEnter={() => setHoveredMsgId(msg.id)}
+                        onMouseLeave={() => { setHoveredMsgId(null); }}
+                      >
+                        {/* Hover action toolbar */}
+                        {hoveredMsgId === msg.id && !isOptimistic && !isEditing && (
+                          <div className={`absolute -top-7 z-10 flex items-center gap-0.5 rounded-xl border border-white/10 bg-[#0F1520] p-1 shadow-lg ${msg.is_mine ? "right-0" : "left-0"}`}>
+                            {/* Emoji trigger */}
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setEmojiPickerMsgId(emojiPickerMsgId === msg.id ? null : msg.id); }}
+                              className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 text-sm"
+                              title="React"
+                            >😊</button>
+                            {/* Reply */}
+                            <button
+                              type="button"
+                              onClick={() => { setReplyingTo({ id: msg.id, content: msg.content, author_name: msg.author?.name ?? (msg.is_mine ? (user?.name ?? "You") : "Trader") }); }}
+                              className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                              title="Reply"
+                            >
+                              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                              </svg>
+                            </button>
+                            {/* Edit (own messages only, within 5 min) */}
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => { setEditingMsgId(msg.id); setEditContent(msg.content); }}
+                                className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                                title="Edit"
+                              >
+                                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                            )}
+                            {/* Pin */}
+                            <button
+                              type="button"
+                              onClick={() => void togglePin(msg)}
+                              className={`rounded-lg p-1.5 hover:bg-white/10 ${msg.is_pinned ? "text-[var(--accent-color)]" : "text-zinc-400 hover:text-zinc-200"}`}
+                              title={msg.is_pinned ? "Unpin" : "Pin"}
+                            >
+                              <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+                              </svg>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Emoji picker popup */}
+                        {emojiPickerMsgId === msg.id && (
+                          <div
+                            className={`absolute -top-16 z-20 flex gap-1 rounded-xl border border-white/10 bg-[#0F1520] p-2 shadow-xl ${msg.is_mine ? "right-0" : "left-0"}`}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {["👍","❤️","😂","😮","😢","🔥","💯","👏"].map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => { void toggleReaction(msg.id, emoji); setEmojiPickerMsgId(null); }}
+                                className="rounded-lg p-1 text-lg hover:bg-white/10 transition-transform hover:scale-125"
+                              >{emoji}</button>
+                            ))}
+                          </div>
+                        )}
+
                         <div className={`flex max-w-[80%] flex-col ${msg.is_mine ? "items-end" : "items-start"}`}>
                           {showAuthor && (
                             <p className="mb-1 px-1 text-[10px] text-zinc-500">{msg.author?.name}</p>
                           )}
-                          <div className={`rounded-2xl px-4 py-2.5 ${
-                            msg.is_mine
-                              ? "bg-[var(--accent-color)] text-[#020308]"
-                              : "border border-white/10 bg-[#0F1520] text-zinc-200"
-                          }`}>
-                            <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
-                            <p className={`mt-1 text-[10px] ${msg.is_mine ? "text-[#020308]/60" : "text-zinc-600"}`}>
-                              {fmtTime(msg.created_at)}
-                            </p>
-                          </div>
+
+                          {/* Reply-to quote */}
+                          {msg.reply_to && (
+                            <div className={`mb-1 max-w-full rounded-lg border-l-2 border-[var(--accent-color)]/60 bg-white/5 px-3 py-1.5 ${msg.is_mine ? "items-end" : "items-start"}`}>
+                              <p className="text-[10px] font-medium text-[var(--accent-color)]/80">{msg.reply_to.author_name}</p>
+                              <p className="truncate text-[11px] text-zinc-500">{msg.reply_to.content}</p>
+                            </div>
+                          )}
+
+                          {/* Message bubble */}
+                          {isEditing ? (
+                            <div className="flex min-w-[200px] flex-col gap-1">
+                              <input
+                                autoFocus
+                                value={editContent}
+                                onChange={(e) => setEditContent(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void saveEdit(msg.id); }
+                                  if (e.key === "Escape") setEditingMsgId(null);
+                                }}
+                                className="rounded-xl border border-[var(--accent-color)]/50 bg-[#0F1520] px-3 py-2 text-sm text-zinc-100 outline-none"
+                              />
+                              <div className="flex gap-1.5 text-[10px]">
+                                <button type="button" onClick={() => void saveEdit(msg.id)} className="text-[var(--accent-color)] hover:underline">Save</button>
+                                <span className="text-zinc-600">·</span>
+                                <button type="button" onClick={() => setEditingMsgId(null)} className="text-zinc-500 hover:underline">Cancel</button>
+                                <span className="text-zinc-600">· Esc to cancel</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className={`rounded-2xl px-4 py-2.5 ${
+                              msg.is_mine
+                                ? "bg-[var(--accent-color)] text-[#020308]"
+                                : "border border-white/10 bg-[#0F1520] text-zinc-200"
+                            }`}>
+                              <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+                              <p className={`mt-1 text-[10px] ${msg.is_mine ? "text-[#020308]/60" : "text-zinc-600"}`}>
+                                {fmtTime(msg.created_at)}{msg.edited_at ? " · edited" : ""}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Reactions */}
+                          {(msg.reactions ?? []).length > 0 && (
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {(msg.reactions ?? []).map((r) => (
+                                <button
+                                  key={r.emoji}
+                                  type="button"
+                                  onClick={() => void toggleReaction(msg.id, r.emoji)}
+                                  className={`flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors ${
+                                    r.by_me
+                                      ? "border-[var(--accent-color)]/50 bg-[var(--accent-color)]/10 text-[var(--accent-color)]"
+                                      : "border-white/10 bg-white/5 text-zinc-300 hover:border-white/20"
+                                  }`}
+                                >
+                                  <span>{r.emoji}</span>
+                                  <span>{r.count}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
+
                         {(isSeen || isDelivered) && (
                           <p className="mt-0.5 text-[10px] text-zinc-500">
                             {isSeen ? "Seen" : "Delivered"}
@@ -817,6 +1050,16 @@ Find a Community
 
               {/* Input */}
               <div className="shrink-0 border-t border-white/10 p-4">
+                {/* Reply-to bar */}
+                {replyingTo && (
+                  <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-[var(--accent-color)]/60 bg-white/5 px-3 py-1.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-medium text-[var(--accent-color)]/80">Replying to {replyingTo.author_name}</p>
+                      <p className="truncate text-[11px] text-zinc-500">{replyingTo.content}</p>
+                    </div>
+                    <button type="button" onClick={() => setReplyingTo(null)} className="shrink-0 text-zinc-600 hover:text-zinc-300">✕</button>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <input
                     type="text"
