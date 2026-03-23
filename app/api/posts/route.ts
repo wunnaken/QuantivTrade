@@ -25,14 +25,15 @@ export async function GET(request: NextRequest) {
   const authorIds = [...new Set((postsRows || []).map((p: { user_id: string }) => p.user_id))];
   const { data: profilesRows } = await supabase
     .from("profiles")
-    .select("user_id, name, username")
+    .select("user_id, name, username, is_verified")
     .in("user_id", authorIds);
 
-  const profilesById: Record<string, { name: string; username: string }> = {};
+  const profilesById: Record<string, { name: string; username: string; is_verified: boolean }> = {};
   for (const pr of profilesRows || []) {
     profilesById[pr.user_id] = {
       name: pr.name ?? "Trader",
       username: pr.username ?? pr.user_id.slice(0, 8),
+      is_verified: pr.is_verified ?? false,
     };
   }
 
@@ -45,6 +46,7 @@ export async function GET(request: NextRequest) {
         name: profile?.name ?? "Trader",
         handle: profile?.username ?? p.user_id.slice(0, 8),
         avatar: null,
+        verified: profile?.is_verified ?? false,
       },
       content: p.content,
       timestamp: p.created_at,
@@ -120,7 +122,7 @@ export async function POST(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, username")
+    .select("name, username, is_verified")
     .eq("user_id", profileId)
     .single();
 
@@ -132,6 +134,7 @@ export async function POST(request: NextRequest) {
         name: profile?.name ?? "Trader",
         handle: profile?.username ?? profileId.slice(0, 8),
         avatar: null,
+        verified: profile?.is_verified ?? false,
       },
       content: post.content,
       timestamp: post.created_at,

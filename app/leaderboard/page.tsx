@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAuth } from "../../components/AuthContext";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
-import { isVerified } from "../../lib/verified";
 
 type RoomRow = {
   id: string;
@@ -75,7 +74,7 @@ export default function LeaderboardPage() {
   const rows = tab === "weekly" ? MOCK_WEEKLY : tab === "alltime" ? MOCK_ALL_TIME : [];
   const verifiedRows = MOCK_VERIFIED_TRADERS;
   const currentHandle = user?.username || user?.email?.split("@")[0] || "";
-  const verified = isVerified(user?.email);
+  const verified = user?.isVerified ?? false;
 
   return (
     <div className="min-h-screen app-page font-[&quot;Times_New_Roman&quot;,serif]">

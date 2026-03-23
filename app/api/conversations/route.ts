@@ -17,7 +17,7 @@ type DbConv = {
 };
 
 type DbMember = { conversation_id: string; user_id: string; last_read_at: string };
-type DbProfile = { user_id: string; name: string; username: string };
+type DbProfile = { user_id: string; name: string; username: string; is_verified?: boolean; is_founder?: boolean };
 
 export async function GET() {
   const userId = await getCurrentProfileId();
@@ -68,7 +68,7 @@ export async function GET() {
     if (otherUserIds.length > 0) {
       const { data: profs } = await supabase
         .from("profiles")
-        .select("user_id, name, username")
+        .select("user_id, name, username, is_verified, is_founder")
         .in("user_id", otherUserIds);
       otherProfiles = (profs ?? []) as DbProfile[];
     }

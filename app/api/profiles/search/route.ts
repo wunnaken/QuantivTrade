@@ -15,10 +15,10 @@ export async function GET(request: NextRequest) {
 
   const { data } = await supabase
     .from("profiles")
-    .select("user_id, name, username")
+    .select("user_id, name, username, is_verified, is_founder")
     .or(`name.ilike.%${q}%,username.ilike.%${q}%`)
     .neq("user_id", userId)
-    .limit(10);
+    .limit(8);
 
   return NextResponse.json({ profiles: data ?? [] });
 }

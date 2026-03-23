@@ -22,7 +22,9 @@ function SignInForm() {
     setLoading(true);
     try {
       await signIn({ email, password });
-      router.push(redirectTo);
+      const profileRes = await fetch("/api/profile/me");
+      const profile = profileRes.ok ? await profileRes.json() as { username?: string } : null;
+      router.push(profile?.username ? redirectTo : "/auth/setup-profile");
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError("Unable to sign in. Please try again.");

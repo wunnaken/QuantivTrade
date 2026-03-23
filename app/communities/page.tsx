@@ -5,7 +5,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../components/AuthContext";
 import { useFocusTrap } from "../../components/useFocusTrap";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
-import { isVerified } from "../../lib/verified";
 
 const INTRO_DISMISSED_KEY = "xchange_communities_intro_dismissed";
 
@@ -290,7 +289,7 @@ export default function CommunitiesPage() {
               { id: "macro-alpha", name: "Verified Macro Alpha", desc: "High conviction macro plays", members: "Verified traders only" },
               { id: "options-elite", name: "Options Elite", desc: "Professional options strategies", members: "Verified traders only" },
             ].map((room) => {
-              const verified = isVerified(user?.email);
+              const verified = user?.isVerified ?? false;
               return (
                 <article key={room.id} className={`relative overflow-hidden rounded-2xl border border-white/5 p-4 ${verified ? "border-[#3B82F6]/30 bg-gradient-to-br from-[#3B82F6]/10 to-white/[0.02]" : "bg-[#050713]"}`}>
                   {!verified && (

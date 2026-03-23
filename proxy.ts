@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-
-const AUTH_COOKIE_NAME = "xchange-demo-auth";
+import { createServerClient } from "@supabase/ssr";
 
 const PROTECTED_PATHS = [
   "/feed",
@@ -35,26 +34,43 @@ function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
-export function proxy(request: NextRequest) {
-  try {
-    const url = request.nextUrl;
-    const pathname = url.pathname;
-    const hasAuth = request.cookies.get(AUTH_COOKIE_NAME)?.value === "1";
+export async function proxy(request: NextRequest) {
+  let response = NextResponse.next({ request });
 
-    if (pathname === "/" && hasAuth) {
-      const feedUrl = new URL("/feed", request.url);
-      return NextResponse.redirect(feedUrl, 307);
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
     }
+  );
 
-    if (isProtectedPath(pathname) && !hasAuth) {
-      const signInUrl = new URL("/auth/sign-in", request.url);
-      signInUrl.searchParams.set("from", pathname);
-      return NextResponse.redirect(signInUrl, 307);
-    }
-  } catch (_err) {
-    // Allow request through on any error
+  // Refresh session and get user
+  const { data: { user } } = await supabase.auth.getUser();
+  const pathname = request.nextUrl.pathname;
+
+  if (pathname === "/" && user) {
+    return NextResponse.redirect(new URL("/feed", request.url), 307);
   }
-  return NextResponse.next();
+
+  if (isProtectedPath(pathname) && !user) {
+    const signInUrl = new URL("/auth/sign-in", request.url);
+    signInUrl.searchParams.set("from", pathname);
+    return NextResponse.redirect(signInUrl, 307);
+  }
+
+  return response;
 }
 
 export const config = {

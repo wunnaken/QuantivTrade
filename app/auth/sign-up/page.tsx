@@ -22,7 +22,7 @@ export default function SignUpPage() {
     setLoading(true);
     try {
       await signUp({ name, email, password });
-      router.push("/");
+      router.push("/auth/setup-profile");
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError("Something went wrong. Please try again.");
@@ -144,9 +144,6 @@ export default function SignUpPage() {
           </p>
         </form>
 
-        <p className="mt-4 text-center text-[10px] text-zinc-500">
-          For demo purposes your account is stored locally in this browser only.
-        </p>
       </div>
     </div>
   );

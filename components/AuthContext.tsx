@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { setAuthCookie, clearAuthCookie } from "../lib/auth-cookie";
+import { createClient } from "@/lib/supabase/client";
 import { setEarlyMember } from "../lib/engagement/invite";
 import type { RiskProfileKey, User } from "../types";
 
@@ -18,113 +18,145 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-const STORAGE_KEY = "xchange-demo-user";
-const JUST_SIGNED_IN_KEY = "xchange-just-signed-in";
+type ProfileRow = {
+  name: string | null;
+  username: string | null;
+  bio: string | null;
+  profile_picture_url: string | null;
+  banner_image_url: string | null;
+  risk_profile: string | null;
+  joined_at: string | null;
+  created_at: string | null;
+  is_verified: boolean | null;
+  is_founder: boolean | null;
+};
+
+function buildUser(authId: string, email: string, row: ProfileRow | null): User {
+  return {
+    id: authId,
+    email,
+    name: row?.name ?? "Trader",
+    username: row?.username ?? undefined,
+    bio: row?.bio ?? undefined,
+    profilePicture: row?.profile_picture_url ?? undefined,
+    bannerImage: row?.banner_image_url ?? undefined,
+    riskProfile: (row?.risk_profile as RiskProfileKey) ?? undefined,
+    joinedAt: row?.joined_at ?? row?.created_at ?? new Date().toISOString(),
+    isVerified: row?.is_verified ?? false,
+    isFounder: row?.is_founder ?? false,
+  };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const supabase = createClient();
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored) as User & { password?: string };
-        const { password: _pw, ...safeUser } = parsed;
-        void _pw;
-        setUser(safeUser);
-        setAuthCookie({ email: safeUser.email, name: safeUser.name || "Trader" });
-      } catch {
-        window.localStorage.removeItem(STORAGE_KEY);
-      }
-    }
+    // Hydrate from current session on mount
+    void supabase.auth.getUser().then(async ({ data: { user: authUser } }) => {
+      if (!authUser) return;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("name, username, bio, profile_picture_url, banner_image_url, risk_profile, joined_at, created_at, is_verified, is_founder")
+        .eq("user_id", authUser.id)
+        .single();
+      setUser(buildUser(authUser.id, authUser.email ?? "", profile as ProfileRow | null));
+    });
+
+    // Keep in sync with auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!session?.user) { setUser(null); return; }
+      const authUser = session.user;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("name, username, bio, profile_picture_url, banner_image_url, risk_profile, joined_at, created_at, is_verified, is_founder")
+        .eq("user_id", authUser.id)
+        .single();
+      setUser(buildUser(authUser.id, authUser.email ?? "", profile as ProfileRow | null));
+    });
+
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+
       async signUp({ name, email, password }) {
         const trimmedEmail = email.trim().toLowerCase();
-        const newUser: User = {
-          id: trimmedEmail,
-          name: name.trim() || "Trader",
+        const trimmedName = name.trim() || "Trader";
+
+        const { data, error } = await supabase.auth.signUp({
           email: trimmedEmail,
-          joinedAt: new Date().toISOString(),
-        };
+          password,
+          options: { data: { name: trimmedName } },
+        });
+        if (error) throw new Error(error.message);
+
+        const userId = data.user?.id;
+        if (!userId) throw new Error("Sign up failed. Please try again.");
+
+        // Pick up any onboarding risk profile
+        let riskProfile: RiskProfileKey | undefined;
         if (typeof window !== "undefined") {
           const pendingRaw = window.localStorage.getItem("xchange-onboarding-pending");
           if (pendingRaw) {
             try {
-              const pending = JSON.parse(pendingRaw) as { riskProfile?: "passive" | "moderate" | "aggressive" };
-              if (pending.riskProfile) newUser.riskProfile = pending.riskProfile;
+              const pending = JSON.parse(pendingRaw) as { riskProfile?: RiskProfileKey };
+              riskProfile = pending.riskProfile;
               window.localStorage.removeItem("xchange-onboarding-pending");
-            } catch {
-              // ignore
-            }
+            } catch { /* ignore */ }
           }
-          window.localStorage.setItem(
-            STORAGE_KEY,
-            JSON.stringify({ ...newUser, password })
-          );
-          setAuthCookie({ email: newUser.email, name: newUser.name || "Trader" });
-          setEarlyMember();
         }
-        setUser(newUser);
+
+        await supabase.from("profiles").upsert(
+          {
+            user_id: userId,
+            email: trimmedEmail,
+            name: trimmedName,
+            ...(riskProfile ? { risk_profile: riskProfile } : {}),
+          },
+          { onConflict: "user_id" }
+        );
+
+        setEarlyMember();
       },
+
       async signIn({ email, password }) {
-        if (typeof window === "undefined") return;
-        const stored = window.localStorage.getItem(STORAGE_KEY);
-        if (!stored) {
-          throw new Error("No account found in this browser. Sign up first — this demo stores your account only in this browser.");
-        }
-        try {
-          const parsed = JSON.parse(stored) as User & { password?: string };
-          if (
-            parsed.email.toLowerCase() !== email.trim().toLowerCase() ||
-            parsed.password !== password
-          ) {
-            throw new Error("Incorrect email or password.");
-          }
-          const { password: _pw, ...safeUser } = parsed;
-          void _pw;
-          window.sessionStorage.setItem(JUST_SIGNED_IN_KEY, "1");
-          setAuthCookie({ email: safeUser.email, name: safeUser.name || "Trader" });
-          setUser(safeUser);
-        } catch (err) {
-          if (err instanceof Error) throw err;
-          throw new Error("Unable to sign in. Please try again.");
-        }
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password,
+        });
+        if (error) throw new Error(error.message);
       },
-      signOut() {
-        clearAuthCookie();
+
+      async signOut() {
+        await supabase.auth.signOut();
         setUser(null);
       },
-      deleteAccount() {
-        if (typeof window === "undefined") return;
-        window.localStorage.removeItem(STORAGE_KEY);
-        window.localStorage.removeItem(JUST_SIGNED_IN_KEY);
-        window.localStorage.removeItem("xchange-welcomed");
-        window.localStorage.removeItem("xchange-briefing-date");
-        window.localStorage.removeItem("xchange-briefing-cache");
-        clearAuthCookie();
+
+      async deleteAccount() {
+        await fetch("/api/account/delete", { method: "DELETE" });
+        await supabase.auth.signOut();
         setUser(null);
       },
-      updateProfile(updates) {
-        if (typeof window === "undefined" || !user) return;
-        const stored = window.localStorage.getItem(STORAGE_KEY);
-        if (!stored) return;
-        try {
-          const parsed = JSON.parse(stored) as User & { password?: string };
-          const updated = { ...parsed, ...updates };
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-          const { password: _pw, ...safeUser } = updated;
-          void _pw;
-          setUser(safeUser);
-        } catch {
-          // ignore
-        }
+
+      async updateProfile(updates) {
+        if (!user) return;
+        const dbUpdates: Record<string, unknown> = {};
+        if (updates.name !== undefined) dbUpdates.name = updates.name;
+        if (updates.username !== undefined) dbUpdates.username = updates.username;
+        if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
+        if (updates.profilePicture !== undefined) dbUpdates.profile_picture_url = updates.profilePicture;
+        if (updates.bannerImage !== undefined) dbUpdates.banner_image_url = updates.bannerImage;
+        if (updates.riskProfile !== undefined) dbUpdates.risk_profile = updates.riskProfile;
+
+        await supabase.from("profiles").update(dbUpdates).eq("user_id", user.id);
+        setUser((prev) => (prev ? { ...prev, ...updates } : prev));
       },
     }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [user]
   );
 
@@ -133,9 +165,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
   return ctx;
 }
-

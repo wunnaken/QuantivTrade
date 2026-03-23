@@ -19,7 +19,6 @@ import { StreakDetailModal } from "../../components/StreakDetailModal";
 import { useToast } from "../../components/ToastContext";
 import { addXPFromPost, addXPFromReaction } from "../../lib/engagement/xp";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
-import { isVerified } from "../../lib/verified";
 import { TrackRecordVerifiedBadge } from "../../components/TrackRecordVerifiedBadge";
 import { getBrokerConnection } from "../../lib/broker-connection";
 
@@ -29,7 +28,7 @@ function VerifiedBadgeWithTooltip() {
   const { user } = useAuth();
   const [showTooltip, setShowTooltip] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isUserVerified = isVerified(user?.email);
+  const isUserVerified = user?.isVerified ?? false;
 
   const onMouseEnter = useCallback(() => {
     if (isUserVerified) return;
@@ -388,7 +387,7 @@ export default function FeedPage() {
       if (!res.ok) return;
       const data = await res.json();
       if (data.post) {
-        const postWithVerified = { ...data.post, author: { ...data.post.author, verified: isVerified(user?.email) } };
+        const postWithVerified = { ...data.post, author: { ...data.post.author, verified: user?.isVerified ?? false } };
         setPosts((prev) => [postWithVerified, ...prev]);
         setReactionCounts((prev) => ({ ...prev, [data.post.id]: data.reactionCounts ?? {} }));
         setUserReactions((prev) => ({ ...prev, [data.post.id]: data.userReactions ?? {} }));
@@ -911,7 +910,7 @@ export default function FeedPage() {
             </section>
 
             {/* Verified Trader sidebar prompt — only for non-verified */}
-            {!isVerified(user?.email) && (
+            {!(user?.isVerified ?? false) && (
               <section
                 className="rounded-2xl border border-[#3B82F6]/30 bg-[#3B82F6]/5 p-4"
               >

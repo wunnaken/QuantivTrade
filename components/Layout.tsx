@@ -12,7 +12,6 @@ import { getSidebarPrefs, saveSidebarPrefs, type SidebarPrefs } from "../lib/sid
 import { hasBeenWelcomed } from "../lib/briefing";
 import { SiteFooter } from "./SiteFooter";
 import { VerifiedBadge } from "./VerifiedBadge";
-import { isVerified } from "../lib/verified";
 import { useLoginStreakTick } from "./StreakProvider";
 import { getPredictNotifications, markPredictNotificationsRead } from "../lib/predict";
 import { getInAppNotifications } from "../lib/price-alerts";
@@ -184,6 +183,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [notificationCount, setNotificationCount] = useState(0);
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
+  const messagesDropdownRef = useRef<HTMLDivElement>(null);
+  const [messagesOpen, setMessagesOpen] = useState(false);
+  const [recentDms, setRecentDms] = useState<{ id: string; other_user: { name: string; username: string } | null; last_message_preview: string | null; last_message_at: string }[]>([]);
 
   useEffect(() => {
     setInAppNotifs(getInAppNotifications());
@@ -194,7 +196,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const n = inAppNotifs.length + getPredictNotifications().length;
-    setNotificationCount(Math.min(99, n) || 4);
+    setNotificationCount(Math.min(99, n));
   }, [inAppNotifs.length]);
   const hiddenPanelRef = useRef<HTMLDivElement>(null);
 
@@ -235,10 +237,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const [draggingHref, setDraggingHref] = useState<string | null>(null);
   const [showWelcomeOverlay, setShowWelcomeOverlay] = useState(false);
-  const [verified, setVerified] = useState(false);
+  const verified = user?.isVerified ?? false;
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
   useEffect(() => {
-    setVerified(isVerified(user?.email));
-  }, [pathname, user?.email]);
+    if (!user) return;
+    const fetchUnread = () => {
+      fetch("/api/conversations/unread")
+        .then((r) => r.json())
+        .then((d: { count: number }) => setUnreadMessages(d.count ?? 0))
+        .catch(() => {});
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -280,12 +293,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       if (profileRef.current && !profileRef.current.contains(target)) setProfileOpen(false);
       if (notificationsRef.current && !notificationsRef.current.contains(target)) setNotificationsOpen(false);
       if (hiddenPanelRef.current && !hiddenPanelRef.current.contains(target)) setHiddenPanelOpen(false);
+      if (messagesDropdownRef.current && !messagesDropdownRef.current.contains(target)) setMessagesOpen(false);
     };
-    if (profileOpen || notificationsOpen || hiddenPanelOpen) {
+    if (profileOpen || notificationsOpen || hiddenPanelOpen || messagesOpen) {
       document.addEventListener("click", handleClickOutside);
       return () => document.removeEventListener("click", handleClickOutside);
     }
-  }, [profileOpen, notificationsOpen, hiddenPanelOpen]);
+  }, [profileOpen, notificationsOpen, hiddenPanelOpen, messagesOpen]);
 
   const isActive = useCallback(
     (href: string) => {
@@ -548,7 +562,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="relative" ref={notificationsRef}>
             <button
               type="button"
-              onClick={() => setNotificationsOpen((o) => !o)}
+              onClick={() => { setNotificationsOpen((o) => !o); setNotificationCount(0); }}
               className="relative rounded p-2 text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-200"
               aria-label="Notifications"
               aria-expanded={notificationsOpen}
@@ -556,9 +570,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-color)] text-[10px] font-bold text-[#020308] ring-2 ring-[#0A0E1A]" suppressHydrationWarning>
-                {notificationCount}
-              </span>
+              {notificationCount > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-color)] text-[10px] font-bold text-[#020308] ring-2 ring-[#0A0E1A]" suppressHydrationWarning>
+                  {notificationCount}
+                </span>
+              )}
             </button>
             {notificationsOpen && (
               <div
@@ -602,50 +618,91 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <div className="my-1 h-px bg-white/10" />
                   </>
                 )}
-                <Link href="/messages?with=sarah_macro" onClick={() => setNotificationsOpen(false)} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/5">
-                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[var(--accent-color)]" />
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">New message from @sarah_macro</p>
-                    <p className="text-xs text-zinc-500">12m ago</p>
-                  </div>
-                </Link>
-                <Link href="/messages" onClick={() => setNotificationsOpen(false)} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/5">
-                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[var(--accent-color)]" />
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">New post in Crypto & High-Beta</p>
-                    <p className="text-xs text-zinc-500">1h ago</p>
-                  </div>
-                </Link>
-                <Link href="/search/NVDA" onClick={() => setNotificationsOpen(false)} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/5">
-                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[var(--accent-color)]" />
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">Your watchlist: NVDA up 3.2%</p>
-                    <p className="text-xs text-zinc-500">2h ago</p>
-                  </div>
-                </Link>
-                <Link href="/feed" onClick={() => setNotificationsOpen(false)} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/5">
-                  <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-[var(--accent-color)]" />
-                  <div>
-                    <p className="text-sm font-medium text-zinc-200">Welcome to Xchange!</p>
-                    <p className="text-xs text-zinc-500">When you joined</p>
-                  </div>
+                {inAppNotifs.length === 0 && getPredictNotifications().length === 0 && (
+                  <p className="px-4 py-3 text-sm text-zinc-500">No new notifications</p>
+                )}
+              </div>
+            )}
+          </div>
+          {/* Messages dropdown */}
+          <div className="relative" ref={messagesDropdownRef}>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !messagesOpen;
+                setMessagesOpen(next);
+                if (next && user) {
+                  fetch("/api/conversations")
+                    .then((r) => r.json())
+                    .then((d: { dms?: typeof recentDms }) => setRecentDms((d.dms ?? []).slice(0, 5)))
+                    .catch(() => {});
+                }
+              }}
+              className="relative rounded p-2 text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-200"
+              aria-label="Messages"
+              aria-expanded={messagesOpen}
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              {unreadMessages > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-[var(--accent-color)] px-0.5 text-[10px] font-bold text-[#020308]">
+                  {unreadMessages > 99 ? "99+" : unreadMessages}
+                </span>
+              )}
+            </button>
+            {messagesOpen && (
+              <div
+                className="absolute right-0 top-full z-50 mt-1 w-72 animate-[fadeIn_0.15s_ease-out] rounded-xl border border-white/10 py-2 shadow-xl"
+                style={{ backgroundColor: "#0F1520" }}
+                role="menu"
+              >
+                <div className="flex items-center justify-between px-4 py-1.5">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Messages</span>
+                  <Link
+                    href="/messages"
+                    onClick={() => setMessagesOpen(false)}
+                    className="text-xs text-[var(--accent-color)] hover:underline"
+                  >
+                    Open all
+                  </Link>
+                </div>
+                <div className="my-1 h-px bg-white/10" />
+                {recentDms.length === 0 ? (
+                  <p className="px-4 py-3 text-sm text-zinc-500">No recent messages</p>
+                ) : (
+                  recentDms.map((dm) => (
+                    <Link
+                      key={dm.id}
+                      href={`/messages?dm=${dm.id}`}
+                      onClick={() => setMessagesOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-white/5"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-[var(--accent-color)]">
+                        {(dm.other_user?.name || dm.other_user?.username || "?")[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-zinc-200">
+                          {dm.other_user?.name || dm.other_user?.username || "Unknown"}
+                        </p>
+                        {dm.last_message_preview && (
+                          <p className="truncate text-xs text-zinc-500">{dm.last_message_preview}</p>
+                        )}
+                      </div>
+                    </Link>
+                  ))
+                )}
+                <div className="my-1 h-px bg-white/10" />
+                <Link
+                  href="/messages"
+                  onClick={() => setMessagesOpen(false)}
+                  className="block px-4 py-2 text-center text-xs text-[var(--accent-color)] hover:bg-white/5"
+                >
+                  View all messages
                 </Link>
               </div>
             )}
           </div>
-          {/* Messages */}
-          <Link
-            href="/messages"
-            className="relative rounded p-2 text-zinc-400 transition-colors hover:bg-white/5 hover:text-zinc-200"
-            aria-label="Messages (5 unread)"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-color)] text-[10px] font-bold text-[#020308]">
-              5
-            </span>
-          </Link>
           {/* Profile dropdown */}
           <div className="relative" ref={profileRef}>
             {user ? (
@@ -757,8 +814,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className={pathname === "/ceos" || pathname === "/dashboard" ? "h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden" : "min-h-[calc(100vh-3.5rem)]"}>{children}</main>
-      {pathname !== "/ceos" && pathname !== "/dashboard" && <SiteFooter />}
+      <main className={pathname === "/ceos" || pathname === "/dashboard" || pathname === "/messages" ? "h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden" : "min-h-[calc(100vh-3.5rem)]"}>{children}</main>
+      {pathname !== "/ceos" && pathname !== "/dashboard" && pathname !== "/messages" && <SiteFooter />}
     </div>
   );
 }

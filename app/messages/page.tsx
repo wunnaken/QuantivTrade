@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { getInitials } from "@/lib/suggested-people";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
+import { useAuth } from "@/components/AuthContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,9 +17,10 @@ type Conversation = {
   type: ConvType;
   name: string | null;
   room_id: string | null;
+  created_at: string;
   last_message_at: string;
   last_message_preview: string | null;
-  other_user?: { user_id: string; name: string; username: string } | null;
+  other_user?: { user_id: string; name: string; username: string; is_verified?: boolean; is_founder?: boolean } | null;
   unread: number;
 };
 
@@ -31,9 +33,19 @@ type Message = {
   author: { name: string; username: string } | null;
 };
 
-type SearchProfile = { user_id: string; name: string; username: string };
+type SearchProfile = { user_id: string; name: string; username: string; is_verified?: boolean; is_founder?: boolean };
 
-type ActiveTab = "community" | "dms" | "groups";
+type ActiveTab = "community" | "direct";
+
+function FounderBadge({ size = 14 }: { size?: number }) {
+  return (
+    <span className="inline-flex items-center justify-center rounded-full bg-amber-500/20 text-amber-400" style={{ width: size, height: size }} title="Founder">
+      <svg width={size * 0.65} height={size * 0.65} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
+      </svg>
+    </span>
+  );
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -239,8 +251,10 @@ function NewGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated:
 function MessagesContent() {
   const searchParams = useSearchParams();
   const withHandle = searchParams.get("with");
+  const withDmId = searchParams.get("dm");
+  const { user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>("community");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("direct");
   const [conversations, setConversations] = useState<{
     community: Conversation[];
     dms: Conversation[];
@@ -255,8 +269,36 @@ function MessagesContent() {
   const [showNewDm, setShowNewDm] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [search, setSearch] = useState("");
+  const [peopleResults, setPeopleResults] = useState<SearchProfile[]>([]);
+  const [peopleSearching, setPeopleSearching] = useState(false);
+  const [startingDm, setStartingDm] = useState<string | null>(null);
+  const [typingUsers, setTypingUsers] = useState<string[]>([]);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const [otherLastRead, setOtherLastRead] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+  const presenceChannelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+
+  useEffect(() => { currentUserIdRef.current = user?.id ?? null; }, [user?.id]);
+
+  // Global presence — track who's online
+  useEffect(() => {
+    if (!user?.id) return;
+    const supabase = createClient();
+    const ch = supabase.channel("global-presence", { config: { presence: { key: user.id } } });
+    presenceChannelRef.current = ch;
+    ch.on("presence", { event: "sync" }, () => {
+      const state = ch.presenceState<{ user_id: string }>();
+      const ids = new Set(Object.keys(state));
+      setOnlineUserIds(ids);
+    }).subscribe(async (status) => {
+      if (status === "SUBSCRIBED") await ch.track({ user_id: user.id });
+    });
+    return () => { void ch.unsubscribe(); };
+  }, [user?.id]);
 
   // Load conversations
   const loadConversations = useCallback(async () => {
@@ -269,16 +311,36 @@ function MessagesContent() {
 
   useEffect(() => { void loadConversations(); }, [loadConversations]);
 
-  // Handle ?with= param (navigate to existing DM)
+  // People search when typing in the sidebar search bar
+  useEffect(() => {
+    if (search.length < 2) { setPeopleResults([]); return; }
+    const t = setTimeout(async () => {
+      setPeopleSearching(true);
+      const res = await fetch(`/api/profiles/search?q=${encodeURIComponent(search)}`);
+      const data = await res.json() as { profiles: SearchProfile[] };
+      setPeopleResults(data.profiles ?? []);
+      setPeopleSearching(false);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Handle ?with= param (navigate to existing DM by username)
   useEffect(() => {
     if (!withHandle || loading) return;
     const dm = conversations.dms.find((d) => d.other_user?.username === withHandle);
-    if (dm) { setActiveTab("dms"); setSelectedId(dm.id); }
+    if (dm) { setActiveTab("direct"); setSelectedId(dm.id); }
   }, [withHandle, loading, conversations.dms]);
+
+  // Handle ?dm= param (navigate to existing DM by id)
+  useEffect(() => {
+    if (!withDmId || loading) return;
+    const dm = conversations.dms.find((d) => d.id === withDmId);
+    if (dm) { setActiveTab("direct"); setSelectedId(dm.id); }
+  }, [withDmId, loading, conversations.dms]);
 
   // Load messages + realtime subscription
   useEffect(() => {
-    if (!selectedId) { setMessages([]); return; }
+    if (!selectedId) { setMessages([]); setTypingUsers([]); setOtherLastRead(null); return; }
 
     setMsgLoading(true);
     fetch(`/api/conversations/${selectedId}/messages`)
@@ -293,28 +355,87 @@ function MessagesContent() {
     const supabase = createClient();
     if (channelRef.current) { void channelRef.current.unsubscribe(); }
 
+    // Mark conversation as read and broadcast read receipt
+    const markRead = async () => {
+      const userId = currentUserIdRef.current;
+      if (!userId) return;
+      const now = new Date().toISOString();
+      await supabase
+        .from("conversation_members")
+        .update({ last_read_at: now })
+        .eq("conversation_id", selectedId)
+        .eq("user_id", userId);
+      void channelRef.current?.send({ type: "broadcast", event: "read", payload: { userId, at: now } });
+    };
+
+    // Fetch other user's last_read_at for seen receipt
+    const userId = currentUserIdRef.current;
+    if (userId) {
+      void supabase
+        .from("conversation_members")
+        .select("last_read_at")
+        .eq("conversation_id", selectedId)
+        .neq("user_id", userId)
+        .maybeSingle()
+        .then(({ data }) => { if (data) setOtherLastRead(data.last_read_at); });
+    }
+
     channelRef.current = supabase
       .channel(`conv-${selectedId}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${selectedId}` },
         (payload) => {
-          const incoming = payload.new as Message & { is_mine?: boolean };
+          const incoming = payload.new as Message & { is_mine?: boolean; user_id: string };
+          if (incoming.user_id === currentUserIdRef.current) return;
+          // Mark as read when receiving a new message (we're viewing the chat)
+          void markRead();
+          // Clear typing indicator for this user when their message arrives
+          setTypingUsers((prev) => prev.filter((n) => n !== (incoming as { author_name?: string }).author_name));
           setMessages((prev) => {
             if (prev.some((m) => m.id === incoming.id)) return prev;
             return [...prev, { ...incoming, is_mine: false, author: null }];
           });
         }
       )
-      .subscribe();
+      .on("broadcast", { event: "read" }, (payload: { payload?: { userId?: string; at?: string } }) => {
+        const { userId: readerId, at } = payload.payload ?? {};
+        if (readerId && readerId !== currentUserIdRef.current && at) {
+          setOtherLastRead(at);
+        }
+      })
+      .on("broadcast", { event: "typing" }, (payload: { payload?: { name?: string; userId?: string } }) => {
+        const { name, userId } = payload.payload ?? {};
+        if (!name || userId === currentUserIdRef.current) return;
+        setTypingUsers((prev) => prev.includes(name) ? prev : [...prev, name]);
+        setTimeout(() => setTypingUsers((prev) => prev.filter((n) => n !== name)), 3000);
+      })
+      .subscribe((status) => {
+        console.log("[realtime] channel status:", status);
+        if (status === "SUBSCRIBED") { void markRead(); }
+      });
 
     return () => { void channelRef.current?.unsubscribe(); };
   }, [selectedId]);
 
-  // Scroll to bottom on new messages
+  // Poll otherLastRead every 4s so "Seen" updates even when sender isn't actively viewing
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    if (!selectedId) return;
+    const supabase = createClient();
+    const interval = setInterval(async () => {
+      const userId = currentUserIdRef.current;
+      if (!userId) return;
+      const { data } = await supabase
+        .from("conversation_members")
+        .select("last_read_at")
+        .eq("conversation_id", selectedId)
+        .neq("user_id", userId)
+        .maybeSingle();
+      if (data?.last_read_at) setOtherLastRead(data.last_read_at);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [selectedId]);
+
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -334,7 +455,11 @@ function MessagesContent() {
       });
       if (res.ok) {
         const { message } = await res.json() as { message: Message };
-        setMessages((prev) => prev.map((m) => m.id === tempId ? message : m));
+        setMessages((prev) => {
+          // If realtime already added the real message, just remove the optimistic one
+          if (prev.some((m) => m.id === message.id)) return prev.filter((m) => m.id !== tempId);
+          return prev.map((m) => m.id === tempId ? message : m);
+        });
         // Update preview in conversation list
         setConversations((prev) => {
           const update = (list: Conversation[]) =>
@@ -353,10 +478,26 @@ function MessagesContent() {
 
   const openConversation = (id: string) => { setSelectedId(id); };
 
-  const handleNewConvCreated = (id: string, tab: ActiveTab) => {
+  const startDmWithPerson = async (profile: SearchProfile) => {
+    setStartingDm(profile.user_id);
+    const res = await fetch("/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "dm", other_user_id: profile.user_id }),
+    });
+    const data = await res.json() as { id: string };
+    setStartingDm(null);
+    setSearch("");
+    setPeopleResults([]);
+    setActiveTab("direct");
+    setSelectedId(data.id);
+    void loadConversations();
+  };
+
+  const handleNewConvCreated = (id: string) => {
     setShowNewDm(false);
     setShowNewGroup(false);
-    setActiveTab(tab);
+    setActiveTab("direct");
     setSelectedId(id);
     void loadConversations();
   };
@@ -365,25 +506,33 @@ function MessagesContent() {
     ? [...conversations.community, ...conversations.dms, ...conversations.groups].find((c) => c.id === selectedId) ?? null
     : null;
 
-  const filteredList = (list: Conversation[]) =>
-    search ? list.filter((c) => convDisplayName(c).toLowerCase().includes(search.toLowerCase())) : list;
+  const filteredList = (list: Conversation[]) => {
+    if (!search) return list;
+    const q = search.toLowerCase();
+    return list.filter((c) =>
+      convDisplayName(c).toLowerCase().includes(q) ||
+      (c.other_user?.username?.toLowerCase().includes(q) ?? false)
+    );
+  };
 
-  const tabList = activeTab === "community" ? filteredList(conversations.community)
-    : activeTab === "dms" ? filteredList(conversations.dms)
-    : filteredList(conversations.groups);
+  const directList = [...conversations.dms, ...conversations.groups].sort(
+    (a, b) => new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+  );
+
+  const tabList = activeTab === "community" ? filteredList(conversations.community) : filteredList(directList);
 
   return (
     <>
       {showNewDm && (
         <NewDmModal
           onClose={() => setShowNewDm(false)}
-          onCreated={(id) => handleNewConvCreated(id, "dms")}
+          onCreated={(id) => handleNewConvCreated(id)}
         />
       )}
       {showNewGroup && (
         <NewGroupModal
           onClose={() => setShowNewGroup(false)}
-          onCreated={(id) => handleNewConvCreated(id, "groups")}
+          onCreated={(id) => handleNewConvCreated(id)}
         />
       )}
 
@@ -394,7 +543,7 @@ function MessagesContent() {
           <div className="border-b border-white/10 p-3">
             <input
               type="search"
-              placeholder="Search…"
+              placeholder="Search people or conversations…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
@@ -403,36 +552,93 @@ function MessagesContent() {
 
           {/* Tabs */}
           <div className="flex border-b border-white/10 p-1">
-            {(["community", "dms", "groups"] as ActiveTab[]).map((tab) => (
+            {(["direct", "community"] as ActiveTab[]).map((tab) => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 rounded-md py-2 text-xs font-medium capitalize transition-colors ${
+                className={`flex-1 rounded-md py-2 text-xs font-medium transition-colors ${
                   activeTab === tab ? "bg-[var(--accent-color)]/20 text-[var(--accent-color)]" : "text-zinc-400 hover:text-zinc-200"
                 }`}
               >
-                {tab === "community" ? "Community" : tab === "dms" ? "DMs" : "Groups"}
+                {tab === "community" ? "Community" : "Direct"}
               </button>
             ))}
           </div>
 
-          {/* New DM / Group buttons */}
-          {(activeTab === "dms" || activeTab === "groups") && (
+          {/* Browse communities button */}
+          {activeTab === "community" && (
             <div className="border-b border-white/10 p-2">
+              <Link
+                href="/communities"
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-400 transition hover:bg-white/10 hover:text-zinc-200"
+              >
+Find a Community
+              </Link>
+            </div>
+          )}
+
+          {/* New DM / Group buttons */}
+          {activeTab === "direct" && (
+            <div className="flex gap-2 border-b border-white/10 p-2">
               <button
                 type="button"
-                onClick={() => activeTab === "dms" ? setShowNewDm(true) : setShowNewGroup(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-400 transition hover:bg-white/10 hover:text-zinc-200"
+                onClick={() => setShowNewDm(true)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-400 transition hover:bg-white/10 hover:text-zinc-200"
               >
-                <span className="text-lg leading-none">+</span>
-                {activeTab === "dms" ? "New Message" : "New Group"}
+                <span className="text-base leading-none">+</span> Message
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowNewGroup(true)}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-medium text-zinc-400 transition hover:bg-white/10 hover:text-zinc-200"
+              >
+                <span className="text-base leading-none">+</span> Group
               </button>
             </div>
           )}
 
           {/* Conversation list */}
           <ul className="flex-1 overflow-y-auto p-2">
+            {/* People search results */}
+            {search.length >= 2 && (
+              <>
+                {peopleSearching && (
+                  <li className="px-3 py-2 text-xs text-zinc-500">Searching…</li>
+                )}
+                {!peopleSearching && peopleResults.map((p) => (
+                  <li key={`person-${p.user_id}`}>
+                    <button
+                      type="button"
+                      disabled={startingDm === p.user_id}
+                      onClick={() => void startDmWithPerson(p)}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/5"
+                    >
+                      <span className="relative shrink-0">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-[var(--accent-color)]">
+                          {getInitials(p.name)}
+                        </span>
+                        {onlineUserIds.has(p.user_id) && (
+                          <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0F1520] bg-emerald-400" />
+                        )}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="truncate text-sm font-medium text-zinc-200">{p.name}</p>
+                          {p.is_verified && <VerifiedBadge size={13} />}
+                          {p.is_founder && <FounderBadge size={14} />}
+                        </div>
+                        <p className="truncate text-xs text-zinc-500">@{p.username?.toLowerCase()}</p>
+                      </div>
+                      <span className="shrink-0 text-xs text-zinc-600">Message</span>
+                    </button>
+                  </li>
+                ))}
+                {!peopleSearching && peopleResults.length > 0 && tabList.length > 0 && (
+                  <li className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-600">Conversations</li>
+                )}
+              </>
+            )}
             {loading && (
               <li className="space-y-2 p-2">
                 {[1, 2, 3].map((i) => (
@@ -446,13 +652,9 @@ function MessagesContent() {
                 ))}
               </li>
             )}
-            {!loading && tabList.length === 0 && (
+            {!loading && tabList.length === 0 && search.length < 2 && (
               <li className="px-3 py-8 text-center text-sm text-zinc-500">
-                {activeTab === "dms" ? (
-                  <>No messages yet.<br />
-                    <Link href="/people" className="mt-2 inline-block text-[var(--accent-color)] hover:underline">Find people to message</Link>
-                  </>
-                ) : activeTab === "groups" ? "No groups yet. Create one above." : "No community rooms found."}
+                {activeTab === "direct" ? "No messages yet. Search for someone above." : "No community rooms found."}
               </li>
             )}
             {!loading && tabList.map((c) => {
@@ -467,13 +669,22 @@ function MessagesContent() {
                       isActive ? "bg-[var(--accent-color)]/10 text-[var(--accent-color)]" : "hover:bg-white/5"
                     }`}
                   >
-                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
-                      isActive ? "bg-[var(--accent-color)]/20 text-[var(--accent-color)]" : "bg-white/10 text-zinc-400"
-                    }`}>
-                      {convAvatar(c)}
+                    <span className="relative shrink-0">
+                      <span className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-semibold ${
+                        isActive ? "bg-[var(--accent-color)]/20 text-[var(--accent-color)]" : "bg-white/10 text-zinc-400"
+                      }`}>
+                        {convAvatar(c)}
+                      </span>
+                      {c.type === "dm" && c.other_user && onlineUserIds.has(c.other_user.user_id) && (
+                        <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0F1520] bg-emerald-400" />
+                      )}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-zinc-200">{name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="truncate text-sm font-medium text-zinc-200">{name}</p>
+                        {c.type === "dm" && c.other_user?.is_verified && <VerifiedBadge size={12} />}
+                        {c.type === "dm" && c.other_user?.is_founder && <FounderBadge size={13} />}
+                      </div>
                       <p className="truncate text-xs text-zinc-500">{c.last_message_preview ?? (c.type === "community" ? "Public room" : "No messages yet")}</p>
                     </div>
                     <div className="shrink-0 text-right">
@@ -509,14 +720,23 @@ function MessagesContent() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)]">
-                  {convAvatar(selectedConv)}
+                <span className="relative shrink-0">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)]">
+                    {convAvatar(selectedConv)}
+                  </span>
+                  {selectedConv.type === "dm" && selectedConv.other_user && onlineUserIds.has(selectedConv.other_user.user_id) && (
+                    <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0A0E1A] bg-emerald-400" />
+                  )}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-zinc-100">{convDisplayName(selectedConv)}</p>
-                  <p className="text-xs text-zinc-500 capitalize">
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-medium text-zinc-100">{convDisplayName(selectedConv)}</p>
+                    {selectedConv.type === "dm" && selectedConv.other_user?.is_verified && <VerifiedBadge size={14} />}
+                    {selectedConv.type === "dm" && selectedConv.other_user?.is_founder && <FounderBadge size={15} />}
+                  </div>
+                  <p className="text-xs text-zinc-500">
                     {selectedConv.type === "dm"
-                      ? `@${selectedConv.other_user?.username ?? ""}`
+                      ? `@${(selectedConv.other_user?.username ?? "").toLowerCase()}`
                       : selectedConv.type === "community"
                       ? "Community room · open to all"
                       : "Private group"}
@@ -525,40 +745,75 @@ function MessagesContent() {
               </header>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
                 {msgLoading && (
                   <div className="flex justify-center py-8">
                     <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-[var(--accent-color)]" />
                   </div>
                 )}
-                {!msgLoading && messages.length === 0 && (
-                  <p className="py-12 text-center text-sm text-zinc-600">No messages yet. Say hello!</p>
+                {!msgLoading && (
+                  <div className="mb-2 flex items-center gap-3 px-1 pt-2">
+                    <div className="h-px flex-1 bg-white/5" />
+                    <p className="text-[10px] text-zinc-600">
+                      Created {new Date(selectedConv.created_at).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" })}
+                    </p>
+                    <div className="h-px flex-1 bg-white/5" />
+                  </div>
                 )}
-                {!msgLoading && messages.map((msg, i) => {
-                  const prevMsg = messages[i - 1];
-                  const showAuthor = !msg.is_mine && selectedConv.type !== "dm" && msg.author && prevMsg?.user_id !== msg.user_id;
-                  return (
-                    <div key={msg.id} className={`flex ${msg.is_mine ? "justify-end" : "justify-start"}`}>
-                      <div className={`flex max-w-[80%] flex-col ${msg.is_mine ? "items-end" : "items-start"}`}>
-                        {showAuthor && (
-                          <p className="mb-1 px-1 text-[10px] text-zinc-500">{msg.author?.name}</p>
-                        )}
-                        <div className={`rounded-2xl px-4 py-2.5 ${
-                          msg.is_mine
-                            ? "bg-[var(--accent-color)] text-[#020308]"
-                            : "border border-white/10 bg-[#0F1520] text-zinc-200"
-                        }`}>
-                          <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
-                          <p className={`mt-1 text-[10px] ${msg.is_mine ? "text-[#020308]/60" : "text-zinc-600"}`}>
-                            {fmtTime(msg.created_at)}
-                          </p>
+                {!msgLoading && messages.length === 0 && (
+                  <p className="py-6 text-center text-sm text-zinc-600">No messages yet. Say hello!</p>
+                )}
+                {!msgLoading && (() => {
+                  // Find index of last sent (is_mine) non-optimistic message for receipt
+                  const lastSentIdx = messages.reduce((acc, m, i) => m.is_mine && !m.id.startsWith("opt-") ? i : acc, -1);
+                  return messages.map((msg, i) => {
+                    const prevMsg = messages[i - 1];
+                    const showAuthor = !msg.is_mine && selectedConv.type !== "dm" && msg.author && prevMsg?.user_id !== msg.user_id;
+                    const isLastSent = msg.is_mine && i === lastSentIdx;
+                    const isSeen = isLastSent && otherLastRead != null && otherLastRead >= msg.created_at;
+                    const isDelivered = isLastSent && !isSeen && !msg.id.startsWith("opt-");
+                    return (
+                      <div key={msg.id} className={`flex flex-col ${msg.is_mine ? "items-end" : "items-start"}`}>
+                        <div className={`flex max-w-[80%] flex-col ${msg.is_mine ? "items-end" : "items-start"}`}>
+                          {showAuthor && (
+                            <p className="mb-1 px-1 text-[10px] text-zinc-500">{msg.author?.name}</p>
+                          )}
+                          <div className={`rounded-2xl px-4 py-2.5 ${
+                            msg.is_mine
+                              ? "bg-[var(--accent-color)] text-[#020308]"
+                              : "border border-white/10 bg-[#0F1520] text-zinc-200"
+                          }`}>
+                            <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
+                            <p className={`mt-1 text-[10px] ${msg.is_mine ? "text-[#020308]/60" : "text-zinc-600"}`}>
+                              {fmtTime(msg.created_at)}
+                            </p>
+                          </div>
                         </div>
+                        {(isSeen || isDelivered) && (
+                          <p className="mt-0.5 text-[10px] text-zinc-500">
+                            {isSeen ? "Seen" : "Delivered"}
+                          </p>
+                        )}
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
                 <div ref={messagesEndRef} />
               </div>
+
+              {/* Typing indicator */}
+              {typingUsers.length > 0 && (
+                <div className="flex items-center gap-2 px-5 pb-1">
+                  <span className="flex gap-0.5">
+                    {[0,1,2].map((i) => (
+                      <span key={i} className="h-1.5 w-1.5 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+                    ))}
+                  </span>
+                  <span className="text-xs text-zinc-500">
+                    {typingUsers.length === 1 ? `${typingUsers[0]} is typing…` : `${typingUsers.join(", ")} are typing…`}
+                  </span>
+                </div>
+              )}
 
               {/* Input */}
               <div className="shrink-0 border-t border-white/10 p-4">
@@ -566,10 +821,16 @@ function MessagesContent() {
                   <input
                     type="text"
                     value={input}
-                    onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); } }}
                     placeholder={`Message ${convDisplayName(selectedConv)}…`}
                     className="flex-1 rounded-xl border border-white/10 bg-[#0F1520] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      if (!channelRef.current || !user) return;
+                      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                      void channelRef.current.send({ type: "broadcast", event: "typing", payload: { name: user.name || user.username || "Someone", userId: user.id } });
+                      typingTimeoutRef.current = setTimeout(() => {}, 2500);
+                    }}
                   />
                   <button
                     type="button"
@@ -592,8 +853,7 @@ function MessagesContent() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </div>
-              <p className="text-sm text-zinc-500">Select a conversation to start chatting</p>
-              <Link href="/people" className="text-xs text-[var(--accent-color)] hover:underline">Find people to message</Link>
+              <p className="text-sm text-zinc-500">Select a conversation or search for someone to message</p>
             </div>
           )}
         </main>

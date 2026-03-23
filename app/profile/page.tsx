@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../components/AuthContext";
 import type { User } from "../../components/AuthContext";
-import { isSpecialAccount } from "../../lib/special-account";
 import { getInitials as getSuggestedInitials } from "../../lib/suggested-people";
 import {
   ALL_PROFILE_BUBBLES,
@@ -22,9 +21,8 @@ import { MorningBriefing } from "../../components/MorningBriefing";
 import { loadStreaks } from "../../lib/engagement/streaks";
 import { STREAK_BADGES } from "../../lib/engagement/constants";
 import { loadXP, getRankTitle } from "../../lib/engagement/xp";
-import { isEarlyMember, getOrCreateInviteCode, getInvitedCount } from "../../lib/engagement/invite";
+import { getOrCreateInviteCode, getInvitedCount } from "../../lib/engagement/invite";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
-import { isVerified } from "../../lib/verified";
 import { getTrades, computePnL, formatPercent } from "../../lib/journal";
 import { getPoints as getPredictPoints } from "../../lib/predict";
 import { getBrokerConnection, disconnectBroker, BROKER_TEAL } from "../../lib/broker-connection";
@@ -32,8 +30,8 @@ import { ConnectBrokerModal } from "../../components/ConnectBrokerModal";
 import { TrackRecordVerifiedBadge } from "../../components/TrackRecordVerifiedBadge";
 
 const POSTS_KEY = "xchange-demo-posts";
-const USERNAME_CHANGED_AT_KEY = "xchange-username-changed-at";
-const NAME_CHANGED_AT_KEY = "xchange-name-changed-at";
+const USERNAME_CHANGED_AT_KEY = (userId: string) => `xchange-username-changed-at-${userId}`;
+const NAME_CHANGED_AT_KEY = (userId: string) => `xchange-name-changed-at-${userId}`;
 
 const USERNAME_COOLDOWN_DAYS = 30;
 const NAME_COOLDOWN_DAYS = 14;
@@ -392,8 +390,9 @@ export default function ProfilePage() {
     }
 
     const now = Date.now();
-    const nameChangedAtRaw = window.localStorage.getItem(NAME_CHANGED_AT_KEY);
-    const usernameChangedAtRaw = window.localStorage.getItem(USERNAME_CHANGED_AT_KEY);
+    const userId = user?.id ?? "";
+    const nameChangedAtRaw = window.localStorage.getItem(NAME_CHANGED_AT_KEY(userId));
+    const usernameChangedAtRaw = window.localStorage.getItem(USERNAME_CHANGED_AT_KEY(userId));
     const nameChangedAt = nameChangedAtRaw ? Number(nameChangedAtRaw) : 0;
     const usernameChangedAt = usernameChangedAtRaw ? Number(usernameChangedAtRaw) : 0;
 
@@ -429,10 +428,8 @@ export default function ProfilePage() {
       const currentUsernameLabel = currentUsername || "(no username)";
       lines.push(`Your username will change from "@${currentUsernameLabel}" to "@${nextUsernameLabel}".`);
     }
-    lines.push(
-      `Display name can be changed once every ${NAME_COOLDOWN_DAYS} days.`,
-      `Username can be changed once every ${USERNAME_COOLDOWN_DAYS} days.`
-    );
+    if (nameChangedAt > 0) lines.push(`Display name can be changed once every ${NAME_COOLDOWN_DAYS} days.`);
+    if (usernameChangedAt > 0) lines.push(`Username can be changed once every ${USERNAME_COOLDOWN_DAYS} days.`);
 
     setProfileChangeModal({
       kind: "confirm",
@@ -455,13 +452,14 @@ export default function ProfilePage() {
       bio: bioDraft.trim() || undefined,
     };
 
+    const uid = user?.id ?? "";
     if (profileChangeModal.nameChanged) {
       updates.name = profileChangeModal.nextName;
-      window.localStorage.setItem(NAME_CHANGED_AT_KEY, String(now));
+      window.localStorage.setItem(NAME_CHANGED_AT_KEY(uid), String(now));
     }
     if (profileChangeModal.usernameChanged) {
       updates.username = profileChangeModal.nextUsername;
-      window.localStorage.setItem(USERNAME_CHANGED_AT_KEY, String(now));
+      window.localStorage.setItem(USERNAME_CHANGED_AT_KEY(uid), String(now));
     }
 
     updateProfile(updates);
@@ -779,7 +777,7 @@ export default function ProfilePage() {
                     <h1 className="text-2xl font-bold tracking-tight text-zinc-50 sm:text-3xl">
                       {displayName}
                     </h1>
-                    {isVerified(user?.email) && (
+                    {user?.isVerified && (
                       <span className="inline-flex items-center" title="Verified Trader — Identity and track record confirmed">
                         <VerifiedBadge size={22} />
                       </span>
@@ -789,7 +787,7 @@ export default function ProfilePage() {
                         <TrackRecordVerifiedBadge size={20} showLabel />
                       </span>
                     )}
-                    {isEarlyMember() && (
+                    {user?.isFounder && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400" title="Joined Xchange in the early days">
                         ⭐ Early Member
                       </span>
@@ -799,7 +797,7 @@ export default function ProfilePage() {
                         🏆 Top Trader — Week of Mar 10
                       </span>
                     )}
-                    {isSpecialAccount(user.email) && (
+                    {user?.isFounder && (
                       <span
                         className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/20 text-amber-400"
                         title="Founder"
@@ -813,7 +811,7 @@ export default function ProfilePage() {
                   </div>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-zinc-400">
                       @{displayUsername}
-                      {isVerified(user?.email) && (
+                      {user?.isVerified && (
                         <span className="inline-flex items-center" title="Verified Trader">
                           <VerifiedBadge size={16} />
                         </span>
@@ -975,7 +973,7 @@ export default function ProfilePage() {
           </section>
 
           {/* Upgrade banner — only for non-verified users */}
-          {!isVerified(user?.email) && (
+          {!user?.isVerified && (
             <section className="mt-6 rounded-xl border-l-4 border-[#3B82F6] bg-[#3B82F6]/10 p-4" aria-label="Become a Verified Trader">
               <div className="flex flex-wrap items-center gap-4 sm:gap-6">
                 <div className="flex-shrink-0">
@@ -1001,8 +999,8 @@ export default function ProfilePage() {
 
         {/* Card wrapper for rest of profile — full rounded card with spacing from content above and footer */}
         <div className="mb-12 mt-8 rounded-2xl border px-6 pb-8 pt-6 transition-colors duration-300 sm:rounded-3xl sm:px-8" style={{ backgroundColor: "var(--app-card-alt)", borderColor: "var(--app-border)" }}>
-        {isVerified(user?.email) && <ProfilePerformanceCard brokerConnected={brokerConnectionState.connected} brokerName={brokerConnectionState.brokerName} onConnectClick={() => setConnectBrokerModalOpen(true)} />}
-        {isVerified(user?.email) && <ProfileMonetizeSection />}
+        {user?.isVerified && <ProfilePerformanceCard brokerConnected={brokerConnectionState.connected} brokerName={brokerConnectionState.brokerName} onConnectClick={() => setConnectBrokerModalOpen(true)} />}
+        {user?.isVerified && <ProfileMonetizeSection />}
         {/* Your Streaks — aligned with this card, slightly bigger */}
           <section className="mb-6" aria-label="Your streaks">
             <h2 className="text-sm font-semibold text-zinc-50">Your Streaks</h2>
