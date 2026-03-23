@@ -8,10 +8,7 @@ export type ProfileRow = {
   name: string | null;
   username: string | null;
   bio: string | null;
-  profile_picture_url: string | null;
-  banner_image_url: string | null;
-  risk_profile: string | null;
-  joined_at: string | null;
+  avatar_url: string | null;
   created_at: string | null;
   updated_at: string | null;
 };

@@ -6,7 +6,6 @@ export type SuggestedProfileRow = {
   id: string;
   name: string | null;
   username: string | null;
-  risk_profile: string | null;
 };
 
 export async function GET() {
@@ -15,7 +14,7 @@ export async function GET() {
 
   let query = supabase
     .from("profiles")
-    .select("user_id, name, username, risk_profile")
+    .select("user_id, name, username")
     .limit(20)
     .order("created_at", { ascending: false });
 
@@ -34,7 +33,7 @@ export async function GET() {
     id: p.user_id,
     name: p.name ?? "Trader",
     username: p.username ?? p.user_id.slice(0, 8),
-    risk_profile: p.risk_profile ?? "Moderate",
+    risk_profile: "Moderate",
   }));
 
   return NextResponse.json({ profiles });

@@ -22,10 +22,7 @@ type ProfileRow = {
   name: string | null;
   username: string | null;
   bio: string | null;
-  profile_picture_url: string | null;
-  banner_image_url: string | null;
-  risk_profile: string | null;
-  joined_at: string | null;
+  avatar_url: string | null;
   created_at: string | null;
   is_verified: boolean | null;
   is_founder: boolean | null;
@@ -38,10 +35,8 @@ function buildUser(authId: string, email: string, row: ProfileRow | null): User 
     name: row?.name ?? "Trader",
     username: row?.username ?? undefined,
     bio: row?.bio ?? undefined,
-    profilePicture: row?.profile_picture_url ?? undefined,
-    bannerImage: row?.banner_image_url ?? undefined,
-    riskProfile: (row?.risk_profile as RiskProfileKey) ?? undefined,
-    joinedAt: row?.joined_at ?? row?.created_at ?? new Date().toISOString(),
+    profilePicture: row?.avatar_url ?? undefined,
+    joinedAt: row?.created_at ?? new Date().toISOString(),
     isVerified: row?.is_verified ?? false,
     isFounder: row?.is_founder ?? false,
   };
@@ -57,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!authUser) return;
       const { data: profile } = await supabase
         .from("profiles")
-        .select("name, username, bio, profile_picture_url, banner_image_url, risk_profile, joined_at, created_at, is_verified, is_founder")
+        .select("name, username, bio, avatar_url, created_at, is_verified, is_founder")
         .eq("user_id", authUser.id)
         .single();
       setUser(buildUser(authUser.id, authUser.email ?? "", profile as ProfileRow | null));
@@ -69,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const authUser = session.user;
       const { data: profile } = await supabase
         .from("profiles")
-        .select("name, username, bio, profile_picture_url, banner_image_url, risk_profile, joined_at, created_at, is_verified, is_founder")
+        .select("name, username, bio, avatar_url, created_at, is_verified, is_founder")
         .eq("user_id", authUser.id)
         .single();
       setUser(buildUser(authUser.id, authUser.email ?? "", profile as ProfileRow | null));
@@ -115,7 +110,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             user_id: userId,
             email: trimmedEmail,
             name: trimmedName,
-            ...(riskProfile ? { risk_profile: riskProfile } : {}),
           },
           { onConflict: "user_id" }
         );
@@ -148,9 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (updates.name !== undefined) dbUpdates.name = updates.name;
         if (updates.username !== undefined) dbUpdates.username = updates.username;
         if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
-        if (updates.profilePicture !== undefined) dbUpdates.profile_picture_url = updates.profilePicture;
-        if (updates.bannerImage !== undefined) dbUpdates.banner_image_url = updates.bannerImage;
-        if (updates.riskProfile !== undefined) dbUpdates.risk_profile = updates.riskProfile;
+        if (updates.profilePicture !== undefined) dbUpdates.avatar_url = updates.profilePicture;
 
         await supabase.from("profiles").update(dbUpdates).eq("user_id", user.id);
         setUser((prev) => (prev ? { ...prev, ...updates } : prev));

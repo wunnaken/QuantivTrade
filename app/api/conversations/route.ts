@@ -64,7 +64,7 @@ export async function GET() {
       .in("conversation_id", dmConvIds)
       .neq("user_id", userId);
 
-    const otherUserIds = [...new Set((otherMembers ?? []).map((m: DbMember) => m.user_id))];
+    const otherUserIds = [...new Set((otherMembers ?? []).map((m) => m.user_id))];
     if (otherUserIds.length > 0) {
       const { data: profs } = await supabase
         .from("profiles")
