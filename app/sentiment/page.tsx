@@ -371,7 +371,7 @@ export default function SentimentRadarPage() {
 
   const activeItems = viewMode === "sectors" ? US_SECTORS : GLOBAL_REGIONS;
   const activeScores = useMemo(
-    () => (viewMode === "sectors" ? displaySectors : displayGlobal),
+    () => (viewMode === "sectors" ? displaySectors : displayGlobal) as Record<string, number>,
     [viewMode, displaySectors, displayGlobal],
   );
 

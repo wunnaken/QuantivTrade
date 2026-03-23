@@ -393,7 +393,7 @@ Trades data: ${JSON.stringify(last20)}`;
       setFailedLocalTrades((prev) => prev.filter((t) => t.id !== id));
       setTrades((prev) => prev.filter((t) => t.id !== id));
       if (insights) setInsights(null);
-      toast.showToast("Trade deleted", "default");
+      toast.showToast("Trade deleted", "info");
       return;
     }
     try {
@@ -401,7 +401,7 @@ Trades data: ${JSON.stringify(last20)}`;
       if (res.ok) {
         setTrades((prev) => prev.filter((t) => t.id !== id));
         if (insights) setInsights(null);
-        toast.showToast("Trade deleted", "default");
+        toast.showToast("Trade deleted", "info");
       } else {
         toast.showToast("Delete failed", "error");
       }
@@ -971,7 +971,7 @@ Trades data: ${JSON.stringify(last20)}`;
             }
             setModalOpen(false);
             setEditingTrade(null);
-            if (savedTrade) toast.showToast("Trade saved", "default");
+            if (savedTrade) toast.showToast("Trade saved", "info");
           }}
           onSaveFailed={(localTrade) => {
             setFailedLocalTrades((prev) => [...prev, localTrade]);

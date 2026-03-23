@@ -494,11 +494,11 @@ export default function BondView() {
                       <Tooltip
                         contentStyle={{ background: "#0F1520", border: "1px solid rgba(255,255,255,0.1)" }}
                         labelStyle={{ color: "#cbd5e1" }}
-                        labelFormatter={(v: string) => {
-                          const d = new Date(v);
+                        labelFormatter={(v) => {
+                          const d = new Date(String(v));
                           return Number.isFinite(d.getTime())
                             ? d.toLocaleDateString(undefined, { month: "short", day: "2-digit", year: "numeric" })
-                            : v;
+                            : String(v);
                         }}
                         formatter={(value, _name, item) => {
                           const n = typeof value === "number" ? value : Number(value);

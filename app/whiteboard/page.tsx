@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import "@excalidraw/excalidraw/index.css";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -11,6 +12,7 @@ import { setLastWorkspaceTab } from "../../lib/workspace-tab";
 const TOP_BAR_BG = "#080B14";
 const DEFAULT_APP_STATE = { viewBackgroundColor: "#1e1e2e" };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const Excalidraw = dynamic(
   () => import("@excalidraw/excalidraw").then((m) => m.Excalidraw),
   {
@@ -21,7 +23,7 @@ const Excalidraw = dynamic(
       </div>
     ),
   }
-);
+) as React.ComponentType<Record<string, unknown>>;
 
 type Board = {
   id: string;

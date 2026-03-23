@@ -1,4 +1,6 @@
 import type { FeatureCollection } from "geojson";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore – no type declarations for d3-geo-projection
 import { geoStitch } from "d3-geo-projection";
 
 /**
