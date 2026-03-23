@@ -769,14 +769,14 @@ export default function DashboardPage() {
               width={width}
               layout={layout}
               onLayoutChange={handleLayoutChange}
-              isDraggable={canEdit}
-              isResizable={canEdit}
-              cols={12}
-              rowHeight={ROW_H}
-              margin={[8, 8]}
-              containerPadding={[16, 16]}
-              draggableHandle=".widget-header"
-              resizeHandles={["se"]}
+              gridConfig={{
+                cols: 12,
+                rowHeight: ROW_H,
+                margin: [8, 8],
+                containerPadding: [16, 16],
+              }}
+              dragConfig={{ enabled: canEdit, handle: ".widget-header", bounded: false, threshold: 3 }}
+              resizeConfig={{ enabled: canEdit, handles: ["se"] }}
               className={theme.showGridLines !== false && canEdit ? "dashboard-grid-lines" : ""}
               style={{ minHeight: "100%" }}
             >
