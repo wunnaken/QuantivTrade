@@ -234,7 +234,7 @@ async function fetchAllRssFeeds(feeds: string[], sourceMap: Record<string, strin
   const fetchOpts: RequestInit = {
     next: { revalidate: 300 },
     signal: AbortSignal.timeout(12000),
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; XchangeNews/1.0; +https://xchange.app)" },
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; QuantivTradeNews/1.0; +https://quantivtrade.app)" },
   };
 
   const results = await Promise.allSettled(

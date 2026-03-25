@@ -17,7 +17,8 @@ import {
 } from "../../lib/profile-bubbles";
 import { useTheme } from "../../components/ThemeContext";
 import { ACCENT_OPTIONS } from "../../lib/accent-color";
-import { MorningBriefing } from "../../components/MorningBriefing";
+import { BriefingPreferencesForm } from "../../components/BriefingPreferencesForm";
+import { fetchBriefingPreferences, type BriefingPreferences } from "../../lib/briefing-preferences";
 import { loadStreaks } from "../../lib/engagement/streaks";
 import { STREAK_BADGES } from "../../lib/engagement/constants";
 import { loadXP, getRankTitle } from "../../lib/engagement/xp";
@@ -29,9 +30,9 @@ import { getBrokerConnection, disconnectBroker, BROKER_TEAL } from "../../lib/br
 import { ConnectBrokerModal } from "../../components/ConnectBrokerModal";
 import { TrackRecordVerifiedBadge } from "../../components/TrackRecordVerifiedBadge";
 
-const POSTS_KEY = "xchange-demo-posts";
-const USERNAME_CHANGED_AT_KEY = (userId: string) => `xchange-username-changed-at-${userId}`;
-const NAME_CHANGED_AT_KEY = (userId: string) => `xchange-name-changed-at-${userId}`;
+const POSTS_KEY = "quantivtrade-demo-posts";
+const USERNAME_CHANGED_AT_KEY = (userId: string) => `quantivtrade-username-changed-at-${userId}`;
+const NAME_CHANGED_AT_KEY = (userId: string) => `quantivtrade-name-changed-at-${userId}`;
 
 const USERNAME_COOLDOWN_DAYS = 30;
 const NAME_COOLDOWN_DAYS = 14;
@@ -108,6 +109,48 @@ function getPerformanceFromTrades(timeframe: Timeframe) {
   const worst = withPnL.length > 0 ? withPnL.reduce((a, x) => (x.pnl.pnlPercent < a.pnl.pnlPercent ? x : a), withPnL[0]) : null;
   const loginStreak = loadStreaks().loginStreak;
   return { total, winRate, avgReturn, best, worst, loginStreak };
+}
+
+function BriefingPreferencesSection() {
+  const [open, setOpen] = useState(false);
+  const [prefs, setPrefs] = useState<BriefingPreferences | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    fetchBriefingPreferences().then((p) => { setPrefs(p); setLoaded(true); });
+  }, []);
+
+  const hasSaved = loaded && prefs !== null;
+
+  return (
+    <div className="mt-6 pt-5 border-t border-white/10">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-semibold text-zinc-300">Morning Briefing Preferences</p>
+          <p className="mt-0.5 text-[11px]" style={{ color: "var(--app-text-muted)" }}>
+            {!loaded ? "Loading…" : hasSaved ? "Your briefing is personalized." : "Set up to get a personalized morning briefing."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)]"
+        >
+          {open ? "Close" : hasSaved ? "Edit" : "Set Up"}
+        </button>
+      </div>
+      {open && (
+        <div className="mt-4">
+          <BriefingPreferencesForm
+            compact
+            initialPrefs={prefs}
+            onSave={(p) => { setPrefs(p); setOpen(false); }}
+            onCancel={() => setOpen(false)}
+          />
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ProfilePerformanceCard({ brokerConnected, brokerName, onConnectClick }: { brokerConnected?: boolean; brokerName?: string; onConnectClick?: () => void }) {
@@ -216,7 +259,6 @@ export default function ProfilePage() {
   const [selectedBubbleIds, setSelectedBubbleIdsState] = useState<string[]>([]);
   const [editingBubbles, setEditingBubbles] = useState(false);
   const [draftBubbleIds, setDraftBubbleIds] = useState<string[]>([]);
-  const [showBriefingPreview, setShowBriefingPreview] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [profileChangeModal, setProfileChangeModal] = useState<{
     kind: "confirm" | "blocked";
@@ -232,7 +274,7 @@ export default function ProfilePage() {
   const [verifiedSubmitting, setVerifiedSubmitting] = useState(false);
   const [verifiedSubmitError, setVerifiedSubmitError] = useState<string | null>(null);
   const [verifiedSubmitted, setVerifiedSubmitted] = useState(
-    typeof window !== "undefined" && window.localStorage.getItem("xchange-verified-applied") === "true"
+    typeof window !== "undefined" && window.localStorage.getItem("quantivtrade-verified-applied") === "true"
   );
   const [connectBrokerModalOpen, setConnectBrokerModalOpen] = useState(false);
   const [brokerConnectionState, setBrokerConnectionState] = useState<ReturnType<typeof getBrokerConnection>>({ connected: false });
@@ -283,7 +325,7 @@ export default function ProfilePage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("reset_verified") === "1") {
       try {
-        window.localStorage.removeItem("xchange-verified-applied");
+        window.localStorage.removeItem("quantivtrade-verified-applied");
       } catch {}
       setVerifiedSubmitted(false);
       params.delete("reset_verified");
@@ -480,12 +522,6 @@ export default function ProfilePage() {
 
   return (
     <>
-      {showBriefingPreview && (
-        <MorningBriefing
-          skipAnimation={false}
-          onClose={() => setShowBriefingPreview(false)}
-        />
-      )}
       {profileChangeModal && (
         <div
           className="fixed inset-0 z-[115] flex items-center justify-center bg-black/70 p-4"
@@ -593,7 +629,7 @@ export default function ProfilePage() {
                                 setVerifiedSubmitError(data.error ?? "Failed to submit. Try again.");
                                 return;
                               }
-                              try { window.localStorage.setItem("xchange-verified-applied", "true"); } catch {}
+                              try { window.localStorage.setItem("quantivtrade-verified-applied", "true"); } catch {}
                               setVerifiedSubmitted(true);
                             } catch {
                               setVerifiedSubmitError("Could not send. Try again.");
@@ -788,11 +824,11 @@ export default function ProfilePage() {
                       </span>
                     )}
                     {user?.isFounder && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400" title="Joined Xchange in the early days">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400" title="Joined QuantivTrade in the early days">
                         ⭐ Early Member
                       </span>
                     )}
-                    {typeof window !== "undefined" && window.localStorage.getItem("xchange-top-trader-week") && (
+                    {typeof window !== "undefined" && window.localStorage.getItem("quantivtrade-top-trader-week") && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400" title="Top Trader">
                         🏆 Top Trader — Week of Mar 10
                       </span>
@@ -1101,6 +1137,40 @@ export default function ProfilePage() {
             />
           )}
 
+        {/* Connected Accounts */}
+          <section className="mb-6 rounded-xl border border-white/10 px-4 py-4" aria-label="Connected Accounts">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-50">
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              Connected Accounts
+            </h2>
+            <p className="mt-0.5 text-xs text-zinc-500">Link your social accounts to your profile.</p>
+
+            <div className="mt-4 flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-3">
+              <div className="flex items-center gap-3">
+                {/* X (Twitter) logo */}
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-black">
+                  <svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.258 5.63 5.906-5.63Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-zinc-200">X (Twitter)</p>
+                  <p className="text-xs text-zinc-500">Not connected</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-400 cursor-not-allowed opacity-60"
+                title="Coming soon"
+              >
+                Connect
+              </button>
+            </div>
+          </section>
+
         {/* Accent Color (logged-in only; profile is own profile) */}
           <div className="mt-6 pt-5 border-t border-white/10">
             <h3 className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--app-text)" }}>
@@ -1110,7 +1180,7 @@ export default function ProfilePage() {
               Accent Color
             </h3>
             <p className="mt-0.5 text-[11px]" style={{ color: "var(--app-text-muted)" }}>
-              Personalize your Xchange experience
+              Personalize your QuantivTrade experience
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {ACCENT_OPTIONS.map((opt) => {
@@ -1163,8 +1233,8 @@ export default function ProfilePage() {
                 type="button"
                 onClick={() => {
                   const code = getOrCreateInviteCode(user.username ?? "");
-                  const msg = `Join me on Xchange — the social trading intelligence platform. Use my invite code ${code} at xchange.app to get started. Real market data. AI analysis. Community of traders.`;
-                  navigator.share?.({ text: msg, title: "Join Xchange" }).catch(() => navigator.clipboard?.writeText(msg));
+                  const msg = `Join me on QuantivTrade — the social trading intelligence platform. Use my invite code ${code} at quantivtrade.app to get started. Real market data. AI analysis. Community of traders.`;
+                  navigator.share?.({ text: msg, title: "Join QuantivTrade" }).catch(() => navigator.clipboard?.writeText(msg));
                 }}
                 className="rounded-full border border-[var(--accent-color)]/50 px-3 py-1.5 text-xs font-medium text-[var(--accent-color)] hover:bg-[var(--accent-color)]/10"
               >
@@ -1185,20 +1255,10 @@ export default function ProfilePage() {
             </button>
           </div>
 
-          {/* Preview morning briefing — only visible to user on own profile */}
-          <div className="mt-6 pt-5 border-t border-white/10">
-            <p className="text-[11px]" style={{ color: "var(--app-text-muted)" }}>
-              Morning briefing
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowBriefingPreview(true)}
-              className="mt-2 text-sm transition-colors hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-card)] rounded"
-              style={{ color: "var(--accent-color)" }}
-            >
-              Preview morning briefing
-            </button>
-          </div>
+          {/* Morning Briefing Preferences — premium users only */}
+          {user?.isVerified && (
+            <BriefingPreferencesSection />
+          )}
 
         {/* Posts */}
         <section className="mt-6 rounded-2xl border p-5 transition-colors duration-300" style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}>

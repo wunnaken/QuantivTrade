@@ -219,7 +219,7 @@ function CompactRow({ article, onOpen, onSectorClick }: {
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 
-const NEWS_CACHE_KEY = "xchange-news-last";
+const NEWS_CACHE_KEY = "quantivtrade-news-last";
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 function getCachedNews(): { articles: MarketNewsArticle[]; savedAt: string } | null {

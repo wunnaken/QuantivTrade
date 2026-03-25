@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { XchangeLogoImage } from "./XchangeLogoImage";
+import { QuantivTradeLogoImage } from "./XchangeLogoImage";
 import { useAuth } from "./AuthContext";
 
 const FOOTER_BG = "#080B14";
@@ -107,9 +107,9 @@ export function SiteFooter() {
           {/* Column 1 — Brand */}
           <div className="flex flex-col gap-4 lg:col-span-1">
             <div className="flex items-center gap-2.5">
-              <XchangeLogoImage size={36} />
+              <QuantivTradeLogoImage size={36} />
               <span className="text-lg font-semibold" style={{ color: "var(--accent-color)" }}>
-                Xchange
+                QuantivTrade
               </span>
             </div>
             <p className="text-sm font-medium text-white/90">
@@ -166,7 +166,7 @@ export function SiteFooter() {
           }}
         >
           <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
-            <span>© 2026 Xchange. All rights reserved.</span>
+            <span>© 2026 QuantivTrade. All rights reserved.</span>
             {apiStatus && (
               <span className="flex items-center gap-1.5" title={apiLabel}>
                 <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${statusColor}`} aria-hidden />

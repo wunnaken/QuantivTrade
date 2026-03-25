@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     const ipoCalendar = (data.ipoCalendar ?? []).map((e: Record<string, unknown>) => ({
       name: e.name ?? "—",
       date: e.date ?? from,
-      exchange: e.exchange ?? "—",
+      equantivtrade: e.equantivtrade ?? "—",
       numberOfShares: e.numberOfShares,
       priceRangeLow: e.priceRangeLow,
       priceRangeHigh: e.priceRangeHigh,

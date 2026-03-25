@@ -2,9 +2,9 @@
  * Invite code and early member badge. localStorage.
  */
 
-const EARLY_MEMBER_KEY = "xchange-early-member";
-const INVITE_CODE_KEY = "xchange-invite-code";
-const INVITED_COUNT_KEY = "xchange-invited-count";
+const EARLY_MEMBER_KEY = "quantivtrade-early-member";
+const INVITE_CODE_KEY = "quantivtrade-invite-code";
+const INVITED_COUNT_KEY = "quantivtrade-invited-count";
 
 export function setEarlyMember(): void {
   if (typeof window === "undefined") return;

@@ -175,7 +175,7 @@ export default function PrivacyPage() {
                 9. Children&apos;s Privacy
               </h2>
               <p className="mt-3 text-zinc-300">
-                Xchange is not intended for users under 18 years of age. We do not knowingly collect data from minors.
+                QuantivTrade is not intended for users under 18 years of age. We do not knowingly collect data from minors.
               </p>
             </section>
 

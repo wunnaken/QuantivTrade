@@ -3,7 +3,7 @@
  * Stored in localStorage. One day = calendar day in user's local timezone.
  */
 
-const STORAGE_KEY = "xchange-streaks";
+const STORAGE_KEY = "quantivtrade-streaks";
 
 export type StreakType = "login" | "journal" | "briefing";
 

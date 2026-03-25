@@ -148,7 +148,7 @@ function TickerDataPanel({
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-zinc-100">{ticker}</h1>
         <p className="mt-1 text-sm text-zinc-400">{name}</p>
-        <p className="mt-1 text-xs text-zinc-500">👁 {watchingCount} Xchange members watching {ticker} today</p>
+        <p className="mt-1 text-xs text-zinc-500">👁 {watchingCount} QuantivTrade members watching {ticker} today</p>
       </div>
       {quoteLoading ? (
         <div className="flex items-baseline gap-2">

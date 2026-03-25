@@ -1,4 +1,4 @@
-export const THEME_STORAGE_KEY = "xchange-theme";
+export const THEME_STORAGE_KEY = "quantivtrade-theme";
 export type Theme = "dark" | "light";
 
 export function getStoredTheme(): Theme {

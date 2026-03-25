@@ -53,7 +53,7 @@ export async function GET() {
     const res = await fetch(
       "https://raw.githubusercontent.com/unitedstates/congress-legislators/main/legislators-current.yaml",
       {
-        headers: { "User-Agent": "Xchange/1.0" },
+        headers: { "User-Agent": "QuantivTrade/1.0" },
         next: { revalidate: 86400 }, // cache 24h
       }
     );

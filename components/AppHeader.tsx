@@ -5,7 +5,7 @@ import { useAuth } from "./AuthContext";
 import { DemoInfoIcon } from "./DemoInfoIcon";
 import { MarketTickerBar } from "./MarketTickerBar";
 import { ProfileIcon } from "./ProfileIcon";
-import { XchangeLogo } from "./XchangeLogo";
+import { QuantivTradeLogo } from "./XchangeLogo";
 
 export function AppHeader() {
   const { user } = useAuth();
@@ -24,7 +24,7 @@ export function AppHeader() {
         aria-label="Main navigation"
       >
         <div className="flex shrink-0 items-center gap-4">
-          <XchangeLogo />
+          <QuantivTradeLogo />
           <Link
             href="/feed"
             className="rounded-full border px-3 py-1.5 text-xs font-medium transition hover:border-[var(--accent-color)]/50 hover:bg-[var(--accent-color)]/10 hover:text-[var(--accent-color)]"

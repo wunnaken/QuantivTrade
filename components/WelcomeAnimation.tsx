@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useCallback } from "react";
-import { XchangeLogoImage } from "./XchangeLogoImage";
+import { QuantivTradeLogoImage } from "./XchangeLogoImage";
 
 const BG = "#0A0E1A";
 const TOTAL_DURATION_MS = 6500;
@@ -21,7 +21,7 @@ export function WelcomeAnimation({ onComplete }: { onComplete: () => void }) {
       className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden"
       style={{ backgroundColor: BG }}
       aria-live="polite"
-      aria-label="Welcome to Xchange"
+      aria-label="Welcome to QuantivTrade"
     >
       {/* Skip */}
       <button
@@ -70,13 +70,13 @@ export function WelcomeAnimation({ onComplete }: { onComplete: () => void }) {
               animation: "welcome-logo-in 1s ease-out forwards",
             }}
           >
-            <XchangeLogoImage size={120} />
+            <QuantivTradeLogoImage size={120} />
           </div>
         </div>
 
-        {/* Step 2: "Xchange" letter by letter (1–2s) */}
+        {/* Step 2: "QuantivTrade" letter by letter (1–2s) */}
         <div className="mt-8 flex justify-center sm:mt-10" style={{ minHeight: "4rem" }}>
-          {"Xchange".split("").map((letter, i) => (
+          {"QuantivTrade".split("").map((letter, i) => (
             <span
               key={`${letter}-${i}`}
               className="text-5xl font-bold tracking-tight sm:text-6xl lg:text-7xl"

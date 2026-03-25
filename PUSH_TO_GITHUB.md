@@ -1,6 +1,6 @@
-# Push Xchange to GitHub (wunnaken/Xchange)
+# Push QuantivTrade to GitHub (wunnaken/QuantivTrade)
 
-Your repo is ready: **https://github.com/wunnaken/Xchange**
+Your repo is ready: **https://github.com/wunnaken/QuantivTrade**
 
 ## 1. Open a terminal in Cursor
 
@@ -10,7 +10,7 @@ Your repo is ready: **https://github.com/wunnaken/Xchange**
 The terminal opens at the bottom. If it’s not in your project folder, type:
 
 ```bash
-cd g:\xchange
+cd g:\quantivtrade
 ```
 
 and press Enter.
@@ -24,9 +24,9 @@ Copy and paste each line, press Enter, then do the next. Use the **“push an ex
 ```bash
 git init
 git add .
-git commit -m "Initial commit - Xchange beta"
+git commit -m "Initial commit - QuantivTrade beta"
 git branch -M main
-git remote add origin https://github.com/wunnaken/Xchange.git
+git remote add origin https://github.com/wunnaken/QuantivTrade.git
 git push -u origin main
 ```
 
@@ -41,4 +41,4 @@ git push -u origin main
 
 ---
 
-After `git push` succeeds, refresh your GitHub repo page — you should see all your files. Then in Netlify, import from Git and choose **wunnaken/Xchange**.
+After `git push` succeeds, refresh your GitHub repo page — you should see all your files. Then in Netlify, import from Git and choose **wunnaken/QuantivTrade**.

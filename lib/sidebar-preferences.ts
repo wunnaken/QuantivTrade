@@ -1,4 +1,4 @@
-const STORAGE_KEY = "xchange-sidebar-prefs";
+const STORAGE_KEY = "quantivtrade-sidebar-prefs";
 
 export type SidebarPrefs = {
   order: string[];

@@ -4,8 +4,8 @@
  * - User portfolio/context (added to system prompt)
  */
 
-const CONVERSATIONS_KEY = "xchange-ai-conversations";
-const PORTFOLIO_CONTEXT_KEY = "xchange-ai-portfolio-context";
+const CONVERSATIONS_KEY = "quantivtrade-ai-conversations";
+const PORTFOLIO_CONTEXT_KEY = "quantivtrade-ai-portfolio-context";
 const MAX_CONVERSATIONS = 10;
 
 export type StoredConversation = {

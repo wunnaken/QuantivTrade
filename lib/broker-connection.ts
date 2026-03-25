@@ -3,8 +3,8 @@
  * State stored in localStorage for demo.
  */
 
-const STORAGE_KEY = "xchange-broker-connection";
-const NOTIFY_KEY = "xchange-broker-notify-emails";
+const STORAGE_KEY = "quantivtrade-broker-connection";
+const NOTIFY_KEY = "quantivtrade-broker-notify-emails";
 
 export type BrokerConnection = {
   connected: boolean;

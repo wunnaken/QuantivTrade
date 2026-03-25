@@ -83,9 +83,9 @@ export type SavedDashboard = {
   updatedAt: string;
 };
 
-const STORAGE_PREFIX = "xchange-dashboard-";
-const LIST_KEY = "xchange-dashboard-list";
-const LAST_DASHBOARD_ID_KEY = "xchange-dashboard-last-id";
+const STORAGE_PREFIX = "quantivtrade-dashboard-";
+const LIST_KEY = "quantivtrade-dashboard-list";
+const LAST_DASHBOARD_ID_KEY = "quantivtrade-dashboard-last-id";
 const MAX_DASHBOARDS = 4;
 
 export function getLastDashboardId(): string | null {

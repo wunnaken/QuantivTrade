@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const SYSTEM_PROMPT = `You are a financial analyst assistant for Xchange, a social trading intelligence platform. When given a stock ticker or asset, provide a clear, structured analysis in this exact JSON format:
+const SYSTEM_PROMPT = `You are a financial analyst assistant for QuantivTrade, a social trading intelligence platform. When given a stock ticker or asset, provide a clear, structured analysis in this exact JSON format:
 {
   "riskRating": number (1-10, where 1=very safe, 10=extremely risky),
   "riskLabel": string (e.g. "Moderate Risk"),

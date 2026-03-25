@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-const SYSTEM = `You are a macro analyst for Xchange. Analyze economic indicator data for traders and investors. Respond with valid JSON only, no markdown or extra text. Use this exact structure:
-{"trend":"Improving|Deteriorating|Stable","trendColor":"green|red|yellow","summary":"2-3 sentences plain English","marketImpact":"what this means for stocks, bonds, dollar","watchFor":"what to watch next"}`;
+const SYSTEM = `You are a macro analyst for QuantivTrade. Analyze economic indicator data for traders and investors. Respond with valid JSON only, no markdown or extra text. Use this exact structure:
+{"trend":"Improving|Deteriorating|Stable","trendColor":"green|red|yellow","summary":"2-3 sentences plain English","marketImpact":"what this means for stocks, bonds, dollar","watchFor":"what to watch next"}
+
+When asked to compare two indicators, the summary and marketImpact fields should describe the relationship and what it signals together.`;
 
 export async function POST(req: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
@@ -12,19 +14,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "AI not configured" }, { status: 503 });
   }
 
-  let body: { indicatorName: string; currentValue: number | string; trend: string; dataSummary: string };
+  let body: {
+    indicatorName: string;
+    currentValue: number | string;
+    trend: string;
+    dataSummary: string;
+    compareWith?: { label: string; summary: string } | null;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { indicatorName, currentValue, trend, dataSummary } = body;
+  const { indicatorName, currentValue, trend, dataSummary, compareWith } = body;
   if (!indicatorName || dataSummary == null) {
     return NextResponse.json({ error: "indicatorName and dataSummary required" }, { status: 400 });
   }
 
-  const user = `Analyze this economic indicator for traders and investors: ${indicatorName}. Current value: ${currentValue}. Trend: ${trend || "unknown"}. 10-year context: ${typeof dataSummary === "string" ? dataSummary : JSON.stringify(dataSummary)}. Respond in JSON only: trend (Improving/Deteriorating/Stable), trendColor (green/red/yellow), summary (2-3 sentences), marketImpact (stocks, bonds, dollar), watchFor (what to watch next).`;
+  const user = compareWith
+    ? `Compare these two economic indicators for traders and investors and explain the relationship between them:
+
+PRIMARY — ${indicatorName}: current value ${currentValue}, trend ${trend || "unknown"}. Context: ${dataSummary}
+COMPARE — ${compareWith.label}: ${compareWith.summary}
+
+Explain what the relationship between these two indicators signals for markets right now. Respond in JSON only: trend (Improving/Deteriorating/Stable), trendColor (green/red/yellow), summary (2-3 sentences on the relationship and what it means), marketImpact (for stocks, bonds, dollar), watchFor (what to monitor).`
+    : `Analyze this economic indicator for traders and investors: ${indicatorName}. Current value: ${currentValue}. Trend: ${trend || "unknown"}. 10-year context: ${typeof dataSummary === "string" ? dataSummary : JSON.stringify(dataSummary)}. Respond in JSON only: trend (Improving/Deteriorating/Stable), trendColor (green/red/yellow), summary (2-3 sentences), marketImpact (stocks, bonds, dollar), watchFor (what to watch next).`;
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {

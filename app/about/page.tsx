@@ -15,7 +15,7 @@ export default function AboutPage() {
           Built for traders who think before they trade
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400">
-          Xchange is the social trading intelligence platform combining real-time market data, AI-powered analysis, and a community of serious investors.
+          QuantivTrade is the social trading intelligence platform combining real-time market data, AI-powered analysis, and a community of serious investors.
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
           <Link
@@ -51,7 +51,7 @@ export default function AboutPage() {
               </ul>
             </div>
             <div className="rounded-xl border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/5 p-6 md:p-8">
-              <h3 className="text-lg font-semibold text-white" style={{ color: "var(--accent-color)" }}>The Xchange way</h3>
+              <h3 className="text-lg font-semibold text-white" style={{ color: "var(--accent-color)" }}>The QuantivTrade way</h3>
               <ul className="mt-4 space-y-3 text-zinc-300">
                 <li className="flex gap-3"><span className="text-[var(--accent-color)]" aria-hidden>✓</span> Everything in one platform</li>
                 <li className="flex gap-3"><span className="text-[var(--accent-color)]" aria-hidden>✓</span> Social community meets institutional data</li>
@@ -108,7 +108,7 @@ export default function AboutPage() {
           <div className="mt-12 grid gap-6 md:grid-cols-3">
             <div className="rounded-xl border border-white/10 bg-[#0F1520] p-6">
               <h3 className="font-semibold text-white">Conservative / Beginner</h3>
-              <p className="mt-2 text-sm text-zinc-400">New to investing? Xchange explains what every indicator means in plain English. Your Conservative profile surfaces safe, long-term ideas matched to your goals.</p>
+              <p className="mt-2 text-sm text-zinc-400">New to investing? QuantivTrade explains what every indicator means in plain English. Your Conservative profile surfaces safe, long-term ideas matched to your goals.</p>
             </div>
             <div className="rounded-xl border border-white/10 bg-[#0F1520] p-6">
               <h3 className="font-semibold text-white">Moderate / Intermediate</h3>
@@ -127,7 +127,7 @@ export default function AboutPage() {
         <div className="mx-auto max-w-6xl">
           <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-6 py-4 text-center">
             <p className="text-sm font-medium text-amber-200">
-              Xchange is an educational platform. Nothing on Xchange is financial advice. Always do your own research and consult a qualified financial advisor.
+              QuantivTrade is an educational platform. Nothing on QuantivTrade is financial advice. Always do your own research and consult a qualified financial advisor.
             </p>
           </div>
         </div>
@@ -164,7 +164,7 @@ export default function AboutPage() {
             Ready to think smarter about markets?
           </h2>
           <p className="mt-4 text-zinc-400">
-            Join Xchange today — free to get started
+            Join QuantivTrade today — free to get started
           </p>
           <Link
             href="/auth/sign-up"

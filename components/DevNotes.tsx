@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-const STORAGE_KEY = "xchange-dev-notes";
+const STORAGE_KEY = "quantivtrade-dev-notes";
 const ORANGE = "#F97316";
 
 type NoteType = "bug" | "warning" | "info" | "fixed";

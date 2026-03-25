@@ -4,7 +4,7 @@ import { FormEvent, Suspense, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../../components/AuthContext";
-import { XchangeLogo } from "../../../components/XchangeLogo";
+import { QuantivTradeLogo } from "../../../components/XchangeLogo";
 
 function SignInForm() {
   const { signIn } = useAuth();
@@ -37,11 +37,11 @@ function SignInForm() {
     <div className="min-h-screen app-page font-[&quot;Times_New_Roman&quot;,serif]">
       <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-10">
         <header className="absolute left-6 top-6">
-          <XchangeLogo />
+          <QuantivTradeLogo />
         </header>
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-zinc-50">
-            Sign in to Xchange
+            Sign in to QuantivTrade
           </h1>
           <p className="mt-2 text-xs text-zinc-400">
             Access your communities, ideas, and profile.
@@ -144,7 +144,7 @@ function SignInForm() {
           </div>
 
           <p className="mt-3 text-[11px] text-zinc-400">
-            New to Xchange?{" "}
+            New to QuantivTrade?{" "}
             <Link
               href="/auth/sign-up"
               className="font-semibold transition hover:opacity-90"

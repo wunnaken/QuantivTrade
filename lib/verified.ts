@@ -4,7 +4,7 @@
  * Only the account with this email is auto-verified (no localStorage needed).
  */
 
-export const VERIFIED_KEY = "xchange-verified";
+export const VERIFIED_KEY = "quantivtrade-verified";
 
 /** Email that is always treated as verified (dev / your account). */
 const VERIFIED_DEV_EMAIL = "zack.mutz01@gmail.com";

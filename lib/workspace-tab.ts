@@ -3,7 +3,7 @@
  * Used so "Workspace" in the sidebar returns to the same tab.
  */
 
-const STORAGE_KEY = "xchange-workspace-tab";
+const STORAGE_KEY = "quantivtrade-workspace-tab";
 
 export type WorkspaceTab = "ai" | "dashboard" | "whiteboard";
 

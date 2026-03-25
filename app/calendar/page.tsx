@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import type { EarningsItem as ApiEarnings, EconomicItem as ApiEconomic } from "../api/calendar/route";
 import { EconomicDetailModal } from "./EconomicDetailModal";
+import { EarningsDetailModal } from "./EarningsDetailModal";
 
 const CARD_BG = "#0F1520";
 
@@ -54,40 +55,7 @@ function formatDayShort(d: Date): string {
 }
 
 type HeatmapDayType = "fed" | "high" | "medium" | "low";
-
-/** Last Wednesday of month (0-indexed month) */
-function lastWednesday(year: number, month0: number): number {
-  const last = new Date(year, month0 + 1, 0).getDate();
-  for (let d = last; d >= Math.max(1, last - 6); d--) {
-    if (new Date(year, month0, d).getDay() === 3) return d;
-  }
-  return last;
-}
-
-/** Known recurring dates: FOMC = blue, NFP/CPI = high (red), GDP = medium (amber), jobless claims proxy = low (green). */
-function getYearEventMap(year: number): Map<string, HeatmapDayType> {
-  const map = new Map<string, HeatmapDayType>();
-  const fomcDays: [number, number][] = [
-    [1, 28], [1, 29], [3, 18], [3, 19], [4, 29], [4, 30], [6, 17], [6, 18],
-    [7, 29], [7, 30], [9, 16], [9, 17], [10, 28], [10, 29], [12, 16], [12, 17],
-  ];
-  fomcDays.forEach(([m, d]) => map.set(`${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`, "fed"));
-  for (let m = 1; m <= 12; m++) {
-    const first = new Date(year, m - 1, 1).getDay();
-    const firstFriday = ((5 - first + 1 + 7) % 7) || 7;
-    map.set(`${year}-${String(m).padStart(2, "0")}-${String(firstFriday).padStart(2, "0")}`, "high");
-    const cpiDay = 12;
-    if (cpiDay <= new Date(year, m, 0).getDate()) map.set(`${year}-${String(m).padStart(2, "0")}-${String(cpiDay).padStart(2, "0")}`, "high");
-    const lowDay = 8;
-    if (lowDay <= new Date(year, m, 0).getDate()) map.set(`${year}-${String(m).padStart(2, "0")}-${String(lowDay).padStart(2, "0")}`, "low");
-  }
-  for (const month0 of [0, 3, 6, 9]) {
-    const d = lastWednesday(year, month0);
-    const m = month0 + 1;
-    map.set(`${year}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`, "medium");
-  }
-  return map;
-}
+type YearEventPoint = { date: string; impact: "HIGH" | "MEDIUM" | "LOW"; name: string };
 
 function getEventLabel(type: HeatmapDayType | null): string | null {
   if (type === "fed") return "FOMC / Fed meeting";
@@ -97,9 +65,28 @@ function getEventLabel(type: HeatmapDayType | null): string | null {
   return null;
 }
 
-function YearHeatmap({ year }: { year: number }) {
+function YearHeatmap({ year, events }: { year: number; events: YearEventPoint[] }) {
   const [hovered, setHovered] = useState<{ date: string; type: HeatmapDayType | null; x: number; y: number } | null>(null);
-  const eventMap = useMemo(() => getYearEventMap(year), [year]);
+  const eventMap = useMemo(() => {
+    const map = new Map<string, HeatmapDayType>();
+    for (const ev of events) {
+      const existing = map.get(ev.date);
+      const type: HeatmapDayType =
+        ev.name.toLowerCase().includes("fomc") || ev.name.toLowerCase().includes("federal reserve") || ev.name.toLowerCase().includes("rate decision")
+          ? "fed"
+          : ev.impact === "HIGH"
+          ? "high"
+          : ev.impact === "MEDIUM"
+          ? "medium"
+          : "low";
+      // Higher priority wins: fed > high > medium > low
+      const order: Record<HeatmapDayType, number> = { fed: 0, high: 1, medium: 2, low: 3 };
+      if (!existing || order[type] < order[existing]) {
+        map.set(ev.date, type);
+      }
+    }
+    return map;
+  }, [events]);
   const months = useMemo(() => {
     const m: { name: string; firstDow: number; days: { date: string; type: HeatmapDayType | null }[] }[] = [];
     const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -138,8 +125,8 @@ function YearHeatmap({ year }: { year: number }) {
           <div key={month.name} className="min-w-[140px]">
             <p className="mb-2 text-center text-xs font-medium text-zinc-400">{month.name}</p>
             <div className="grid grid-cols-7 gap-0.5 text-[10px]">
-              {["S", "M", "T", "W", "T", "F", "S"].map((h) => (
-                <span key={h} className="text-center text-zinc-500">{h}</span>
+              {["S", "M", "T", "W", "T", "F", "S"].map((h, hi) => (
+                <span key={hi} className="text-center text-zinc-500">{h}</span>
               ))}
               {Array.from({ length: month.firstDow }, (_, i) => <span key={`pad-${i}`} />)}
               {month.days.map((day) => {
@@ -174,8 +161,24 @@ function YearHeatmap({ year }: { year: number }) {
   );
 }
 
-function YearHeatmapSummary({ year }: { year: number }) {
-  const eventMap = useMemo(() => getYearEventMap(year), [year]);
+function YearHeatmapSummary({ year, events }: { year: number; events: YearEventPoint[] }) {
+  const eventMap = useMemo(() => {
+    const map = new Map<string, HeatmapDayType>();
+    for (const ev of events) {
+      const existing = map.get(ev.date);
+      const type: HeatmapDayType =
+        ev.name.toLowerCase().includes("fomc") || ev.name.toLowerCase().includes("rate decision")
+          ? "fed"
+          : ev.impact === "HIGH" ? "high"
+          : ev.impact === "MEDIUM" ? "medium"
+          : "low";
+      const order: Record<HeatmapDayType, number> = { fed: 0, high: 1, medium: 2, low: 3 };
+      if (!existing || order[type] < order[existing]) {
+        map.set(ev.date, type);
+      }
+    }
+    return map;
+  }, [events]);
   const stats = useMemo(() => {
     const byMonth = new Map<number, number>();
     let fedCount = 0;
@@ -267,10 +270,90 @@ function getEconomicEventBreakdown(name: string, country: string): string {
   return `${c}Macro release. Compare actual to estimate and previous to gauge surprise.`;
 }
 
+function MonthlyActivityChart({ events }: { events: YearEventPoint[] }) {
+  const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  const monthData = useMemo(() => {
+    const counts = Array.from({ length: 12 }, (_, i) => ({
+      month: MONTH_NAMES[i],
+      HIGH: 0,
+      MEDIUM: 0,
+      LOW: 0,
+      topEvents: [] as string[],
+    }));
+    for (const ev of events) {
+      const m = new Date(ev.date + "T00:00:00").getMonth();
+      if (m < 0 || m > 11) continue;
+      counts[m][ev.impact]++;
+      if (ev.impact === "HIGH" && counts[m].topEvents.length < 3) {
+        if (!counts[m].topEvents.includes(ev.name)) counts[m].topEvents.push(ev.name);
+      }
+    }
+    return counts;
+  }, [events]);
+
+  const maxTotal = Math.max(...monthData.map((d) => d.HIGH + d.MEDIUM + d.LOW), 1);
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+      <h3 className="mb-1 text-sm font-semibold text-zinc-100">Monthly Market Activity</h3>
+      <p className="mb-4 text-xs text-zinc-500">High/medium impact economic events by month — heavier months drive more volatility.</p>
+      <div className="flex items-end gap-1.5 h-32">
+        {monthData.map((d, i) => {
+          const total = d.HIGH + d.MEDIUM + d.LOW;
+          const heightPct = (total / maxTotal) * 100;
+          const highPct = total > 0 ? (d.HIGH / total) * 100 : 0;
+          const medPct = total > 0 ? (d.MEDIUM / total) * 100 : 0;
+          const lowPct = total > 0 ? (d.LOW / total) * 100 : 0;
+          const isBusiest = total === maxTotal && total > 0;
+          return (
+            <div key={i} className="group relative flex flex-1 flex-col items-center gap-1">
+              <div className="relative w-full" style={{ height: 100 }}>
+                <div
+                  className="absolute bottom-0 w-full rounded-t overflow-hidden transition-all duration-300"
+                  style={{ height: `${heightPct}%` }}
+                >
+                  <div style={{ height: `${highPct}%`, backgroundColor: "#ef4444" }} />
+                  <div style={{ height: `${medPct}%`, backgroundColor: "#f59e0b" }} />
+                  <div style={{ height: `${lowPct}%`, backgroundColor: "#166534" }} />
+                </div>
+                {isBusiest && (
+                  <div className="absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded px-1 py-0.5 text-[9px] font-bold text-red-400">
+                    Busiest
+                  </div>
+                )}
+              </div>
+              <span className="text-[10px] text-zinc-500">{d.month}</span>
+              <span className="text-[10px] font-medium text-zinc-400">{total || ""}</span>
+              {/* Tooltip on hover */}
+              {total > 0 && (
+                <div className="pointer-events-none absolute bottom-full left-1/2 mb-2 hidden -translate-x-1/2 rounded-lg border border-white/10 bg-[#0a0f1a] p-2 text-xs shadow-xl group-hover:block z-10 min-w-[140px]">
+                  <p className="font-semibold text-zinc-200 mb-1">{d.month} — {total} events</p>
+                  {d.HIGH > 0 && <p className="text-red-400">{d.HIGH} high impact</p>}
+                  {d.MEDIUM > 0 && <p className="text-amber-400">{d.MEDIUM} medium impact</p>}
+                  {d.topEvents.map((e, j) => <p key={j} className="text-zinc-500 text-[10px] mt-0.5 truncate">{e}</p>)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-3 flex gap-4 text-xs text-zinc-500">
+        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-red-500" /> High</span>
+        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-amber-500" /> Medium</span>
+        <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-[#166834]" /> Low</span>
+      </div>
+    </div>
+  );
+}
+
 export default function CalendarPage() {
   const [activeTab, setActiveTab] = useState<"earnings" | "economic" | "year">("earnings");
   const [selectedEconomicEvent, setSelectedEconomicEvent] = useState<EconomicWithDay | null>(null);
+  const [selectedEarning, setSelectedEarning] = useState<EarningsWithDay | null>(null);
   const [yearViewYear, setYearViewYear] = useState(new Date().getFullYear());
+  const [yearEvents, setYearEvents] = useState<YearEventPoint[]>([]);
+  const [yearEventsLoading, setYearEventsLoading] = useState(false);
   const [weekOffset, setWeekOffset] = useState(0);
   const [earnings, setEarnings] = useState<EarningsWithDay[]>([]);
   const [economic, setEconomic] = useState<EconomicWithDay[]>([]);
@@ -307,6 +390,8 @@ export default function CalendarPage() {
 
   const refetchCalendar = useCallback(() => {
     setLoading(true);
+    setEarnings([]);
+    setEconomic([]);
     setEconomicError(null);
     fetch(`/api/calendar?from=${fromStr}&to=${toStr}`, { cache: "no-store" })
       .then((res) => res.json())
@@ -344,6 +429,22 @@ export default function CalendarPage() {
     refetchCalendar();
   }, [refetchCalendar]);
 
+  // Auto-refresh every 2 minutes so beat/miss updates appear live
+  useEffect(() => {
+    const interval = setInterval(refetchCalendar, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [refetchCalendar]);
+
+  useEffect(() => {
+    if (activeTab !== "year") return;
+    setYearEventsLoading(true);
+    fetch(`/api/calendar/year-events?year=${yearViewYear}`)
+      .then((r) => r.json())
+      .then((d) => setYearEvents((d.events ?? []) as YearEventPoint[]))
+      .catch(() => setYearEvents([]))
+      .finally(() => setYearEventsLoading(false));
+  }, [yearViewYear, activeTab]);
+
   const earningsByDay = useMemo(() => {
     const byDay: EarningsWithDay[][] = [[], [], [], [], []];
     for (const e of earnings) {
@@ -362,7 +463,31 @@ export default function CalendarPage() {
 
   const totalEarnings = earnings.length;
   const highImpactCount = economic.filter((e) => e.impact === "HIGH").length;
-  const anticipatedEvents = economic.filter((e) => e.impact === "HIGH").slice(0, 3);
+  const anticipatedEvents = economic.filter((e) => e.impact === "HIGH").slice(0, 5);
+
+  const marketMovers = useMemo(() => {
+    const result: { name: string; description: string; impact: "HIGH" | "MEDIUM" | "earnings" }[] = [];
+    for (const ev of economic.filter((e) => e.impact === "HIGH").slice(0, 4)) {
+      result.push({ name: ev.name, description: getEconomicEventBreakdown(ev.name, ev.country), impact: "HIGH" });
+    }
+    if (result.length < 4) {
+      for (const ev of economic.filter((e) => e.impact === "MEDIUM").slice(0, 4 - result.length)) {
+        result.push({ name: ev.name, description: getEconomicEventBreakdown(ev.name, ev.country), impact: "MEDIUM" });
+      }
+    }
+    if (result.length < 3) {
+      for (const e of earnings.slice(0, 3 - result.length)) {
+        const bmoAmc = e.bmoAmc ? ` (${e.bmoAmc})` : "";
+        const eps = e.epsEstimate != null ? ` EPS est. $${e.epsEstimate.toFixed(2)}.` : "";
+        result.push({
+          name: `${e.name}${bmoAmc}`,
+          description: `Earnings release${eps}`,
+          impact: "earnings",
+        });
+      }
+    }
+    return result;
+  }, [economic, earnings]);
 
   /** Countdown for upcoming event (updates every minute) */
   const [now, setNow] = useState(() => new Date());
@@ -372,12 +497,14 @@ export default function CalendarPage() {
   }, []);
 
   function countdownTo(dateStr: string): string {
-    const d = new Date(dateStr + "T12:00:00Z");
-    if (d.getTime() <= now.getTime()) return "Released";
-    const ms = d.getTime() - now.getTime();
-    const days = Math.floor(ms / (24 * 60 * 60 * 1000));
-    const hours = Math.floor((ms % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-    return `In ${days}d ${hours}h`;
+    const todayStr = now.toISOString().slice(0, 10);
+    if (dateStr < todayStr) return "Released";
+    if (dateStr === todayStr) return "Today";
+    const eventDate = new Date(dateStr + "T00:00:00");
+    const todayMidnight = new Date(todayStr + "T00:00:00");
+    const days = Math.round((eventDate.getTime() - todayMidnight.getTime()) / (24 * 60 * 60 * 1000));
+    if (days === 1) return "Tomorrow";
+    return `In ${days}d`;
   }
 
   function consensusLabel(ev: EconomicWithDay): "BEAT" | "MISS" | "IN LINE" | null {
@@ -404,6 +531,13 @@ export default function CalendarPage() {
             actual: selectedEconomicEvent.actual,
           }}
           onClose={() => setSelectedEconomicEvent(null)}
+        />
+      )}
+      {selectedEarning && (
+        <EarningsDetailModal
+          ticker={selectedEarning.ticker}
+          companyName={selectedEarning.name}
+          onClose={() => setSelectedEarning(null)}
         />
       )}
       <main className="min-h-screen flex-1">
@@ -443,8 +577,9 @@ export default function CalendarPage() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setWeekOffset((o) => o - 1)}
-                  className="rounded-lg border border-white/10 p-2 text-zinc-400 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)]"
+                  onClick={() => setWeekOffset((o) => Math.max(o - 1, -4))}
+                  disabled={weekOffset <= -4}
+                  className="rounded-lg border border-white/10 p-2 text-zinc-400 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)] disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label="Previous week"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -456,8 +591,9 @@ export default function CalendarPage() {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setWeekOffset((o) => o + 1)}
-                  className="rounded-lg border border-white/10 p-2 text-zinc-400 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)]"
+                  onClick={() => setWeekOffset((o) => Math.min(o + 1, 4))}
+                  disabled={weekOffset >= 4}
+                  className="rounded-lg border border-white/10 p-2 text-zinc-400 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)] disabled:opacity-30 disabled:cursor-not-allowed"
                   aria-label="Next week"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -491,8 +627,11 @@ export default function CalendarPage() {
                     </button>
                   </div>
                 </div>
+                {yearEventsLoading && (
+                  <p className="text-center text-xs text-zinc-500">Loading economic event data…</p>
+                )}
                 <div className="overflow-x-auto">
-                  <YearHeatmap year={yearViewYear} />
+                  <YearHeatmap year={yearViewYear} events={yearEvents} />
                 </div>
                 <div className="flex flex-wrap gap-4 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-xs">
                   <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded" style={{ backgroundColor: "#0F1520" }} /> No events</span>
@@ -502,7 +641,8 @@ export default function CalendarPage() {
                   <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-[#3B82F6]" /> Fed meeting</span>
                   <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-[#EF4444]" /> Multiple high</span>
                 </div>
-                <YearHeatmapSummary year={yearViewYear} />
+                <YearHeatmapSummary year={yearViewYear} events={yearEvents} />
+                <MonthlyActivityChart events={yearEvents} />
                 <p className="text-center text-xs text-zinc-500">
                   {yearViewYear} at a glance: Hover a day for events. Click to open details. Data from economic calendar.
                 </p>
@@ -535,7 +675,11 @@ export default function CalendarPage() {
                         earningsByDay[dayIndex].map((item) => (
                           <div
                             key={item.id}
-                            className={`rounded-xl border p-3 transition-all duration-200 ${getEarningsBorderClass(item)}`}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedEarning(item)}
+                            onKeyDown={(e) => e.key === "Enter" && setSelectedEarning(item)}
+                            className={`cursor-pointer rounded-xl border p-3 transition-all duration-200 ${getEarningsBorderClass(item)}`}
                             style={{ backgroundColor: CARD_BG }}
                           >
                             <div className="flex items-start gap-2">
@@ -586,6 +730,9 @@ export default function CalendarPage() {
                                 </span>
                               )}
                             </div>
+                            <p className="mt-2 text-[10px] font-medium text-[var(--accent-color)] opacity-70">
+                              View earnings history →
+                            </p>
                           </div>
                         ))
                       )}
@@ -738,12 +885,20 @@ export default function CalendarPage() {
                 <li>High impact events: {highImpactCount}</li>
               </ul>
               <p className="mt-3 text-xs font-medium text-zinc-400">Most anticipated</p>
-              <ul className="mt-1 space-y-1 text-xs text-zinc-400">
-                {anticipatedEvents.map((e) => (
-                  <li key={e.id}>
-                    {e.name} — {e.dateTimeET}
-                  </li>
-                ))}
+              <ul className="mt-1 space-y-1.5 text-xs text-zinc-400">
+                {anticipatedEvents.length === 0 ? (
+                  <li className="italic text-zinc-500">No high-impact events this week</li>
+                ) : (
+                  anticipatedEvents.map((e, idx) => (
+                    <li key={e.id} className="flex gap-1.5">
+                      <span className="flex-shrink-0 font-bold text-zinc-500">{idx + 1}.</span>
+                      <span>
+                        <span className="text-zinc-200">{e.name}</span>
+                        <span className="ml-1 text-zinc-500">{e.date}</span>
+                      </span>
+                    </li>
+                  ))
+                )}
               </ul>
             </section>
             <section
@@ -752,15 +907,28 @@ export default function CalendarPage() {
             >
               <h2 className="text-sm font-semibold text-zinc-100">Market Moving Events</h2>
               <ul className="mt-3 space-y-3 text-xs text-zinc-400">
-                <li>
-                  <span className="font-medium text-red-400">Core CPI</span> — Sets tone for rates; beats/misses drive equity and bond volatility.
-                </li>
-                <li>
-                  <span className="font-medium text-red-400">FOMC Minutes</span> — Traders look for hints on cut timing and balance-sheet plans.
-                </li>
-                <li>
-                  <span className="font-medium text-amber-400">Nike (NKE)</span> — AMC Thursday; consumer and China exposure in focus.
-                </li>
+                {marketMovers.length === 0 ? (
+                  <li className="italic text-zinc-500">
+                    {loading ? "Loading…" : "No notable events this week"}
+                  </li>
+                ) : (
+                  marketMovers.map((m, i) => (
+                    <li key={i}>
+                      <span
+                        className={`font-medium ${
+                          m.impact === "HIGH"
+                            ? "text-red-400"
+                            : m.impact === "MEDIUM"
+                            ? "text-amber-400"
+                            : "text-[var(--accent-color)]"
+                        }`}
+                      >
+                        {m.name}
+                      </span>{" "}
+                      — {m.description}
+                    </li>
+                  ))
+                )}
               </ul>
             </section>
           </div>

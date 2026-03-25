@@ -3,7 +3,7 @@
  * Alerts only run while the app tab is open (60s polling).
  */
 
-export const PRICE_ALERTS_KEY = "xchange-price-alerts";
+export const PRICE_ALERTS_KEY = "quantivtrade-price-alerts";
 export const MAX_ALERTS_FREE = 10;
 
 export type PriceAlertCondition = "above" | "below";
@@ -94,7 +94,7 @@ export function generateAlertId(): string {
 }
 
 /** In-app notification entries (for bell dropdown). */
-const IN_APP_NOTIFICATIONS_KEY = "xchange-in-app-notifications";
+const IN_APP_NOTIFICATIONS_KEY = "quantivtrade-in-app-notifications";
 
 export type InAppNotification = {
   id: string;
@@ -129,12 +129,12 @@ export function addInAppNotification(n: Omit<InAppNotification, "id" | "time">):
   const list = getInAppNotifications();
   list.unshift(entry);
   localStorage.setItem(IN_APP_NOTIFICATIONS_KEY, JSON.stringify(list.slice(0, 50)));
-  window.dispatchEvent(new Event("xchange-in-app-notifications-changed"));
+  window.dispatchEvent(new Event("quantivtrade-in-app-notifications-changed"));
 }
 
 export function clearInAppNotification(id: string): void {
   if (typeof window === "undefined") return;
   const list = getInAppNotifications().filter((n) => n.id !== id);
   localStorage.setItem(IN_APP_NOTIFICATIONS_KEY, JSON.stringify(list));
-  window.dispatchEvent(new Event("xchange-in-app-notifications-changed"));
+  window.dispatchEvent(new Event("quantivtrade-in-app-notifications-changed"));
 }

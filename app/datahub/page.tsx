@@ -18,7 +18,7 @@ const TOOLS: { id: number; name: string; description: string }[] = [
   { id: 8, name: "Fed Dashboard", description: "Federal Reserve rates, dot plot, balance sheet, and CME probabilities" },
   { id: 9, name: "Earnings Whisper", description: "Official estimates vs trader expectations and historical beat rates" },
   { id: 10, name: "Congress Trades", description: "What politicians are buying and selling — follow the smart money" },
-  { id: 11, name: "Dark Pool", description: "Large institutional off-exchange block trades and smart money flow" },
+  { id: 11, name: "Dark Pool", description: "Large institutional off-equantivtrade block trades and smart money flow" },
   { id: 12, name: "Crypto Dashboard", description: "Dominance, funding rates, stablecoin flows, and fear index" },
 ];
 
@@ -448,7 +448,7 @@ function FearGreedView() {
 
 // ─── Tool 5: IPO Calendar ──────────────────────────────────────────────────
 function IPOCalendarView() {
-  const [ipo, setIpo] = useState<Array<{ name: string; date: string; exchange: string; priceRangeLow?: number; priceRangeHigh?: number; status: string }>>([]);
+  const [ipo, setIpo] = useState<Array<{ name: string; date: string; equantivtrade: string; priceRangeLow?: number; priceRangeHigh?: number; status: string }>>([]);
   const [range, setRange] = useState<"week" | "month" | "quarter">("week");
 
   const { from, to } = useMemo(() => {
@@ -484,7 +484,7 @@ function IPOCalendarView() {
             <tr className="border-b border-white/10 bg-white/5">
               <th className="p-2 font-medium text-zinc-400">Company</th>
               <th className="p-2 font-medium text-zinc-400">Expected date</th>
-              <th className="p-2 font-medium text-zinc-400">Exchange</th>
+              <th className="p-2 font-medium text-zinc-400">Equantivtrade</th>
               <th className="p-2 font-medium text-zinc-400">Price range</th>
               <th className="p-2 font-medium text-zinc-400">Status</th>
             </tr>
@@ -497,7 +497,7 @@ function IPOCalendarView() {
                 <tr key={i} className={`border-b border-white/5 ${i % 2 ? "bg-white/[0.02]" : ""}`}>
                   <td className="p-2 font-medium text-white">{r.name}</td>
                   <td className="p-2 text-zinc-300">{r.date}</td>
-                  <td className="p-2 text-zinc-300">{r.exchange}</td>
+                  <td className="p-2 text-zinc-300">{r.equantivtrade}</td>
                   <td className="p-2 text-zinc-300">{r.priceRangeLow != null ? `$${r.priceRangeLow}-${r.priceRangeHigh}` : "—"}</td>
                   <td className="p-2"><span className="rounded bg-white/10 px-2 py-0.5 text-xs">{r.status}</span></td>
                 </tr>
@@ -753,7 +753,7 @@ function DarkPoolView() {
       </div>
       <p className="text-zinc-400">Dark pool block trades — sample.</p>
       <div className="rounded-lg border border-white/10 p-4">
-        <p className="text-sm text-zinc-500">Time | Ticker | Price | Size | Dark Pool % | Exchange | Smart Money Signal</p>
+        <p className="text-sm text-zinc-500">Time | Ticker | Price | Size | Dark Pool % | Equantivtrade | Smart Money Signal</p>
       </div>
     </div>
   );

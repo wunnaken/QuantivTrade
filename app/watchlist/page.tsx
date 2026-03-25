@@ -118,10 +118,10 @@ export default function WatchlistPage() {
     const onChanged = () => {
       void refresh();
     };
-    window.addEventListener("xchange-watchlist-changed", onChanged);
+    window.addEventListener("quantivtrade-watchlist-changed", onChanged);
     return () => {
       mounted = false;
-      window.removeEventListener("xchange-watchlist-changed", onChanged);
+      window.removeEventListener("quantivtrade-watchlist-changed", onChanged);
     };
   }, [refresh]);
 
@@ -202,7 +202,7 @@ export default function WatchlistPage() {
           updated = true;
           if (a.notifyBrowser && typeof Notification !== "undefined" && Notification.permission === "granted") {
             try {
-              new Notification("Xchange Price Alert", {
+              new Notification("QuantivTrade Price Alert", {
                 body: `${a.ticker} has reached ${formatPrice(price)} — your target was ${formatPrice(a.targetPrice)}`,
                 icon: "/logo.png",
                 tag: a.id,

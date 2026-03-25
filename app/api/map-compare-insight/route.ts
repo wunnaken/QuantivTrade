@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-const SYSTEM = `You are a macro and markets analyst for Xchange. Given a comparison of 2–4 countries on one main metric plus GDP growth, inflation, and population where available, write a short comparative insight (2–4 sentences). Be specific: highlight who leads or lags, what might explain it, and one practical takeaway. No bullet points—plain prose. Do not give buy/sell advice.`;
+const SYSTEM = `You are a macro and markets analyst for QuantivTrade. Given a comparison of 2–4 countries on one main metric plus GDP growth, inflation, and population where available, write a short comparative insight (2–4 sentences). Be specific: highlight who leads or lags, what might explain it, and one practical takeaway. No bullet points—plain prose. Do not give buy/sell advice.`;
 
 type CountryRow = {
   name: string;

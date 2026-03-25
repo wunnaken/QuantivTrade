@@ -3,8 +3,8 @@
  * Scores: 40% community (localStorage posts), 60% news (API/Claude). See dev notes.
  */
 
-export const SENTIMENT_SNAPSHOTS_KEY = "xchange-sentiment-snapshots";
-export const SENTIMENT_ONBOARDING_KEY = "xchange-sentiment-onboarding-seen";
+export const SENTIMENT_SNAPSHOTS_KEY = "quantivtrade-sentiment-snapshots";
+export const SENTIMENT_ONBOARDING_KEY = "quantivtrade-sentiment-onboarding-seen";
 const MAX_SNAPSHOTS_DAYS = 30;
 const SNAPSHOT_INTERVAL_MS = 30 * 60 * 1000;
 
@@ -177,7 +177,7 @@ export function generateInitialSnapshots(): SentimentSnapshot[] {
 export function computeCommunityScore(sector: SectorId): number {
   if (typeof window === "undefined") return 50;
   try {
-    const raw = window.localStorage.getItem("xchange-demo-posts");
+    const raw = window.localStorage.getItem("quantivtrade-demo-posts");
     if (!raw) return 50;
     const posts = JSON.parse(raw) as Array<{ text?: string; date?: string }>;
     if (!Array.isArray(posts)) return 50;
@@ -244,7 +244,7 @@ export type DriverPost = { text: string; date: string; sentiment: "bullish" | "b
 export function getSectorDriverPosts(sector: SectorId): DriverPost[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem("xchange-demo-posts");
+    const raw = window.localStorage.getItem("quantivtrade-demo-posts");
     if (!raw) return [];
     const posts = JSON.parse(raw) as Array<{ text?: string; date?: string }>;
     if (!Array.isArray(posts)) return [];

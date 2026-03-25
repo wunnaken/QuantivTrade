@@ -3,8 +3,13 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { XchangeLogoImage } from "./XchangeLogoImage";
+import { QuantivTradeLogoImage } from "./XchangeLogoImage";
 import { getCachedBriefing, setCachedBriefing, clearCachedBriefing } from "../lib/briefing";
+import {
+  hasPreferences,
+  type BriefingPreferences,
+} from "../lib/briefing-preferences";
+import { BriefingPreferencesForm } from "./BriefingPreferencesForm";
 
 const BG = "#0A0E1A";
 
@@ -35,7 +40,7 @@ function getGreeting(): string {
   return "Good Evening";
 }
 
-function getMarketsStatus(): { text: string; sub?: string } {
+function getMarketsStatus(): { text: string } {
   const now = new Date();
   const et = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
   const day = et.getDay();
@@ -64,20 +69,36 @@ export function MorningBriefing({
   skipAnimation = false,
   onClose,
   cachedFetchedAt,
+  isPremium = false,
+  preferences = null,
+  onPreferencesSaved,
 }: {
   skipAnimation?: boolean;
   onClose: () => void;
   cachedFetchedAt?: string | null;
+  isPremium?: boolean;
+  /** Pass loaded preferences from the parent (DB-backed). */
+  preferences?: BriefingPreferences | null;
+  /** Called after the user saves preferences inside the briefing. */
+  onPreferencesSaved?: (prefs: BriefingPreferences) => void;
 }) {
   const router = useRouter();
-  const [phase, setPhase] = useState<number | "loading" | "content">(skipAnimation ? "loading" : 1);
+  const needsSetup = isPremium && !hasPreferences(preferences);
+  const [phase, setPhase] = useState<number | "loading" | "prefs" | "content">(() => {
+    if (skipAnimation) return "loading";
+    if (needsSetup) return "prefs";
+    return 1;
+  });
   const [briefing, setBriefing] = useState<BriefingData | null>(null);
   const [loadingLineIndex, setLoadingLineIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<string | null>(cachedFetchedAt ?? null);
+  const [showPrefsEdit, setShowPrefsEdit] = useState(false);
+  // Local copy of prefs so edits inside briefing reflect immediately
+  const [activePrefs, setActivePrefs] = useState<BriefingPreferences | null>(preferences ?? null);
   const progressRef = useRef<HTMLDivElement>(null);
 
-  const fetchBriefing = useCallback(async (forceRefresh = false) => {
+  const fetchBriefing = useCallback(async (forceRefresh = false, overridePrefs?: BriefingPreferences | null) => {
     if (!forceRefresh) {
       const cached = getCachedBriefing();
       if (cached?.data && typeof cached.data === "object" && "headline" in cached.data) {
@@ -90,7 +111,16 @@ export function MorningBriefing({
       clearCachedBriefing();
     }
     try {
-      const res = await fetch("/api/morning-briefing", { credentials: "include", cache: "no-store" });
+      const prefs = overridePrefs !== undefined ? overridePrefs : activePrefs;
+      const usePrefs = isPremium && hasPreferences(prefs) ? prefs : null;
+      const res = await fetch("/api/morning-briefing", {
+        method: usePrefs ? "POST" : "GET",
+        credentials: "include",
+        cache: "no-store",
+        ...(usePrefs
+          ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: usePrefs }) }
+          : {}),
+      });
       const data = await res.json();
       if (!res.ok) {
         setError(data?.error ?? "Failed to load briefing");
@@ -105,7 +135,7 @@ export function MorningBriefing({
       setError(e instanceof Error ? e.message : "Failed to load briefing");
       setPhase("content");
     }
-  }, []);
+  }, [isPremium, activePrefs]);
 
   useLayoutEffect(() => {
     if (skipAnimation && typeof window !== "undefined") {
@@ -120,6 +150,7 @@ export function MorningBriefing({
   }, [skipAnimation]);
 
   useEffect(() => {
+    if (phase === "prefs") return;
     if (skipAnimation) {
       const cached = getCachedBriefing();
       if (cached?.data && typeof cached.data === "object" && "headline" in cached.data) return;
@@ -129,15 +160,12 @@ export function MorningBriefing({
     fetchBriefing();
     const t = setTimeout(() => setPhase(3), 1500);
     return () => clearTimeout(t);
-  }, [skipAnimation, fetchBriefing]);
-
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [skipAnimation, phase]);
 
   useEffect(() => {
     if (phase !== "loading" && phase !== 3) return;
-    const id = setInterval(() => {
-      setLoadingLineIndex((i) => (i + 1) % LOADING_LINES.length);
-    }, 500);
+    const id = setInterval(() => setLoadingLineIndex((i) => (i + 1) % LOADING_LINES.length), 500);
     return () => clearInterval(id);
   }, [phase]);
 
@@ -156,49 +184,80 @@ export function MorningBriefing({
     requestAnimationFrame(tick);
   }, [phase]);
 
-  const handleSkip = useCallback(() => {
-    if (phase === "content" && briefing) return;
-    if (skipAnimation) {
-      fetchBriefing();
-      return;
-    }
-    setPhase("loading");
-    fetchBriefing();
-  }, [phase, skipAnimation, briefing, fetchBriefing]);
-
-  const dateStr = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const dateStr = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
   const markets = getMarketsStatus();
   const greeting = getGreeting();
 
-  if (phase === "content" && (briefing || error)) {
+  // Preferences setup screen
+  if (phase === "prefs") {
     return (
-      <div
-        className="fixed inset-0 z-[100] flex flex-col overflow-hidden bg-[#0A0E1A]"
-        style={{ backgroundColor: BG }}
-        aria-live="polite"
-      >
+      <div className="fixed inset-0 z-[100] flex flex-col overflow-hidden" style={{ backgroundColor: BG }} aria-live="polite">
         <div className="flex-1 overflow-y-auto">
           <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0A0E1A]/95 px-4 py-3 backdrop-blur">
             <div className="flex items-center gap-3">
-              <XchangeLogoImage size={36} />
+              <QuantivTradeLogoImage size={36} />
               <span className="font-semibold text-zinc-100">Morning Briefing</span>
             </div>
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-zinc-500">{dateStr}</span>
-              {fetchedAt && (
-                <span className="text-xs text-zinc-500">Updated at {formatBriefingTime(fetchedAt)}</span>
+            <button type="button" onClick={onClose} className="rounded p-2 text-zinc-400 hover:bg-white/10 hover:text-zinc-200" aria-label="Close">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </header>
+          <div className="mx-auto max-w-2xl px-4 py-10">
+            <h1 className="text-2xl font-bold text-zinc-100">Personalize Your Briefing</h1>
+            <p className="mt-2 text-sm text-zinc-400">
+              Tell us about your trading preferences and we&apos;ll tailor every morning briefing to what matters most to you.
+            </p>
+            <div className="mt-8">
+              <BriefingPreferencesForm
+                initialPrefs={activePrefs}
+                onSave={(saved) => {
+                  setActivePrefs(saved);
+                  onPreferencesSaved?.(saved);
+                  setPhase("loading");
+                  fetchBriefing(true, saved);
+                }}
+                onCancel={() => {
+                  setPhase("loading");
+                  fetchBriefing();
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Content screen
+  if (phase === "content" && (briefing || error)) {
+    return (
+      <div className="fixed inset-0 z-[100] flex flex-col overflow-hidden" style={{ backgroundColor: BG }} aria-live="polite">
+        <div className="flex-1 overflow-y-auto">
+          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0A0E1A]/95 px-4 py-3 backdrop-blur">
+            <div className="flex items-center gap-3">
+              <QuantivTradeLogoImage size={36} />
+              <span className="font-semibold text-zinc-100">Morning Briefing</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="hidden text-sm text-zinc-500 sm:block">{dateStr}</span>
+              {fetchedAt && <span className="text-xs text-zinc-500">Updated {formatBriefingTime(fetchedAt)}</span>}
+              {isPremium && (
+                <button
+                  type="button"
+                  onClick={() => setShowPrefsEdit((v) => !v)}
+                  className="rounded p-2 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                  aria-label="Edit briefing preferences"
+                  title="Personalize briefing"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </button>
               )}
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded p-2 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
-                aria-label="Close"
-              >
+              <button type="button" onClick={onClose} className="rounded p-2 text-zinc-400 hover:bg-white/10 hover:text-zinc-200" aria-label="Close">
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -206,14 +265,33 @@ export function MorningBriefing({
             </div>
           </header>
 
+          {showPrefsEdit && (
+            <div className="border-b border-white/10 bg-[#0F1520] px-4 py-6">
+              <div className="mx-auto max-w-2xl">
+                <h3 className="mb-4 text-sm font-semibold text-zinc-200">Edit Briefing Preferences</h3>
+                <BriefingPreferencesForm
+                  compact
+                  initialPrefs={activePrefs}
+                  onSave={(saved) => {
+                    setActivePrefs(saved);
+                    onPreferencesSaved?.(saved);
+                    setShowPrefsEdit(false);
+                    clearCachedBriefing();
+                    setBriefing(null);
+                    setError(null);
+                    setPhase("loading");
+                    fetchBriefing(true, saved);
+                  }}
+                  onCancel={() => setShowPrefsEdit(false)}
+                />
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="mx-auto max-w-2xl px-4 py-12 text-center">
               <p className="text-zinc-400">{error}</p>
-              <button
-                type="button"
-                onClick={() => { setError(null); setPhase("loading"); fetchBriefing(); }}
-                className="mt-4 rounded-lg bg-[var(--accent-color)] px-4 py-2 text-sm font-medium text-[#020308]"
-              >
+              <button type="button" onClick={() => { setError(null); setPhase("loading"); fetchBriefing(true); }} className="mt-4 rounded-lg bg-[var(--accent-color)] px-4 py-2 text-sm font-medium text-[#020308]">
                 Retry
               </button>
             </div>
@@ -221,15 +299,7 @@ export function MorningBriefing({
 
           {briefing && !error && (
             <div className="mx-auto max-w-3xl px-4 py-8" style={{ animation: "briefing-content-slide-up 0.5s ease-out" }}>
-              <div
-                className={`mb-6 rounded-lg px-6 py-4 ${
-                  briefing.moodColor === "green"
-                    ? "bg-gradient-to-r from-emerald-600/30 to-emerald-500/20"
-                    : briefing.moodColor === "red"
-                    ? "bg-gradient-to-r from-red-600/30 to-red-500/20"
-                    : "bg-gradient-to-r from-amber-600/30 to-amber-500/20"
-                }`}
-              >
+              <div className={`mb-6 rounded-lg px-6 py-4 ${briefing.moodColor === "green" ? "bg-gradient-to-r from-emerald-600/30 to-emerald-500/20" : briefing.moodColor === "red" ? "bg-gradient-to-r from-red-600/30 to-red-500/20" : "bg-gradient-to-r from-amber-600/30 to-amber-500/20"}`}>
                 <p className="text-2xl font-bold text-white">{briefing.marketMood}</p>
               </div>
 
@@ -237,31 +307,14 @@ export function MorningBriefing({
                 {briefing.headline}
               </h1>
 
-              <p className="mx-auto mb-10 max-w-[700px] text-center text-zinc-300 leading-relaxed">
-                {briefing.overview}
-              </p>
+              <p className="mx-auto mb-10 max-w-[700px] text-center text-zinc-300 leading-relaxed">{briefing.overview}</p>
 
               <section className="mb-10">
                 <h2 className="mb-4 text-lg font-semibold text-zinc-100">Top Stories</h2>
                 <div className="grid gap-4 md:grid-cols-3">
                   {briefing.topStories?.slice(0, 3).map((s, i) => (
-                    <div
-                      key={i}
-                      className={`rounded-xl border-l-4 bg-[#0F1520] p-4 ${
-                        s.impact === "Bullish"
-                          ? "border-emerald-500"
-                          : s.impact === "Bearish"
-                          ? "border-red-500"
-                          : "border-zinc-500"
-                      }`}
-                    >
-                      <span
-                        className={`text-xs font-medium ${
-                          s.impact === "Bullish" ? "text-emerald-400" : s.impact === "Bearish" ? "text-red-400" : "text-zinc-400"
-                        }`}
-                      >
-                        {s.impact}
-                      </span>
+                    <div key={i} className={`rounded-xl border-l-4 bg-[#0F1520] p-4 ${s.impact === "Bullish" ? "border-emerald-500" : s.impact === "Bearish" ? "border-red-500" : "border-zinc-500"}`}>
+                      <span className={`text-xs font-medium ${s.impact === "Bullish" ? "text-emerald-400" : s.impact === "Bearish" ? "text-red-400" : "text-zinc-400"}`}>{s.impact}</span>
                       <p className="mt-1 font-medium text-zinc-200">{s.title}</p>
                       <p className="mt-2 text-sm text-zinc-500">{s.detail}</p>
                     </div>
@@ -306,9 +359,7 @@ export function MorningBriefing({
               </section>
 
               <section className="mb-10">
-                <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold text-zinc-100">
-                  <span>🌐</span> Geopolitical Pulse
-                </h2>
+                <h2 className="mb-2 text-lg font-semibold text-zinc-100">Geopolitical Pulse</h2>
                 <div className="rounded-xl border border-white/10 bg-[#0F1520] p-4">
                   <p className="text-zinc-300">{briefing.geopolitical}</p>
                 </div>
@@ -317,9 +368,7 @@ export function MorningBriefing({
               <section className="mb-10">
                 <div className="rounded-xl p-[2px]" style={{ background: "linear-gradient(to right, var(--accent-color), rgba(245,158,11,0.8))" }}>
                   <div className="rounded-[10px] bg-[#0F1520] p-4">
-                    <div className="flex items-center gap-2 text-lg font-semibold text-zinc-100">
-                      <span>⚡</span> Trader&apos;s Edge
-                    </div>
+                    <div className="text-lg font-semibold text-zinc-100">Trader&apos;s Edge</div>
                     <p className="mt-2 text-zinc-300">{briefing.tradersEdge}</p>
                   </div>
                 </div>
@@ -327,25 +376,14 @@ export function MorningBriefing({
 
               <p className="text-center italic text-zinc-500">&ldquo;{briefing.oneLiner}&rdquo;</p>
 
-              <div className="mt-10 rounded-xl border border-[#3B82F6]/30 bg-[#3B82F6]/10 p-4">
-                <p className="text-sm font-medium text-white">💡 Tip: Verified Traders get their morning briefing personalized to their exact portfolio and trade journal.</p>
-                <Link href="/verify" className="mt-2 inline-block text-sm font-medium text-[#3B82F6] hover:underline">Upgrade for $9/month →</Link>
-              </div>
-
               <footer className="mt-12 flex flex-col items-center gap-4 border-t border-white/10 pt-8">
-                <p className="text-center text-xs text-zinc-500">
-                  AI-generated briefing based on current market data. Not financial advice.
-                </p>
+                <p className="text-center text-xs text-zinc-500">AI-generated briefing based on current market data. Not financial advice.</p>
                 <Link
                   href="/feed"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onClose();
-                    router.push("/feed");
-                  }}
+                  onClick={(e) => { e.preventDefault(); onClose(); router.push("/feed"); }}
                   className="rounded-full bg-[var(--accent-color)] px-6 py-2.5 font-semibold text-[#020308] transition-opacity hover:opacity-90"
                 >
-                  Enter Xchange →
+                  Enter QuantivTrade →
                 </Link>
               </footer>
             </div>
@@ -355,54 +393,27 @@ export function MorningBriefing({
     );
   }
 
-  const showSkip = phase !== "content" || !briefing;
-  const showGreeting = phase === 1;
-  const showLoadingUI = phase === 3 || phase === "loading";
-
+  // Intro / loading screens (no skip button)
   return (
-    <div
-      className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden"
-      style={{ backgroundColor: BG }}
-      aria-live="polite"
-      aria-label="Morning Briefing"
-    >
-      {showSkip && (
-        <button
-          type="button"
-          onClick={handleSkip}
-          className="absolute right-6 top-6 z-10 px-6 py-3 text-xl text-zinc-500 transition-colors hover:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]"
-        >
-          Skip →
-        </button>
-      )}
-
-      {/* Good morning — fixed 1.5s */}
-      {showGreeting && (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden" style={{ backgroundColor: BG }} aria-live="polite" aria-label="Morning Briefing">
+      {phase === 1 && (
         <div className="flex w-full flex-col items-center px-6 transition-opacity duration-300 ease-out">
           <div className="absolute left-6 top-6">
-            <XchangeLogoImage size={44} />
+            <QuantivTradeLogoImage size={44} />
           </div>
           <p className="text-4xl font-bold text-zinc-100 md:text-5xl">{greeting}</p>
           <p className="mt-2 text-xl text-zinc-400">{dateStr}</p>
           <p className="mt-1 text-lg text-[var(--accent-color)]">{markets.text}</p>
         </div>
       )}
-
-      {/* Spinning logo + cycling text — no minimum, until brief loads */}
-      {showLoadingUI && (
+      {(phase === 3 || phase === "loading") && (
         <div className="flex flex-col items-center justify-center gap-6 px-6">
           <div className="flex h-20 w-20 items-center justify-center" style={{ animation: "briefing-logo-spin 3s linear infinite" }}>
-            <XchangeLogoImage size={80} />
+            <QuantivTradeLogoImage size={80} />
           </div>
-          <p className="min-h-[2rem] text-center text-lg text-zinc-300">
-            {LOADING_LINES[loadingLineIndex]}
-          </p>
+          <p className="min-h-[2rem] text-center text-lg text-zinc-300">{LOADING_LINES[loadingLineIndex]}</p>
           <div className="h-1 w-64 overflow-hidden rounded-full bg-white/10">
-            <div
-              ref={progressRef}
-              className="h-full rounded-full transition-[width] duration-300 ease-out"
-              style={{ width: "0%", backgroundColor: "var(--accent-color)" }}
-            />
+            <div ref={progressRef} className="h-full rounded-full transition-[width] duration-300 ease-out" style={{ width: "0%", backgroundColor: "var(--accent-color)" }} />
           </div>
         </div>
       )}

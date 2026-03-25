@@ -9,9 +9,9 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  ReferenceArea,
   ReferenceLine,
 } from "recharts";
+
 type EconomicEventDetail = {
   id: string;
   name: string;
@@ -24,15 +24,8 @@ type EconomicEventDetail = {
 
 const CARD_BG = "#0F1520";
 const GRID_COLOR = "#1a2535";
-const RECESSION_FILL = "rgba(239,68,68,0.1)";
 
-const RECESSION_PERIODS: [string, string][] = [
-  ["2020-02-01", "2020-04-30"],
-  ["2007-12-01", "2009-06-30"],
-  ["2001-03-01", "2001-11-30"],
-];
-
-const FRED_CACHE_KEY = "xchange-calendar-fred-";
+const FRED_CACHE_KEY = "quantivtrade-calendar-fred-";
 const CACHE_HOURS = 24;
 
 function getCacheKey(seriesId: string, start: string, end: string) {
@@ -59,16 +52,27 @@ function saveCache(seriesId: string, start: string, end: string, data: { date: s
   } catch {}
 }
 
-// Event name -> FRED series ID (same as API)
 const EVENT_TO_FRED: Record<string, string> = {
   "cpi": "CPIAUCSL", "consumer price": "CPIAUCSL", "inflation": "CPIAUCSL",
   "core cpi": "CPILFESL", "fed funds": "FEDFUNDS", "fomc": "FEDFUNDS", "federal reserve": "FEDFUNDS",
+  "rate decision": "FEDFUNDS",
   "unemployment": "UNRATE", "gdp": "A191RL1Q225SBEA", "nonfarm payroll": "PAYEMS", "nfp": "PAYEMS",
   "jobs report": "PAYEMS", "payrolls": "PAYEMS", "retail sales": "RSXFS", "ppi": "PPIACO",
   "producer price": "PPIACO", "consumer sentiment": "UMCSENT", "housing starts": "HOUST",
   "ism manufacturing": "MANEMP", "jobless claims": "ICSA", "10y": "DGS10", "10 year": "DGS10",
   "treasury 10": "DGS10", "2y": "DGS2", "2 year": "DGS2", "treasury 2": "DGS2",
   "yield curve": "T10Y2Y", "pce": "PCEPI", "pce inflation": "PCEPI", "core pce": "PCEPILFE",
+  "nonfarm payrolls": "PAYEMS",
+  "initial jobless claims": "ICSA",
+  "state unemployment": "ICSA",
+  "advance trade": "BOPTEXP",
+  "chicago fed": "CFNAI",
+  "industrial production": "INDPRO",
+  "ism manufacturing pmi": "MANEMP",
+  "ism services pmi": "NMFBAI",
+  "trade balance": "BOPGSTB",
+  "durable goods": "DGORDER",
+  "personal income": "PCEPI",
 };
 
 function getSeriesId(eventName: string): string | null {
@@ -113,6 +117,8 @@ const COMPARE_OPTIONS: { label: string; id: string }[] = [
   { label: "Yield Curve", id: "T10Y2Y" },
   { label: "Nonfarm Payrolls", id: "PAYEMS" },
   { label: "Retail Sales", id: "RSXFS" },
+  { label: "PCE Inflation", id: "PCEPI" },
+  { label: "Core PCE", id: "PCEPILFE" },
 ];
 
 export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps) {
@@ -121,10 +127,10 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
   const [loading, setLoading] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [compareSeriesId, setCompareSeriesId] = useState<string | null>(null);
-  const [compareObservations, setCompareObservations] = useState<{ date: string; value: number }[]>([]);
+  const [aiCompareId, setAiCompareId] = useState<string | null>(null);
 
   const { start, end } = getStartEnd(range);
+
   const fetchData = useCallback(async () => {
     const sid = getSeriesId(event.name);
     if (!sid) {
@@ -159,19 +165,11 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
     fetchData();
   }, [fetchData]);
 
+  // Reset AI analysis when event changes
   useEffect(() => {
-    if (!compareSeriesId || !start || !end) {
-      setCompareObservations([]);
-      return;
-    }
-    fetch(
-      `/api/calendar/fred?series_id=${encodeURIComponent(compareSeriesId)}&observation_start=${start}&observation_end=${end}`,
-      { cache: "no-store" }
-    )
-      .then((r) => r.json())
-      .then((d) => setCompareObservations((d.observations ?? []) as { date: string; value: number }[]))
-      .catch(() => setCompareObservations([]));
-  }, [compareSeriesId, start, end]);
+    setAiAnalysis(null);
+    setAiCompareId(null);
+  }, [event.id]);
 
   const handleGetAIAnalysis = useCallback(async () => {
     const sid = getSeriesId(event.name);
@@ -180,8 +178,48 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
     try {
       const currentVal = observations[observations.length - 1]?.value ?? event.actual ?? "";
       const prevVal = observations[observations.length - 2]?.value;
-      const trend = prevVal != null ? (currentVal > prevVal ? "up" : currentVal < prevVal ? "down" : "flat") : "unknown";
-      const dataSummary = `Current: ${currentVal}, 10Y avg: ${observations.length ? (observations.reduce((a, o) => a + o.value, 0) / observations.length).toFixed(2) : "n/a"}, high/low over period.`;
+      const trend =
+        prevVal != null
+          ? Number(currentVal) > prevVal
+            ? "up"
+            : Number(currentVal) < prevVal
+            ? "down"
+            : "flat"
+          : "unknown";
+      const avg = (
+        observations.reduce((a, o) => a + o.value, 0) / observations.length
+      ).toFixed(2);
+      const dataSummary = `Current: ${currentVal}, trend: ${trend}, 10Y avg: ${avg}.`;
+
+      // Optionally fetch comparison series data for AI context
+      let compareWith: { label: string; summary: string } | null = null;
+      if (aiCompareId) {
+        const compareLabel =
+          COMPARE_OPTIONS.find((o) => o.id === aiCompareId)?.label ?? aiCompareId;
+        try {
+          const { start: cs, end: ce } = getStartEnd("10Y");
+          const cRes = await fetch(
+            `/api/calendar/fred?series_id=${encodeURIComponent(aiCompareId)}&observation_start=${cs}&observation_end=${ce}`,
+            { cache: "no-store" }
+          );
+          const cData = await cRes.json();
+          const cObs = (cData.observations ?? []) as { date: string; value: number }[];
+          if (cObs.length > 1) {
+            const cCurrent = cObs[cObs.length - 1].value;
+            const cPrev = cObs[cObs.length - 2].value;
+            const cTrend =
+              cCurrent > cPrev ? "up" : cCurrent < cPrev ? "down" : "flat";
+            const cAvg = (
+              cObs.reduce((a, o) => a + o.value, 0) / cObs.length
+            ).toFixed(2);
+            compareWith = {
+              label: compareLabel,
+              summary: `${compareLabel}: current ${cCurrent.toFixed(2)}, trend ${cTrend}, 10Y avg ${cAvg}.`,
+            };
+          }
+        } catch {}
+      }
+
       const res = await fetch("/api/calendar/economic-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -190,6 +228,7 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
           currentValue: currentVal,
           trend,
           dataSummary,
+          compareWith,
         }),
       });
       if (res.ok) {
@@ -199,7 +238,7 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
     } finally {
       setAiLoading(false);
     }
-  }, [event.name, event.actual, observations]);
+  }, [event.name, event.actual, observations, aiCompareId]);
 
   const current = observations.length > 0 ? observations[observations.length - 1]?.value : null;
   const previous = observations.length > 1 ? observations[observations.length - 2]?.value : null;
@@ -213,14 +252,12 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
   const highYear = highIdx >= 0 && observations[highIdx] ? observations[highIdx].date.slice(0, 4) : "";
   const lowYear = lowIdx >= 0 && observations[lowIdx] ? observations[lowIdx].date.slice(0, 4) : "";
 
-  const chartData = useMemo(() => {
-    const primary = observations.map((o) => ({ ...o, name: o.date, value: o.value }));
-    if (!compareSeriesId || compareObservations.length === 0) {
-      return primary.map((p) => ({ ...p, value2: undefined }));
-    }
-    const byDate = new Map(compareObservations.map((o) => [o.date, o.value]));
-    return primary.map((p) => ({ ...p, value2: byDate.get(p.date) }));
-  }, [observations, compareSeriesId, compareObservations]);
+  const chartData = useMemo(
+    () => observations.map((o) => ({ ...o, name: o.date })),
+    [observations]
+  );
+
+  const compareLabel = COMPARE_OPTIONS.find((o) => o.id === aiCompareId)?.label;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
@@ -232,18 +269,43 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
       >
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0F1520]/95 px-4 py-3 backdrop-blur">
           <h2 className="text-lg font-semibold text-zinc-100">{event.name}</h2>
-          <button type="button" onClick={onClose} className="rounded p-2 text-zinc-400 hover:bg-white/10 hover:text-white" aria-label="Close">
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-2 text-zinc-400 hover:bg-white/10 hover:text-white"
+            aria-label="Close"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
-        <div className="p-4 space-y-4">
+
+        <div className="space-y-4 p-4">
           <p className="text-sm text-zinc-400">{event.description}</p>
+
           <div className="flex flex-wrap gap-4 text-sm">
-            {event.actual != null && <span><span className="text-zinc-500">Current / Latest:</span> <span className="text-white font-medium">{event.actual}</span></span>}
-            {event.previous != null && <span><span className="text-zinc-500">Previous:</span> <span className="text-zinc-300">{event.previous}</span></span>}
-            {event.date && <span><span className="text-zinc-500">Date:</span> <span className="text-zinc-300">{event.date}</span></span>}
+            {event.actual != null && (
+              <span>
+                <span className="text-zinc-500">Current / Latest: </span>
+                <span className="font-medium text-white">{event.actual}</span>
+              </span>
+            )}
+            {event.previous != null && (
+              <span>
+                <span className="text-zinc-500">Previous: </span>
+                <span className="text-zinc-300">{event.previous}</span>
+              </span>
+            )}
+            {event.date && (
+              <span>
+                <span className="text-zinc-500">Date: </span>
+                <span className="text-zinc-300">{event.date}</span>
+              </span>
+            )}
           </div>
 
+          {/* Range selectors only — no compare dropdown */}
           <div className="flex flex-wrap items-center gap-2">
             {(["1Y", "3Y", "5Y", "10Y", "Max"] as RangeKey[]).map((r) => (
               <button
@@ -251,47 +313,60 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
                 type="button"
                 onClick={() => setRange(r)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                  range === r ? "bg-[var(--accent-color)] text-[#020308]" : "bg-white/10 text-zinc-400 hover:bg-white/15"
+                  range === r
+                    ? "bg-[var(--accent-color)] text-[#020308]"
+                    : "bg-white/10 text-zinc-400 hover:bg-white/15"
                 }`}
               >
                 {r}
               </button>
             ))}
-            <span className="text-zinc-500">|</span>
-            <select
-              value={compareSeriesId ?? ""}
-              onChange={(e) => setCompareSeriesId(e.target.value || null)}
-              className="rounded-lg border border-white/20 bg-black/40 px-2 py-1.5 text-xs text-zinc-200"
-            >
-              <option value="">Compare with...</option>
-              {COMPARE_OPTIONS.filter((o) => o.id !== getSeriesId(event.name)).map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
-              ))}
-            </select>
           </div>
 
+          {/* Chart */}
           {loading ? (
-            <div className="h-64 flex items-center justify-center text-zinc-500">Loading chart…</div>
+            <div className="flex h-64 items-center justify-center text-zinc-500">Loading chart…</div>
           ) : chartData.length > 0 ? (
             <div className="h-64 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={GRID_COLOR} />
-                  {RECESSION_PERIODS.map(([s, e], i) => (
-                    <ReferenceArea key={i} x1={s} x2={e} fill={RECESSION_FILL} />
-                  ))}
-                  {avg10y != null && <ReferenceLine y={avg10y} stroke="#6B7280" strokeDasharray="4 4" />}
-                  <XAxis dataKey="date" tick={{ fill: "#9CA3AF", fontSize: 10 }} tickFormatter={(v) => (v || "").slice(0, 4)} />
-                  <YAxis yAxisId="left" tick={{ fill: "#9CA3AF", fontSize: 10 }} domain={["auto", "auto"]} />
-                  {compareSeriesId && <YAxis yAxisId="right" orientation="right" tick={{ fill: "#60A5FA", fontSize: 10 }} domain={["auto", "auto"]} />}
+                  {avg10y != null && (
+                    <ReferenceLine y={avg10y} stroke="#6B7280" strokeDasharray="4 4" />
+                  )}
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: "#9CA3AF", fontSize: 10 }}
+                    tickFormatter={(v) => (v || "").slice(0, 4)}
+                  />
+                  <YAxis
+                    tick={{ fill: "#9CA3AF", fontSize: 10 }}
+                    domain={["auto", "auto"]}
+                  />
                   <Tooltip
-                    contentStyle={{ backgroundColor: "#1a2535", border: "1px solid #374151", borderRadius: 8 }}
-                    labelStyle={{ color: "#E5E7EB" }}
-                    formatter={(value: unknown) => [typeof value === "number" ? value.toFixed(2) : String(value ?? ""), "Value"]}
+                    contentStyle={{
+                      backgroundColor: "#0a0f1a",
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                    labelStyle={{ color: "#a1a1aa" }}
+                    itemStyle={{ color: "#e4e4e7" }}
+                    cursor={{ stroke: "rgba(255,255,255,0.1)", strokeWidth: 1 }}
+                    formatter={(value: unknown) => [
+                      typeof value === "number" ? value.toFixed(2) : String(value ?? ""),
+                      event.name,
+                    ]}
                     labelFormatter={(label) => `Date: ${label}`}
                   />
-                  <Line type="monotone" dataKey="value" stroke="var(--accent-color)" strokeWidth={2} dot={false} activeDot={{ r: 4, fill: "var(--accent-color)" }} yAxisId="left" />
-                  {compareSeriesId && <Line type="monotone" dataKey="value2" stroke="#60A5FA" strokeWidth={1.5} dot={false} activeDot={{ r: 3 }} yAxisId="right" />}
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke="var(--accent-color)"
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4, fill: "var(--accent-color)" }}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -299,37 +374,121 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
             <p className="text-sm text-zinc-500">No historical data for this indicator.</p>
           )}
 
+          {/* Stats grid */}
           <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-black/20 p-3 text-xs sm:grid-cols-3">
-            {current != null && <div><span className="text-zinc-500">Current:</span> <span className="text-zinc-200">{current.toFixed(2)}</span></div>}
-            {previous != null && <div><span className="text-zinc-500">Previous:</span> <span className="text-zinc-200">{previous.toFixed(2)}</span></div>}
-            {oneYearAgo != null && <div><span className="text-zinc-500">1 Year Ago:</span> <span className="text-zinc-200">{oneYearAgo.toFixed(2)}</span></div>}
-            {allTimeHigh != null && <div><span className="text-zinc-500">All-Time High:</span> <span className="text-zinc-200">{allTimeHigh.toFixed(2)} ({highYear})</span></div>}
-            {allTimeLow != null && <div><span className="text-zinc-500">All-Time Low:</span> <span className="text-zinc-200">{allTimeLow.toFixed(2)} ({lowYear})</span></div>}
-            {avg10y != null && <div><span className="text-zinc-500">10Y Average:</span> <span className="text-zinc-200">{avg10y.toFixed(2)}</span></div>}
+            {current != null && (
+              <div>
+                <span className="text-zinc-500">Current: </span>
+                <span className="text-zinc-200">{current.toFixed(2)}</span>
+              </div>
+            )}
+            {previous != null && (
+              <div>
+                <span className="text-zinc-500">Previous: </span>
+                <span className="text-zinc-200">{previous.toFixed(2)}</span>
+              </div>
+            )}
+            {oneYearAgo != null && (
+              <div>
+                <span className="text-zinc-500">1 Year Ago: </span>
+                <span className="text-zinc-200">{oneYearAgo.toFixed(2)}</span>
+              </div>
+            )}
+            {allTimeHigh != null && (
+              <div>
+                <span className="text-zinc-500">All-Time High: </span>
+                <span className="text-zinc-200">
+                  {allTimeHigh.toFixed(2)} ({highYear})
+                </span>
+              </div>
+            )}
+            {allTimeLow != null && (
+              <div>
+                <span className="text-zinc-500">All-Time Low: </span>
+                <span className="text-zinc-200">
+                  {allTimeLow.toFixed(2)} ({lowYear})
+                </span>
+              </div>
+            )}
+            {avg10y != null && (
+              <div>
+                <span className="text-zinc-500">10Y Average: </span>
+                <span className="text-zinc-200">{avg10y.toFixed(2)}</span>
+              </div>
+            )}
           </div>
 
-          <div className="space-y-2">
+          {/* AI Analysis section */}
+          <div className="space-y-3">
+            {/* Compare-with chip selector */}
+            <div>
+              <p className="mb-2 text-xs font-medium text-zinc-400">
+                Compare with (AI will analyze relationship)
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {COMPARE_OPTIONS.filter((o) => o.id !== getSeriesId(event.name)).map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => setAiCompareId((prev) => (prev === o.id ? null : o.id))}
+                    className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+                      aiCompareId === o.id
+                        ? "border border-[var(--accent-color)]/50 bg-[var(--accent-color)]/15 text-[var(--accent-color)]"
+                        : "border border-white/10 text-zinc-400 hover:border-white/20 hover:text-zinc-300"
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <button
               type="button"
               onClick={handleGetAIAnalysis}
               disabled={aiLoading || observations.length < 2}
               className="rounded-lg bg-[var(--accent-color)]/20 px-4 py-2 text-sm font-medium text-[var(--accent-color)] hover:bg-[var(--accent-color)]/30 disabled:opacity-50"
             >
-              {aiLoading ? "Analyzing…" : "Get AI Analysis"}
+              {aiLoading
+                ? "Analyzing…"
+                : compareLabel
+                ? `Analyze ${event.name} vs ${compareLabel}`
+                : "Get AI Analysis"}
             </button>
+
             {aiAnalysis && (
-              <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm space-y-2">
+              <div className="space-y-2 rounded-lg border border-white/10 bg-black/20 p-3 text-sm">
                 <p className="flex items-center gap-2">
-                  <span className={`rounded px-2 py-0.5 text-xs font-medium ${
-                    aiAnalysis.trendColor === "green" ? "bg-emerald-500/20 text-emerald-400" :
-                    aiAnalysis.trendColor === "red" ? "bg-red-500/20 text-red-400" : "bg-amber-500/20 text-amber-400"
-                  }`}>
+                  <span
+                    className={`rounded px-2 py-0.5 text-xs font-medium ${
+                      aiAnalysis.trendColor === "green"
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : aiAnalysis.trendColor === "red"
+                        ? "bg-red-500/20 text-red-400"
+                        : "bg-amber-500/20 text-amber-400"
+                    }`}
+                  >
                     {aiAnalysis.trend}
                   </span>
+                  {compareLabel && (
+                    <span className="text-xs text-zinc-500">
+                      vs {compareLabel}
+                    </span>
+                  )}
                 </p>
                 <p className="text-zinc-300">{aiAnalysis.summary}</p>
-                {aiAnalysis.marketImpact && <p className="text-xs text-zinc-500"><span className="font-medium text-zinc-400">Market impact:</span> {aiAnalysis.marketImpact}</p>}
-                {aiAnalysis.watchFor && <p className="text-xs text-zinc-500"><span className="font-medium text-zinc-400">Watch for:</span> {aiAnalysis.watchFor}</p>}
+                {aiAnalysis.marketImpact && (
+                  <p className="text-xs text-zinc-500">
+                    <span className="font-medium text-zinc-400">Market impact: </span>
+                    {aiAnalysis.marketImpact}
+                  </p>
+                )}
+                {aiAnalysis.watchFor && (
+                  <p className="text-xs text-zinc-500">
+                    <span className="font-medium text-zinc-400">Watch for: </span>
+                    {aiAnalysis.watchFor}
+                  </p>
+                )}
               </div>
             )}
           </div>

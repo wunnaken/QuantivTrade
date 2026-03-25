@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
 
-const PLANS_TAB_HIDDEN_KEY = "xchange-plans-tab-hidden";
-const PLANS_TAB_HIDDEN_AT_KEY = "xchange-plans-tab-hidden-at";
-const JUST_SIGNED_IN_KEY = "xchange-just-signed-in";
+const PLANS_TAB_HIDDEN_KEY = "quantivtrade-plans-tab-hidden";
+const PLANS_TAB_HIDDEN_AT_KEY = "quantivtrade-plans-tab-hidden-at";
+const JUST_SIGNED_IN_KEY = "quantivtrade-just-signed-in";
 const REAPPEAR_AFTER_MS = 60 * 60 * 1000; // 1 hour
 
 /** Floating Plans tab — visible to everyone (guests and signed-in). Right side, re-shows after 1h if dismissed, and when a new account is created. */

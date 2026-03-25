@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { XchangeLogoImage } from "./XchangeLogoImage";
+import { QuantivTradeLogoImage } from "./XchangeLogoImage";
 import { SiteFooter } from "./SiteFooter";
 
 export function LandingPageContent({ hasInvite = false }: { hasInvite?: boolean }) {
@@ -13,7 +13,7 @@ export function LandingPageContent({ hasInvite = false }: { hasInvite?: boolean 
             You&apos;ve been invited! Create your account to get started →
           </Link>
         ) : (
-          <span>🚀 Xchange is in Beta — Join the waitlist for early access</span>
+          <span>🚀 QuantivTrade is in Beta — Join the waitlist for early access</span>
         )}
       </div>
       <main className="mx-auto flex max-w-6xl flex-col gap-16 px-6 py-16 lg:flex-row lg:items-center lg:gap-20 lg:px-8 lg:py-24">
@@ -30,7 +30,7 @@ export function LandingPageContent({ hasInvite = false }: { hasInvite?: boolean 
             </h1>
             <p className="max-w-xl text-base text-zinc-400 sm:text-lg">
               Real-time market intelligence. Social communities. Risk-based
-              investing — all in one place. Xchange gives you the signal, the
+              investing — all in one place. QuantivTrade gives you the signal, the
               crowd, and the tools to act with confidence.
             </p>
             <p className="max-w-xl text-sm text-zinc-500 sm:text-base">
@@ -39,7 +39,7 @@ export function LandingPageContent({ hasInvite = false }: { hasInvite?: boolean 
           </div>
           <div className="flex flex-wrap items-center gap-4">
             <Link href="/auth/sign-up" className="rounded-full bg-[var(--accent-color)] px-6 py-2.5 text-sm font-semibold text-[#020308] shadow-xl shadow-[var(--accent-color)]/40 transition hover:bg-[var(--accent-color)]">
-              Join Xchange
+              Join QuantivTrade
             </Link>
             <Link href="/news" className="rounded-full border border-white/15 px-5 py-2 text-sm font-medium text-zinc-200 transition hover:border-[var(--accent-color)]/60 hover:text-[var(--accent-color)]">
               View Live Market Feed
@@ -61,14 +61,14 @@ export function LandingPageContent({ hasInvite = false }: { hasInvite?: boolean 
             <div className="pointer-events-none absolute -top-8 -right-10 h-40 w-40 rounded-full bg-[var(--accent-color)]/20 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-10 -left-8 h-40 w-40 rounded-full bg-cyan-500/15 blur-3xl" />
             <div className="mb-4 flex items-center justify-between text-xs text-zinc-400">
-              <span className="font-medium text-zinc-200">Xchange Pulse</span>
+              <span className="font-medium text-zinc-200">QuantivTrade Pulse</span>
               <span className="inline-flex items-center gap-1 rounded-full bg-[var(--accent-color)]/10 px-3 py-1 text-[11px] text-[var(--accent-color)]">
                 <span className="live-dot inline-block h-1.5 w-1.5 rounded-full text-[var(--accent-color)]" />
                 Markets Open · Live
               </span>
             </div>
             <p className="mb-4 text-[11px] text-zinc-500">
-              <strong className="text-zinc-400">Xchange Pulse</strong> is your live dashboard: key indices, market mood, and session status in one place. When markets are open, it shows real-time context so you can see at a glance whether risk is on or off.
+              <strong className="text-zinc-400">QuantivTrade Pulse</strong> is your live dashboard: key indices, market mood, and session status in one place. When markets are open, it shows real-time context so you can see at a glance whether risk is on or off.
             </p>
             <div className="grid gap-4 md:grid-cols-2">
               <Link href="/map" className="space-y-3 rounded-2xl border border-white/5 bg-white/5 p-4 backdrop-blur transition hover:border-[var(--accent-color)]/30">
@@ -83,11 +83,11 @@ export function LandingPageContent({ hasInvite = false }: { hasInvite?: boolean 
                   <strong className="text-zinc-300">Macro Radar</strong> surfaces real-time geopolitical and macro events (central banks, data releases, headlines) and ties them to your watchlists and themes. So you see why markets are moving, not just that they are.
                 </p>
               </Link>
-              <Link href="/mission" className="pulse-logo-link group flex min-h-[7.5rem] flex-col items-center justify-center gap-2 md:min-h-0" aria-label="View Xchange mission">
+              <Link href="/mission" className="pulse-logo-link group flex min-h-[7.5rem] flex-col items-center justify-center gap-2 md:min-h-0" aria-label="View QuantivTrade mission">
                 <span className="relative flex items-center justify-center">
                   <span className="pointer-events-none absolute inset-0 rounded-full bg-[var(--accent-color)]/20 opacity-0 blur-xl transition group-hover:opacity-40" aria-hidden />
                   <span className="inline-flex shrink-0 transition group-hover:scale-[1.03]">
-                    <XchangeLogoImage size={200} />
+                    <QuantivTradeLogoImage size={200} />
                   </span>
                 </span>
                 <span className="flex items-center gap-1 text-xs text-zinc-500 transition group-hover:text-[var(--accent-color)]">
@@ -105,7 +105,7 @@ export function LandingPageContent({ hasInvite = false }: { hasInvite?: boolean 
         <div className="mx-auto max-w-6xl px-6 py-14 lg:px-8 lg:py-16">
           <h2 className="text-center text-2xl font-semibold text-zinc-100 sm:text-3xl">From first trade to full-time.</h2>
           <p className="mx-auto mt-4 max-w-2xl text-center text-sm text-zinc-400 sm:text-base">
-            Xchange is built for everyone: total beginners learning the ropes and day trading experts who live by the tape. One platform, one feed, one place to get the edge.
+            QuantivTrade is built for everyone: total beginners learning the ropes and day trading experts who live by the tape. One platform, one feed, one place to get the edge.
           </p>
           <div className="mt-12 grid gap-8 sm:grid-cols-2">
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
@@ -142,7 +142,7 @@ export function LandingPageContent({ hasInvite = false }: { hasInvite?: boolean 
             <div>
               <h2 className="text-xl font-semibold text-zinc-100 sm:text-2xl">Built for how modern markets move.</h2>
               <p className="mt-2 max-w-xl text-sm text-zinc-300">
-                From social communities to real-time news and growth tools, Xchange connects global flows, narratives, and portfolios in one interface.
+                From social communities to real-time news and growth tools, QuantivTrade connects global flows, narratives, and portfolios in one interface.
               </p>
             </div>
           </div>

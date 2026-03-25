@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   }
   try {
     const res = await fetch(decoded, {
-      headers: { Accept: "image/*", "User-Agent": "Xchange-News/1.0" },
+      headers: { Accept: "image/*", "User-Agent": "QuantivTrade-News/1.0" },
       next: { revalidate: 3600 },
     });
     if (!res.ok) return new NextResponse(null, { status: res.status });

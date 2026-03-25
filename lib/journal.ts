@@ -3,7 +3,7 @@
  * Database integration later.
  */
 
-export const JOURNAL_STORAGE_KEY = "xchange-journal-trades";
+export const JOURNAL_STORAGE_KEY = "quantivtrade-journal-trades";
 
 export type Direction = "LONG" | "SHORT";
 

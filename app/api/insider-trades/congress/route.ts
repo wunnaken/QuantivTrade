@@ -24,7 +24,7 @@ function normalizeType(t?: string): string {
   if (u === "sale (full)" || u.includes("sale_full")) return "Sale (Full)";
   if (u === "sale (partial)" || u.includes("sale_partial")) return "Sale (Partial)";
   if (u.includes("sale")) return "Sale (Full)";
-  if (u.includes("exchange")) return "Exchange";
+  if (u.includes("equantivtrade")) return "Equantivtrade";
   return t;
 }
 
@@ -37,7 +37,7 @@ function daysApart(a?: string, b?: string): number {
 export async function GET() {
   try {
     const res = await fetch("https://api.quiverquant.com/beta/live/congresstrading", {
-      headers: { "User-Agent": "Xchange/1.0", "Accept": "application/json" },
+      headers: { "User-Agent": "QuantivTrade/1.0", "Accept": "application/json" },
       next: { revalidate: 3600 },
     });
 

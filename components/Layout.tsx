@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { XchangeLogoImage } from "./XchangeLogoImage";
+import { QuantivTradeLogoImage } from "./XchangeLogoImage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { MarketTickerBar } from "./MarketTickerBar";
@@ -20,10 +20,11 @@ import { usePriceContext } from "../lib/price-context";
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_BG = "#0A0E1A";
 
-const MAIN_NAV: { href: string; label: string; icon?: "radar" }[] = [
+const MAIN_NAV: { href: string; label: string; icon?: "radar" | "broadcast" | "backtest" }[] = [
   { href: "/feed", label: "Feed" },
   { href: "/communities", label: "Communities" },
   { href: "/messages", label: "Messages" },
+  { href: "/trade-rooms", label: "Trade Rooms", icon: "broadcast" },
   { href: "/news", label: "News" },
   { href: "/map", label: "Maps" },
   { href: "/bonds", label: "Bonds" },
@@ -35,6 +36,7 @@ const MAIN_NAV: { href: string; label: string; icon?: "radar" }[] = [
   { href: "/predict", label: "PredictNow" },
   { href: "/datahub", label: "DataHub" },
   { href: "/insider-trades", label: "InsiderTrades" },
+  { href: "/backtest", label: "Backtest", icon: "backtest" },
   { href: "/watchlist", label: "My Watchlist" },
   { href: "/workspace", label: "Workspace" },
 ];
@@ -59,12 +61,12 @@ function SidebarLogo({ narrow }: { narrow: boolean }) {
     <Link
       href="/"
       className={`flex items-center transition opacity-90 hover:opacity-100 ${narrow ? "justify-center" : "gap-2.5"}`}
-      aria-label="Xchange – Home"
+      aria-label="QuantivTrade – Home"
     >
-      <XchangeLogoImage size={42} />
+      <QuantivTradeLogoImage size={42} />
       {!narrow && (
         <span className="text-xl font-semibold tracking-tight" style={{ color: "var(--accent-color)" }}>
-          Xchange
+          QuantivTrade
         </span>
       )}
     </Link>
@@ -89,7 +91,7 @@ function NavItem({
 }: {
   href: string;
   label: string;
-  icon?: "radar";
+  icon?: "radar" | "broadcast" | "backtest";
   isActive: boolean;
   collapsed: boolean;
   onClick?: () => void;
@@ -135,6 +137,14 @@ function NavItem({
       >
         <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
           {icon === "radar" ? (
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          ) : icon === "broadcast" ? (
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
+            </svg>
+          ) : icon === "backtest" ? (
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
@@ -191,8 +201,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setInAppNotifs(getInAppNotifications());
     const onChange = () => setInAppNotifs(getInAppNotifications());
-    window.addEventListener("xchange-in-app-notifications-changed", onChange);
-    return () => window.removeEventListener("xchange-in-app-notifications-changed", onChange);
+    window.addEventListener("quantivtrade-in-app-notifications-changed", onChange);
+    return () => window.removeEventListener("quantivtrade-in-app-notifications-changed", onChange);
   }, []);
 
   useEffect(() => {

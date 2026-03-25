@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthContext";
-import { XchangeLogo } from "@/components/XchangeLogo";
+import { QuantivTradeLogo } from "@/components/XchangeLogo";
 import { createClient } from "@/lib/supabase/client";
 
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
@@ -71,12 +71,12 @@ export default function SetupProfilePage() {
     <div className="min-h-screen app-page">
       <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-10">
         <header className="absolute left-6 top-6">
-          <XchangeLogo />
+          <QuantivTradeLogo />
         </header>
 
         <div className="mb-6 text-center">
           <h1 className="text-2xl font-semibold text-zinc-50">Set up your profile</h1>
-          <p className="mt-2 text-xs text-zinc-400">Choose how others will see you on Xchange.</p>
+          <p className="mt-2 text-xs text-zinc-400">Choose how others will see you on QuantivTrade.</p>
         </div>
 
         <form
@@ -134,7 +134,7 @@ export default function SetupProfilePage() {
             className="mt-2 w-full rounded-full px-4 py-2 text-xs font-semibold text-[#020308] shadow-lg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
             style={{ backgroundColor: "#00C896", boxShadow: "0 10px 15px -3px rgba(0,200,150,0.4)" }}
           >
-            {loading ? "Saving…" : "Continue to Xchange"}
+            {loading ? "Saving…" : "Continue to QuantivTrade"}
           </button>
         </form>
       </div>

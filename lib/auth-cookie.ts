@@ -1,8 +1,8 @@
 /** Cookie used by middleware to protect /profile. Set from client when user signs in or hydrates from localStorage. */
-export const AUTH_COOKIE_NAME = "xchange-demo-auth";
+export const AUTH_COOKIE_NAME = "quantivtrade-demo-auth";
 const AUTH_COOKIE_MAX_AGE_DAYS = 7;
-export const AUTH_EMAIL_COOKIE = "xchange-demo-email";
-export const AUTH_NAME_COOKIE = "xchange-demo-name";
+export const AUTH_EMAIL_COOKIE = "quantivtrade-demo-email";
+export const AUTH_NAME_COOKIE = "quantivtrade-demo-name";
 const MAX_AGE = AUTH_COOKIE_MAX_AGE_DAYS * 24 * 60 * 60;
 
 export function setAuthCookie(payload?: { email: string; name: string }): void {

@@ -43,7 +43,7 @@ export default function FeedbackPage() {
     <div className="mx-auto max-w-xl px-4 py-10">
       <h1 className="text-2xl font-semibold text-zinc-100">Send feedback</h1>
       <p className="mt-3 text-sm leading-relaxed text-zinc-400">
-        We appreciate you using Xchange and would love to hear from you. Your feedback helps us
+        We appreciate you using QuantivTrade and would love to hear from you. Your feedback helps us
         improve the product.
       </p>
 

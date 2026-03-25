@@ -3,10 +3,10 @@
  * All data in localStorage (no real money).
  */
 
-const POINTS_KEY = "xchange-predict-points";
-const DAILY_CLAIM_KEY = "xchange-predict-daily-claim";
-const MARKETS_KEY = "xchange-predict-markets";
-const NOTIFICATIONS_KEY = "xchange-predict-notifications";
+const POINTS_KEY = "quantivtrade-predict-points";
+const DAILY_CLAIM_KEY = "quantivtrade-predict-daily-claim";
+const MARKETS_KEY = "quantivtrade-predict-markets";
+const NOTIFICATIONS_KEY = "quantivtrade-predict-notifications";
 const INITIAL_POINTS = 1000;
 const DAILY_BONUS = 50;
 const CREATOR_BONUS = 25;
@@ -165,7 +165,7 @@ function pointsFromPercent(pct: number): { yes: number; no: number } {
 
 function getDefaultMarkets(_createdBy: string): PredictMarket[] {
   const now = new Date().toISOString();
-  const creator = "Xchange";
+  const creator = "QuantivTrade";
   return PRELOADED.map((p, i) => {
     const { yes, no } = pointsFromPercent(p.initialYesPercent / 100);
     return {
@@ -240,7 +240,7 @@ export function addMarket(
 }
 
 // Bets are stored inside market or we need a separate store. For simplicity store bets in a separate key.
-const BETS_KEY = "xchange-predict-bets";
+const BETS_KEY = "quantivtrade-predict-bets";
 
 export function loadBets(): PredictBet[] {
   if (typeof window === "undefined") return [];

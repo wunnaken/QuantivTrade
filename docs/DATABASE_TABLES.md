@@ -1,4 +1,4 @@
-# Xchange — Data Moving from Hardcode to Supabase
+# QuantivTrade — Data Moving from Hardcode to Supabase
 
 Use this list to create your Supabase tables. **Special requirements** are called out where needed.
 
@@ -209,7 +209,7 @@ No extra table is strictly required if “suggested” is just a query over `pro
 
 ## 8. **Profile posts (user’s own posts on profile)**
 
-**Currently:** `StoredPost` in localStorage (`xchange-demo-posts`): id, text, date, groupName.
+**Currently:** `StoredPost` in localStorage (`quantivtrade-demo-posts`): id, text, date, groupName.
 
 **Options:**
 

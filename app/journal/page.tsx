@@ -72,7 +72,7 @@ function getCalendarDays(year: number, month: number): { date: string; day: numb
   return out;
 }
 
-const INSIGHTS_CACHE_KEY = "xchange-journal-insights";
+const INSIGHTS_CACHE_KEY = "quantivtrade-journal-insights";
 const INSIGHTS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
 export default function JournalPage() {

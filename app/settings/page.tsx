@@ -7,6 +7,8 @@ import { useTheme } from "../../components/ThemeContext";
 import type { RiskProfileKey } from "../../components/AuthContext";
 import { getBrokerConnection, disconnectBroker, BROKER_TEAL } from "../../lib/broker-connection";
 import { ConnectBrokerModal } from "../../components/ConnectBrokerModal";
+import { BriefingPreferencesForm } from "../../components/BriefingPreferencesForm";
+import { fetchBriefingPreferences, type BriefingPreferences } from "../../lib/briefing-preferences";
 
 const RISK_PROFILES: Record<
   RiskProfileKey,
@@ -22,6 +24,8 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const [brokerState, setBrokerState] = useState(getBrokerConnection());
   const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const [briefingPrefs, setBriefingPrefs] = useState<BriefingPreferences | null>(null);
+  const [briefingPrefsSaved, setBriefingPrefsSaved] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -30,6 +34,11 @@ export default function SettingsPage() {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  useEffect(() => {
+    if (!user?.isVerified) return;
+    fetchBriefingPreferences().then((p) => { if (p) setBriefingPrefs(p); });
+  }, [user?.isVerified]);
 
   if (!user) {
     return (
@@ -97,7 +106,7 @@ export default function SettingsPage() {
             Appearance
           </h2>
           <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>
-            Choose how Xchange looks. Dark is easier on the eyes in low light.
+            Choose how QuantivTrade looks. Dark is easier on the eyes in low light.
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <button
@@ -249,6 +258,40 @@ export default function SettingsPage() {
             </div>
           </div>
         </section>
+
+        {/* Morning Briefing Preferences — premium users only */}
+        {user.isVerified && (
+          <section
+            className="rounded-2xl border p-5 transition-colors duration-300"
+            style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>
+                  Morning Briefing Preferences
+                </h2>
+                <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>
+                  Your daily briefing is personalized based on these preferences. The AI will prioritize your watchlist, sectors, and trading style.
+                </p>
+              </div>
+              {briefingPrefsSaved && (
+                <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-400">
+                  Saved
+                </span>
+              )}
+            </div>
+            <div className="mt-5">
+              <BriefingPreferencesForm
+                initialPrefs={briefingPrefs}
+                onSave={(p) => {
+                  setBriefingPrefs(p);
+                  setBriefingPrefsSaved(true);
+                  setTimeout(() => setBriefingPrefsSaved(false), 3000);
+                }}
+              />
+            </div>
+          </section>
+        )}
 
         {/* Account */}
         <section className="rounded-2xl border border-red-500/30 bg-red-500/5 p-5 transition-colors duration-300">

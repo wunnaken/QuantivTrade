@@ -13,6 +13,8 @@ import { useLivePrices } from "../../lib/hooks/useLivePrice";
 import { PriceDisplay } from "../../components/PriceDisplay";
 import { getCachedBriefing, getBriefingDate, setBriefingSeen } from "../../lib/briefing";
 import { MorningBriefing } from "../../components/MorningBriefing";
+import { BriefingPreferencesForm } from "../../components/BriefingPreferencesForm";
+import { fetchBriefingPreferences, type BriefingPreferences } from "../../lib/briefing-preferences";
 import type { User } from "../../components/AuthContext";
 import { loadStreaks, tickBriefingStreak } from "../../lib/engagement/streaks";
 import { StreakDetailModal } from "../../components/StreakDetailModal";
@@ -22,7 +24,7 @@ import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { TrackRecordVerifiedBadge } from "../../components/TrackRecordVerifiedBadge";
 import { getBrokerConnection } from "../../lib/broker-connection";
 
-const VERIFIED_TOOLTIP_SEEN_KEY = "xchange-verified-badge-tooltip-seen";
+const VERIFIED_TOOLTIP_SEEN_KEY = "quantivtrade-verified-badge-tooltip-seen";
 
 function VerifiedBadgeWithTooltip() {
   const { user } = useAuth();
@@ -68,7 +70,7 @@ function isOnlineStable(handle: string): boolean {
 }
 
 const CARD_BG_VAR = "var(--app-card)";
-const AI_SHARE_KEY = "xchange-ai-share";
+const AI_SHARE_KEY = "quantivtrade-ai-share";
 
 function getInitials(user: User) {
   const name = (user.name || user.username || user.email || "?").trim();
@@ -136,6 +138,8 @@ export default function FeedPage() {
   type FollowedProfile = { id: string; name: string; username: string };
   const [followedProfiles, setFollowedProfiles] = useState<FollowedProfile[]>([]);
   const [showBriefing, setShowBriefing] = useState(false);
+  const [briefingPrefs, setBriefingPrefs] = useState<BriefingPreferences | null>(null);
+  const [showBriefingPrefsPanel, setShowBriefingPrefsPanel] = useState(false);
   const [streakData, setStreakData] = useState(() => loadStreaks());
   const [showStreakModal, setShowStreakModal] = useState(false);
   const [liveCount, setLiveCount] = useState(1200);
@@ -156,6 +160,11 @@ export default function FeedPage() {
   useEffect(() => {
     setStreakData(loadStreaks());
   }, [showBriefing]);
+
+  useEffect(() => {
+    if (!user?.isVerified) return;
+    fetchBriefingPreferences().then((p) => { if (p) setBriefingPrefs(p); });
+  }, [user?.isVerified]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -180,7 +189,7 @@ export default function FeedPage() {
       { ticker: "SPY", pct: 95 },
       { ticker: "AAPL", pct: 120 },
     ];
-    if (typeof window !== "undefined" && !window.sessionStorage.getItem("xchange-trending-banner-seen")) {
+    if (typeof window !== "undefined" && !window.sessionStorage.getItem("quantivtrade-trending-banner-seen")) {
       setTrendingBannerMessage(messages[Math.floor(Math.random() * messages.length)]);
     }
   }, []);
@@ -243,14 +252,14 @@ export default function FeedPage() {
   const dismissTrendingBanner = useCallback(() => {
     setTrendingBannerDismissed(true);
     try {
-      window.sessionStorage.setItem("xchange-trending-banner-seen", "1");
+      window.sessionStorage.setItem("quantivtrade-trending-banner-seen", "1");
     } catch {}
   }, []);
 
   useEffect(() => {
     if (!refreshing) return;
-    document.title = "Refreshing... — Xchange";
-    return () => { document.title = "Xchange"; };
+    document.title = "Refreshing... — QuantivTrade";
+    return () => { document.title = "QuantivTrade"; };
   }, [refreshing]);
 
   useEffect(() => {
@@ -286,7 +295,7 @@ export default function FeedPage() {
           return;
         }
         try {
-          const raw = typeof window !== "undefined" && window.localStorage.getItem("xchange-follows");
+          const raw = typeof window !== "undefined" && window.localStorage.getItem("quantivtrade-follows");
           if (raw) {
             const parsed = JSON.parse(raw) as Array<{ id: string; name: string; username: string }>;
             if (Array.isArray(parsed) && parsed.length > 0) setFollowedProfiles(parsed);
@@ -298,7 +307,7 @@ export default function FeedPage() {
       .catch(() => {
         if (!cancelled) {
           try {
-            const raw = typeof window !== "undefined" && window.localStorage.getItem("xchange-follows");
+            const raw = typeof window !== "undefined" && window.localStorage.getItem("quantivtrade-follows");
             if (raw) {
               const parsed = JSON.parse(raw) as Array<{ id: string; name: string; username: string }>;
               if (Array.isArray(parsed)) setFollowedProfiles(parsed);
@@ -332,10 +341,10 @@ export default function FeedPage() {
     const onChanged = () => {
       void load();
     };
-    window.addEventListener("xchange-watchlist-changed", onChanged);
+    window.addEventListener("quantivtrade-watchlist-changed", onChanged);
     return () => {
       cancelled = true;
-      window.removeEventListener("xchange-watchlist-changed", onChanged);
+      window.removeEventListener("quantivtrade-watchlist-changed", onChanged);
     };
   }, [pathname]);
 
@@ -462,6 +471,9 @@ export default function FeedPage() {
           skipAnimation={getBriefingDate() === new Date().toISOString().slice(0, 10)}
           cachedFetchedAt={getCachedBriefing()?.fetchedAt ?? null}
           onClose={handleBriefingClose}
+          isPremium={user?.isVerified ?? false}
+          preferences={briefingPrefs}
+          onPreferencesSaved={(p) => setBriefingPrefs(p)}
         />
       )}
       {showStreakModal && (
@@ -479,7 +491,6 @@ export default function FeedPage() {
                 title="Leaderboard"
                 aria-label="Leaderboard"
               >
-                <span className="text-base leading-none" aria-hidden>🏆</span>
                 <span className="text-xs font-medium">Leaderboard</span>
               </Link>
               {user && streakData.loginStreak > 0 && (
@@ -547,7 +558,7 @@ export default function FeedPage() {
                 onClick={() => setShowBriefing(true)}
                 className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-[#0F1520] px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)]"
               >
-                <span>📋</span> Morning Briefing
+                Morning Briefing
               </button>
             </div>
             {/* Composer */}
@@ -918,6 +929,40 @@ export default function FeedPage() {
                 <p className="mt-1 text-xs text-zinc-400">Stand out in the feed with a blue checkmark and performance stats.</p>
                 <p className="mt-1 text-xs text-zinc-500">$9/mo · 7-day free trial</p>
                 <Link href="/verify" className="mt-3 inline-block rounded-full bg-[#3B82F6] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#3B82F6]/90">Get Verified →</Link>
+              </section>
+            )}
+
+            {/* Morning Briefing Preferences — premium users only */}
+            {(user?.isVerified ?? false) && (
+              <section
+                className="rounded-2xl border border-white/10 p-4 transition-colors duration-200"
+                style={{ backgroundColor: CARD_BG_VAR }}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-sm font-semibold text-zinc-100">Morning Briefing</h2>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      {briefingPrefs ? "Personalized" : "Not personalized yet"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBriefingPrefsPanel((v) => !v)}
+                    className="text-xs font-medium text-[var(--accent-color)] hover:opacity-80 transition"
+                  >
+                    {showBriefingPrefsPanel ? "Close" : briefingPrefs ? "Edit" : "Set Up"}
+                  </button>
+                </div>
+                {showBriefingPrefsPanel && (
+                  <div className="mt-4 border-t border-white/10 pt-4">
+                    <BriefingPreferencesForm
+                      compact
+                      initialPrefs={briefingPrefs}
+                      onSave={(p) => { setBriefingPrefs(p); setShowBriefingPrefsPanel(false); }}
+                      onCancel={() => setShowBriefingPrefsPanel(false)}
+                    />
+                  </div>
+                )}
               </section>
             )}
 

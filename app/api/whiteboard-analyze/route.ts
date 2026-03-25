@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const SYSTEM_PROMPT = `You are a trading analyst reviewing a trader's whiteboard/notes for Xchange. Analyze what you see (drawings, text, structure) and provide your response as valid JSON only, no other text, with this exact structure:
+const SYSTEM_PROMPT = `You are a trading analyst reviewing a trader's whiteboard/notes for QuantivTrade. Analyze what you see (drawings, text, structure) and provide your response as valid JSON only, no other text, with this exact structure:
 {
   "summary": "string (what the trader is planning or analyzing, 2-3 sentences)",
   "tradeSetup": "string (if there's a trade setup, describe it clearly; otherwise empty string)",

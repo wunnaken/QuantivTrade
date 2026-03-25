@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Xchange",
+  title: "QuantivTrade",
   description: "Where the world trades ideas. Real-time market intelligence, social communities, and risk-based investing.",
 };
 

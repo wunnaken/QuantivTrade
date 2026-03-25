@@ -1,5 +1,5 @@
-const LOCAL_KEY_NEW = "xchange-ticker-config";
-const LOCAL_KEY_OLD = "xchange-header-tickers";
+const LOCAL_KEY_NEW = "quantivtrade-ticker-config";
+const LOCAL_KEY_OLD = "quantivtrade-header-tickers";
 
 export const DEFAULT_TICKERS = [
   "SPY",
@@ -55,7 +55,7 @@ export function setLocalTickerConfig(config: TickerBarConfig): void {
   localStorage.setItem(LOCAL_KEY_NEW, JSON.stringify(payload));
   // keep old key for compatibility with pages still reading old key
   localStorage.setItem(LOCAL_KEY_OLD, JSON.stringify(payload.tickers));
-  window.dispatchEvent(new Event("xchange-header-tickers-changed"));
+  window.dispatchEvent(new Event("quantivtrade-header-tickers-changed"));
 }
 
 export function clearLocalTickerConfig(): void {

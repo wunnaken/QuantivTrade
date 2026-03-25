@@ -711,7 +711,7 @@ async function fetchVixFromYahoo(): Promise<{ value: number | null; change: numb
     const res = await fetch("https://query1.finance.yahoo.com/v8/finance/quote?symbols=%5EVIX", {
       cache: "no-store",
       signal: AbortSignal.timeout(10000),
-      headers: { "User-Agent": "xchange-bonds/1.0" },
+      headers: { "User-Agent": "quantivtrade-bonds/1.0" },
     });
     if (res.ok) {
       const json = (await res.json()) as { quoteResponse?: { result?: { regularMarketPrice?: number; regularMarketChange?: number }[] } };
@@ -731,7 +731,7 @@ async function fetchVixFromYahoo(): Promise<{ value: number | null; change: numb
     const res = await fetch("https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=5d", {
       cache: "no-store",
       signal: AbortSignal.timeout(10000),
-      headers: { "User-Agent": "xchange-bonds/1.0" },
+      headers: { "User-Agent": "quantivtrade-bonds/1.0" },
     });
     if (!res.ok) return { value: null, change: null };
     const json: unknown = await res.json();
@@ -788,7 +788,7 @@ async function fetchBondNewsFromRss(): Promise<BondNewsArticle[]> {
         const res = await fetch(feed.url, {
           next: { revalidate: 3600 },
           signal: AbortSignal.timeout(15000),
-          headers: { "User-Agent": "Mozilla/5.0 (compatible; XchangeBondNews/1.0)" },
+          headers: { "User-Agent": "Mozilla/5.0 (compatible; QuantivTradeBondNews/1.0)" },
         });
         if (!res.ok) return [] as BondNewsArticle[];
         const xml = await res.text();

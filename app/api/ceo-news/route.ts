@@ -89,11 +89,11 @@ export async function GET(request: NextRequest) {
 
   const SENT_TTL_MS = 6 * 60 * 60 * 1000;
   type SentCache = Map<string, { value: "positive" | "neutral" | "negative"; expiresAt: number }>;
-  const g = globalThis as unknown as { __xchange_ceo_sentiment_cache?: SentCache };
+  const g = globalThis as unknown as { __quantivtrade_ceo_sentiment_cache?: SentCache };
   const getCache = (): SentCache => {
-    if (g.__xchange_ceo_sentiment_cache) return g.__xchange_ceo_sentiment_cache;
+    if (g.__quantivtrade_ceo_sentiment_cache) return g.__quantivtrade_ceo_sentiment_cache;
     const m: SentCache = new Map();
-    g.__xchange_ceo_sentiment_cache = m;
+    g.__quantivtrade_ceo_sentiment_cache = m;
     return m;
   };
 

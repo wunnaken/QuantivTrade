@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   }
   try {
     const res = await fetch(`${CLEARBIT_BASE}/${domain}`, {
-      headers: { "User-Agent": "Xchange/1.0" },
+      headers: { "User-Agent": "QuantivTrade/1.0" },
       cache: "force-cache",
       next: { revalidate: 86400 },
     });

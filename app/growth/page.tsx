@@ -12,7 +12,7 @@ import {
 import { useAuth } from "../../components/AuthContext";
 import type { RiskProfileKey } from "../../types";
 
-const GROWTH_SHARE_KEY = "xchange-ai-share";
+const GROWTH_SHARE_KEY = "quantivtrade-ai-share";
 const INFLATION_RATE = 0.032;
 const DEFAULT_INITIAL = 0;
 const YEARS = 30;

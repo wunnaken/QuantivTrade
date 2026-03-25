@@ -1,4 +1,4 @@
-# Netlify build config for Xchange (Next.js)
+# Netlify build config for QuantivTrade (Next.js)
 [build]
   command = "npm run build"
   publish = ".next"

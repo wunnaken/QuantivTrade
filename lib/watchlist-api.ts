@@ -3,7 +3,7 @@
  * Falls back to localStorage when API returns 401 or fails (e.g. demo auth without Supabase).
  */
 
-const WATCHLIST_LOCAL_KEY = "xchange-watchlist";
+const WATCHLIST_LOCAL_KEY = "quantivtrade-watchlist";
 
 export type WatchlistItem = {
   ticker: string;
@@ -31,7 +31,7 @@ export function getWatchlistSyncIssue(): boolean {
 function emitWatchlistChanged(syncIssue: boolean) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(
-    new CustomEvent("xchange-watchlist-changed", { detail: { syncIssue } })
+    new CustomEvent("quantivtrade-watchlist-changed", { detail: { syncIssue } })
   );
 }
 

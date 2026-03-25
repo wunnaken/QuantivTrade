@@ -19,7 +19,7 @@ export function useLoginStreakTick() {
       toast.showToast(`🔥 ${milestone} Day Streak! You're on fire. Keep it up.`, "celebration");
       // Store that we showed this so we don't re-show on every load (only when they actually hit the milestone that day)
       try {
-        window.sessionStorage.setItem(`xchange-streak-milestone-${milestone}`, String(data.lastLogin));
+        window.sessionStorage.setItem(`quantivtrade-streak-milestone-${milestone}`, String(data.lastLogin));
       } catch {
         // ignore
       }

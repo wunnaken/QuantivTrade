@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { XchangeLogoImage } from "../../components/XchangeLogoImage";
+import { QuantivTradeLogoImage } from "../../components/XchangeLogoImage";
 
 /* Scattered positions for star dots (left/top %). Some slightly larger (size 3). */
 const STAR_POSITIONS: { left: number; top: number; size?: number }[] = [
@@ -125,7 +125,7 @@ export default function IdlePage() {
           animation: "idle-logo-spin 40s linear infinite",
         }}
       >
-        <XchangeLogoImage size={logoSize} />
+        <QuantivTradeLogoImage size={logoSize} />
       </div>
 
       {/* Subtle back link */}

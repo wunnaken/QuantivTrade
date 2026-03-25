@@ -5,7 +5,7 @@
  * Uses currentColor so parent can set color (e.g. var(--accent-color)).
  * viewBox 0 0 64 64 with content centered at (32,32) for correct alignment.
  */
-export function XchangeLogoIcon({
+export function QuantivTradeLogoIcon({
   size = 40,
   className = "",
 }: {

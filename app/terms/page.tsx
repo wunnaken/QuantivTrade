@@ -64,7 +64,7 @@ export default function TermsPage() {
             </h1>
             <p className="mt-2 text-sm text-zinc-500">Last updated: March 2026</p>
             <p className="mt-4 text-zinc-400">
-              Please read these terms carefully before using Xchange.
+              Please read these terms carefully before using QuantivTrade.
             </p>
 
             <section id="acceptance" className="mt-10 scroll-mt-24">
@@ -72,7 +72,7 @@ export default function TermsPage() {
                 1. Acceptance of Terms
               </h2>
               <p className="mt-3 text-zinc-300">
-                By accessing or using Xchange you agree to be bound by these Terms of Service. If you do not agree, do not use the platform.
+                By accessing or using QuantivTrade you agree to be bound by these Terms of Service. If you do not agree, do not use the platform.
               </p>
             </section>
 
@@ -81,7 +81,7 @@ export default function TermsPage() {
                 2. Description of Service
               </h2>
               <p className="mt-3 text-zinc-300">
-                Xchange is a social trading intelligence platform that provides market data, AI-powered analysis, community features, and educational investment tools. Xchange does not provide financial advice and is not a registered investment advisor, broker-dealer, or financial institution.
+                QuantivTrade is a social trading intelligence platform that provides market data, AI-powered analysis, community features, and educational investment tools. QuantivTrade does not provide financial advice and is not a registered investment advisor, broker-dealer, or financial institution.
               </p>
             </section>
 
@@ -92,7 +92,7 @@ export default function TermsPage() {
               <div className="mt-4 rounded-lg border-2 border-amber-500/60 bg-amber-500/10 p-4 text-amber-200">
                 <p className="font-semibold uppercase tracking-wide">Important</p>
                 <p className="mt-2 text-sm leading-relaxed">
-                  All content on Xchange is for educational and informational purposes only. Nothing on this platform constitutes financial, investment, legal, or tax advice. Always consult a qualified financial advisor before making investment decisions. Past performance does not guarantee future results. Investing involves risk including the possible loss of principal.
+                  All content on QuantivTrade is for educational and informational purposes only. Nothing on this platform constitutes financial, investment, legal, or tax advice. Always consult a qualified financial advisor before making investment decisions. Past performance does not guarantee future results. Investing involves risk including the possible loss of principal.
                 </p>
               </div>
             </section>
@@ -115,8 +115,8 @@ export default function TermsPage() {
                 5. User Content
               </h2>
               <ul className="mt-3 list-inside list-disc space-y-2 text-zinc-300">
-                <li>You own content you post on Xchange.</li>
-                <li>By posting you grant Xchange a license to display and distribute your content.</li>
+                <li>You own content you post on QuantivTrade.</li>
+                <li>By posting you grant QuantivTrade a license to display and distribute your content.</li>
                 <li>You are responsible for what you post.</li>
                 <li>You may not post: false financial information, market manipulation, spam, harassment, illegal content, or misleading trade claims.</li>
               </ul>
@@ -130,7 +130,7 @@ export default function TermsPage() {
                 <li>Verification does not constitute endorsement.</li>
                 <li>Verified status can be revoked for violations.</li>
                 <li>Performance stats are self-reported unless broker-verified.</li>
-                <li>Xchange is not liable for advice from verified traders.</li>
+                <li>QuantivTrade is not liable for advice from verified traders.</li>
               </ul>
             </section>
 
@@ -163,7 +163,7 @@ export default function TermsPage() {
                 9. Intellectual Property
               </h2>
               <ul className="mt-3 list-inside list-disc space-y-2 text-zinc-300">
-                <li>Xchange name, logo, and platform are owned by Xchange.</li>
+                <li>QuantivTrade name, logo, and platform are owned by QuantivTrade.</li>
                 <li>User content remains owned by the user.</li>
                 <li>AI-generated content on the platform is provided for educational use only.</li>
               </ul>
@@ -183,7 +183,7 @@ export default function TermsPage() {
                 11. Limitation of Liability
               </h2>
               <p className="mt-3 text-zinc-300">
-                Xchange is not liable for any trading losses, financial decisions made based on platform content, or damages arising from use of the platform.
+                QuantivTrade is not liable for any trading losses, financial decisions made based on platform content, or damages arising from use of the platform.
               </p>
             </section>
 

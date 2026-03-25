@@ -1,11 +1,11 @@
 "use client";
 
 /**
- * Renders the Xchange logo with no background. Uses the logo PNG as a mask
+ * Renders the QuantivTrade logo with no background. Uses the logo PNG as a mask
  * so the visible color is the accent color — same shape, dynamic color.
  * The logo asset should have a transparent background for correct masking.
  */
-export function XchangeLogoImage({
+export function QuantivTradeLogoImage({
   size,
   className = "",
 }: {

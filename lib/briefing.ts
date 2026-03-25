@@ -2,9 +2,9 @@
  * Morning briefing: when to show, cache key, and cached content.
  */
 
-export const WELCOMED_KEY = "xchange-welcomed";
-export const BRIEFING_DATE_KEY = "xchange-briefing-date";
-export const BRIEFING_CACHE_KEY = "xchange-briefing-cache";
+export const WELCOMED_KEY = "quantivtrade-welcomed";
+export const BRIEFING_DATE_KEY = "quantivtrade-briefing-date";
+export const BRIEFING_CACHE_KEY = "quantivtrade-briefing-cache";
 
 export function getBriefingDate(): string | null {
   if (typeof window === "undefined") return null;

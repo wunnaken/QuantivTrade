@@ -1,5 +1,5 @@
 /** localStorage key for joined community rooms (array of room names). Shared by communities page and profile page. */
-export const JOINED_ROOMS_KEY = "xchange-demo-joined-groups";
+export const JOINED_ROOMS_KEY = "quantivtrade-demo-joined-groups";
 
 export function getJoinedRooms(): string[] {
   if (typeof window === "undefined") return [];

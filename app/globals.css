@@ -572,7 +572,7 @@ html[data-theme="light"] .dark-bg-section .text-zinc-500 {
   50% { opacity: 0.85; transform: scale(1.03); }
 }
 
-/* Whiteboard: Excalidraw accent matches Xchange */
+/* Whiteboard: Excalidraw accent matches QuantivTrade */
 .whiteboard-excalidraw-wrap .excalidraw {
   --color-primary: var(--accent-color) !important;
 }

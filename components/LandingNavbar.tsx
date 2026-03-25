@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "./AuthContext";
 import { MarketTickerBar } from "./MarketTickerBar";
-import { XchangeLogo } from "./XchangeLogo";
+import { QuantivTradeLogo } from "./XchangeLogo";
 
 export function LandingNavbar() {
   const { user } = useAuth();
@@ -22,7 +22,7 @@ export function LandingNavbar() {
         aria-label="Main navigation"
       >
         <div className="flex shrink-0 items-center gap-4">
-          <XchangeLogo />
+          <QuantivTradeLogo />
         </div>
         <div className="min-w-0 flex-1">
           <MarketTickerBar />

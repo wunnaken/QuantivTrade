@@ -400,7 +400,7 @@ export const HARDCODED_SENTIMENT: Record<string, number> = {
   Mexico: 85,
 };
 
-const MAP_LAYER_STORAGE_KEY = "xchange-map-layer";
+const MAP_LAYER_STORAGE_KEY = "quantivtrade-map-layer";
 
 export function getStoredLayerId(): LayerId | null {
   if (typeof window === "undefined") return null;

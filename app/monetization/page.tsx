@@ -15,7 +15,7 @@ export default function MonetizationPage() {
           <section>
             <h2 className="text-lg font-semibold text-white">Revenue share</h2>
             <p className="mt-2 text-sm leading-relaxed">
-              Verified Traders who create paid communities on Xchange receive 80% of all membership revenue collected through the platform. Xchange retains 20% to cover payment processing, platform infrastructure, and ongoing product development.
+              Verified Traders who create paid communities on QuantivTrade receive 80% of all membership revenue collected through the platform. QuantivTrade retains 20% to cover payment processing, platform infrastructure, and ongoing product development.
             </p>
           </section>
           <section>

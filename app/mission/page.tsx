@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { XchangeLogoImage } from "../../components/XchangeLogoImage";
+import { QuantivTradeLogoImage } from "../../components/XchangeLogoImage";
 
 export default function MissionPage() {
   return (
@@ -18,7 +18,7 @@ export default function MissionPage() {
 
       <div className="flex flex-col items-center text-center">
         <div className="mb-8 flex justify-center">
-          <XchangeLogoImage size={80} />
+          <QuantivTradeLogoImage size={80} />
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-50 sm:text-3xl">
           Our Mission
@@ -30,7 +30,7 @@ export default function MissionPage() {
 
       <div className="mt-12 space-y-6 text-zinc-300 sm:mt-16">
         <p className="text-base leading-relaxed sm:text-lg">
-          Xchange exists to give every investor access to the same tools that move markets:
+          QuantivTrade exists to give every investor access to the same tools that move markets:
           real-time intelligence, global perspectives, and a community that trades ideas, not just tickers.
         </p>
         <p className="text-base leading-relaxed sm:text-lg">
@@ -40,7 +40,7 @@ export default function MissionPage() {
         </p>
         <p className="text-base leading-relaxed sm:text-lg">
           From social communities and live market feeds to risk-based profiles and global maps,
-          Xchange is built for how modern markets move: fast, linked, and personal. Our mission is
+          QuantivTrade is built for how modern markets move: fast, linked, and personal. Our mission is
           to put that power in your hands. -wunnaken
         </p>
       </div>
@@ -50,7 +50,7 @@ export default function MissionPage() {
           href="/plans"
           className="rounded-full bg-[var(--accent-color)] px-6 py-2.5 text-sm font-semibold text-[#020308] transition hover:opacity-90"
         >
-          Join Xchange
+          Join QuantivTrade
         </Link>
       </div>
     </div>

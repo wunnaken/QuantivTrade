@@ -51,13 +51,13 @@ export default function VerifyPage() {
             <VerifiedBadge size={80} />
           </div>
           <h1 className="mt-6 text-3xl font-bold text-white">You&apos;re now a Verified Trader!</h1>
-          <p className="mt-2 text-zinc-400">Your badge is now live on your profile, posts, and across Xchange.</p>
+          <p className="mt-2 text-zinc-400">Your badge is now live on your profile, posts, and across QuantivTrade.</p>
           <Link
             href="/profile"
             className="mt-8 rounded-full px-8 py-3 text-lg font-semibold text-[#020308] transition hover:opacity-90"
             style={{ backgroundColor: VERIFIED_BLUE }}
           >
-            Enter Xchange
+            Enter QuantivTrade
           </Link>
         </div>
         <style dangerouslySetInnerHTML={{ __html: `
@@ -75,7 +75,7 @@ export default function VerifyPage() {
             <VerifiedBadge size={56} />
           </div>
           <h1 className="mt-4 text-3xl font-bold text-white">Verified Trader Program</h1>
-          <p className="mt-2 text-zinc-400">Join the most credible trading community on Xchange</p>
+          <p className="mt-2 text-zinc-400">Join the most credible trading community on QuantivTrade</p>
           <p className="mt-2 text-lg font-medium" style={{ color: VERIFIED_BLUE }}>$9/month · Cancel anytime</p>
         </header>
 
@@ -131,7 +131,7 @@ export default function VerifyPage() {
                 </label>
                 <label className="flex items-center gap-3">
                   <input type="checkbox" checked={req5} onChange={(e) => setReq5(e.target.checked)} className="rounded border-white/20 bg-white/5" />
-                  <span className="text-zinc-200">I agree to Xchange community guidelines</span>
+                  <span className="text-zinc-200">I agree to QuantivTrade community guidelines</span>
                 </label>
                 <button
                   type="button"

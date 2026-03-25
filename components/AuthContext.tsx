@@ -95,12 +95,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Pick up any onboarding risk profile
         let riskProfile: RiskProfileKey | undefined;
         if (typeof window !== "undefined") {
-          const pendingRaw = window.localStorage.getItem("xchange-onboarding-pending");
+          const pendingRaw = window.localStorage.getItem("quantivtrade-onboarding-pending");
           if (pendingRaw) {
             try {
               const pending = JSON.parse(pendingRaw) as { riskProfile?: RiskProfileKey };
               riskProfile = pending.riskProfile;
-              window.localStorage.removeItem("xchange-onboarding-pending");
+              window.localStorage.removeItem("quantivtrade-onboarding-pending");
             } catch { /* ignore */ }
           }
         }

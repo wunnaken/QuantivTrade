@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../components/AuthContext";
-import { XchangeLogoImage } from "../../components/XchangeLogoImage";
-import { XchangeLogoIcon } from "../../components/XchangeLogoIcon";
+import { QuantivTradeLogoImage } from "../../components/XchangeLogoImage";
+import { QuantivTradeLogoIcon } from "../../components/XchangeLogoIcon";
 import { AiMarkdown } from "../../components/AiMarkdown";
 import {
   getStoredConversations,
@@ -100,9 +100,9 @@ function formatTimeAgo(input: string | number | null | undefined): string {
   return `${d}d ago`;
 }
 
-const AI_SHARE_KEY = "xchange-ai-share";
-const AI_PANEL_STATE_KEY = "xchange-ai-panel-state";
-const AI_LOCAL_CONVERSATIONS_KEY = "xchange-ai-conversations";
+const AI_SHARE_KEY = "quantivtrade-ai-share";
+const AI_PANEL_STATE_KEY = "quantivtrade-ai-panel-state";
+const AI_LOCAL_CONVERSATIONS_KEY = "quantivtrade-ai-conversations";
 
 export default function AIPage() {
   const router = useRouter();
@@ -632,7 +632,7 @@ export default function AIPage() {
 
   const handleShare = useCallback((content: string) => {
     if (typeof window === "undefined") return;
-    const text = `💡 Xchange AI insight:\n\n${content}`;
+    const text = `💡 QuantivTrade AI insight:\n\n${content}`;
     try {
       sessionStorage.setItem(AI_SHARE_KEY, JSON.stringify({ content: text }));
     } catch {
@@ -952,7 +952,7 @@ export default function AIPage() {
           {messages.length === 0 && !loading ? (
             <div className="flex h-full min-h-[280px] flex-col items-center justify-center text-center">
               <div className="ai-welcome-logo-pulse mb-4">
-                <XchangeLogoImage size={80} />
+                <QuantivTradeLogoImage size={80} />
               </div>
               <p className="text-lg font-medium text-zinc-200">
                 {greeting}, {username}
@@ -1003,7 +1003,7 @@ export default function AIPage() {
                         className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full"
                         style={{ backgroundColor: "#0F1520" }}
                       >
-                        <XchangeLogoImage size={32} />
+                        <QuantivTradeLogoImage size={32} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div
@@ -1053,7 +1053,7 @@ export default function AIPage() {
                     className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full"
                     style={{ backgroundColor: "#0F1520" }}
                   >
-                    <XchangeLogoImage size={32} />
+                    <QuantivTradeLogoImage size={32} />
                   </div>
                   <div className="flex items-center gap-1 rounded-2xl rounded-tl-sm bg-[#0F1520] px-4 py-3">
                     <span className="ai-typing-dot h-2 w-2 rounded-full bg-zinc-500" />

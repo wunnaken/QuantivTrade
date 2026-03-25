@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import type { BriefingPreferences } from "../../../lib/briefing-preferences";
+import { buildPreferencesSummary } from "../../../lib/briefing-preferences";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-const SYSTEM_PROMPT = `You are the morning market analyst for Xchange, a social trading intelligence platform. Generate a concise, insightful morning market briefing. Respond in this exact JSON format:
+const BASE_SYSTEM_PROMPT = `You are the morning market analyst for QuantivTrade, a social trading intelligence platform. Generate a concise, insightful morning market briefing. Respond in this exact JSON format:
 {
   "headline": string (one punchy headline summarizing today's market mood, max 10 words),
   "marketMood": string ("Risk On", "Risk Off", or "Neutral"),
@@ -59,7 +61,7 @@ async function fetchMarketSnapshot(): Promise<string> {
   }
 }
 
-export async function GET() {
+async function generate(preferences: BriefingPreferences | null): Promise<Response> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
     return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 503 });
@@ -67,9 +69,20 @@ export async function GET() {
 
   const today = new Date().toISOString().slice(0, 10);
   const snapshot = await fetchMarketSnapshot();
-  const userMessage = snapshot
-    ? `Generate the morning market briefing for ${today}. ${snapshot} Use this and current market conditions and recent news.`
-    : `Generate the morning market briefing for ${today}. Use current market conditions and recent news.`;
+
+  let systemPrompt = BASE_SYSTEM_PROMPT;
+  if (preferences) {
+    const summary = buildPreferencesSummary(preferences);
+    if (summary) {
+      systemPrompt += `\n\nThis user has provided personal trading preferences. Prioritize their watchlist tickers in the watchlist and key levels sections, focus on their sectors of interest in top stories, and tailor the trader's edge to their trading style and risk tolerance. Preferences: ${summary}.`;
+    }
+  }
+
+  const userMessage = [
+    `Generate the morning market briefing for ${today}.`,
+    snapshot,
+    "Use current market conditions and recent news.",
+  ].filter(Boolean).join(" ");
 
   try {
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -81,8 +94,8 @@ export async function GET() {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
-        max_tokens: 1024,
-        system: SYSTEM_PROMPT,
+        max_tokens: 1200,
+        system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
       }),
     });
@@ -108,4 +121,17 @@ export async function GET() {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+export async function GET() {
+  return generate(null);
+}
+
+export async function POST(req: Request) {
+  let preferences: BriefingPreferences | null = null;
+  try {
+    const body = await req.json();
+    preferences = (body.preferences as BriefingPreferences) ?? null;
+  } catch {}
+  return generate(preferences);
 }

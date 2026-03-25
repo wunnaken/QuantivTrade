@@ -1,4 +1,4 @@
-# Shareable beta link – Xchange
+# Shareable beta link – QuantivTrade
 
 Ways to get a link you can share so others can use your beta.
 
@@ -14,9 +14,9 @@ Vercel runs Next.js very well and gives you a free HTTPS URL.
 
 2. **Deploy on Vercel**:
    - Go to [vercel.com](https://vercel.com) and sign in with GitHub.
-   - Click **Add New → Project** and import your Xchange repo.
+   - Click **Add New → Project** and import your QuantivTrade repo.
    - Leave the defaults (Framework: Next.js) and click **Deploy**.
-   - When it finishes, you get a URL like `xchange-xxx.vercel.app` – that’s your **shareable beta link**.
+   - When it finishes, you get a URL like `quantivtrade-xxx.vercel.app` – that’s your **shareable beta link**.
 
 3. **Environment variables** (for live market/news):
    - In the Vercel project: **Settings → Environment Variables**.
@@ -34,13 +34,13 @@ When Netlify says **Configure Netlify on GitHub**:
 
 1. Click **Configure Netlify on GitHub** (or the button that sends you to GitHub).
 2. You’ll be on **GitHub** asking to install the **Netlify** app:
-   - Choose the **account** that owns your Xchange repo (your user or an organization).
+   - Choose the **account** that owns your QuantivTrade repo (your user or an organization).
    - Under “Repository access”, choose:
      - **All repositories**, or  
-     - **Only select repositories** → pick the repo where Xchange lives.
+     - **Only select repositories** → pick the repo where QuantivTrade lives.
    - Click **Install** (or **Save**).
 3. You’ll be sent back to **Netlify**. The list of repos should refresh.
-4. Select your **Xchange repo** and continue.
+4. Select your **QuantivTrade repo** and continue.
 
 ### Build and deploy
 

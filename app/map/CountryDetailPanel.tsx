@@ -55,7 +55,7 @@ type ProjectionWorstCase = {
 
 type ProjectionsData = { bestCase: ProjectionBestCase; worstCase: ProjectionWorstCase };
 
-const PROJECTIONS_CACHE_KEY = "xchange-map-projections";
+const PROJECTIONS_CACHE_KEY = "quantivtrade-map-projections";
 const PROJECTIONS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 function getCachedProjections(country: string): ProjectionsData | null {

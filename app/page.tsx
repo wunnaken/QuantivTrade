@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../components/AuthContext";
-import { XchangeLogoImage } from "../components/XchangeLogoImage";
+import { QuantivTradeLogoImage } from "../components/XchangeLogoImage";
 import { LandingPageContent } from "../components/LandingPageContent";
 import { WelcomeAnimation } from "../components/WelcomeAnimation";
 import { hasBeenWelcomed, WELCOMED_KEY } from "../lib/briefing";
@@ -14,7 +14,7 @@ function LoadingScreen() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#0A0E1A]" aria-hidden>
       <div className="animate-pulse">
-        <XchangeLogoImage size={80} />
+        <QuantivTradeLogoImage size={80} />
       </div>
     </div>
   );

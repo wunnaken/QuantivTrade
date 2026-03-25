@@ -50,8 +50,8 @@ export function WatchlistWidget({ onLoaded }: WidgetContentProps) {
     const onChanged = () => {
       void refresh();
     };
-    window.addEventListener("xchange-watchlist-changed", onChanged);
-    return () => window.removeEventListener("xchange-watchlist-changed", onChanged);
+    window.addEventListener("quantivtrade-watchlist-changed", onChanged);
+    return () => window.removeEventListener("quantivtrade-watchlist-changed", onChanged);
   }, [refresh]);
 
   const addTicker = useCallback(async () => {
@@ -494,7 +494,7 @@ export function PredictionMarketsWidget() {
 }
 
 export function CustomNoteWidget({ widgetId }: WidgetContentProps) {
-  const key = `xchange-dashboard-note-${widgetId}`;
+  const key = `quantivtrade-dashboard-note-${widgetId}`;
   const [text, setText] = useState("");
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -709,7 +709,7 @@ function PlaceholderWidget({ title, href, label }: { title: string; href: string
   );
 }
 
-const LIVE_CHART_TICKERS_KEY = "xchange-live-chart-tickers";
+const LIVE_CHART_TICKERS_KEY = "quantivtrade-live-chart-tickers";
 
 const SUGGESTION_TICKERS = [
   "SPY", "QQQ", "AAPL", "TSLA", "NVDA", "MSFT", "GOOGL", "AMZN", "META", "BTC", "ETH",

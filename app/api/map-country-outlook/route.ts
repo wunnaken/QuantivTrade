@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const SYSTEM_PROMPT = `You are a financial analyst for Xchange. Given this economic data for a country, provide a JSON response with exactly these fields:
+const SYSTEM_PROMPT = `You are a financial analyst for QuantivTrade. Given this economic data for a country, provide a JSON response with exactly these fields:
 {
   "outlook": string (2-3 sentences, plain English market outlook for this country),
   "riskScore": number (1-10, investment risk),

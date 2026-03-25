@@ -1,15 +1,15 @@
 /**
  * Accent color theme: stored in localStorage, applied via CSS var --accent-color.
- * Only available to logged-in users; default is Xchange Green.
+ * Only available to logged-in users; default is QuantivTrade Green.
  */
 
-export const ACCENT_STORAGE_KEY = "xchange-accent-color";
+export const ACCENT_STORAGE_KEY = "quantivtrade-accent-color";
 export const DEFAULT_ACCENT = "#00C896";
 
 export type AccentOption = { id: string; name: string; hex: string };
 
 export const ACCENT_OPTIONS: AccentOption[] = [
-  { id: "green", name: "Xchange Green", hex: "#00C896" },
+  { id: "green", name: "QuantivTrade Green", hex: "#00C896" },
   { id: "blue", name: "Ocean Blue", hex: "#3B82F6" },
   { id: "purple", name: "Royal Purple", hex: "#8B5CF6" },
   { id: "pink", name: "Rose Pink", hex: "#EC4899" },

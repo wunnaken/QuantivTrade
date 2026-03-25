@@ -3,11 +3,11 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "../../components/AuthContext";
-import { XchangeLogoImage } from "../../components/XchangeLogoImage";
+import { QuantivTradeLogoImage } from "../../components/XchangeLogoImage";
 import { WelcomeAnimation } from "../../components/WelcomeAnimation";
 
-const WELCOMED_KEY = "xchange-welcomed";
-const PENDING_ONBOARDING_KEY = "xchange-onboarding-pending";
+const WELCOMED_KEY = "quantivtrade-welcomed";
+const PENDING_ONBOARDING_KEY = "quantivtrade-onboarding-pending";
 
 const TOTAL_STEPS = 7;
 const BG = "#0A0E1A";
@@ -176,9 +176,9 @@ export default function OnboardingPage() {
           {step === 1 && (
             <div className="flex flex-1 flex-col items-center justify-center text-center">
               <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center">
-                <XchangeLogoImage size={58} />
+                <QuantivTradeLogoImage size={58} />
               </div>
-              <span className="mt-4 text-2xl font-semibold tracking-tight text-[var(--accent-color)]">Xchange</span>
+              <span className="mt-4 text-2xl font-semibold tracking-tight text-[var(--accent-color)]">QuantivTrade</span>
               <h1 className="mt-10 text-3xl font-bold tracking-tight text-zinc-50 sm:text-4xl">
                 Let&apos;s build your investor profile
               </h1>
@@ -476,7 +476,7 @@ export default function OnboardingPage() {
                 className="mt-10 rounded-full px-10 py-4 text-lg font-semibold text-[#020308] transition-all duration-200 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
                 style={{ backgroundColor: ACCENT }}
               >
-                Enter Xchange
+                Enter QuantivTrade
               </button>
             </div>
           )}

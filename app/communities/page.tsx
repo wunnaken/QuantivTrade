@@ -6,7 +6,7 @@ import { useAuth } from "../../components/AuthContext";
 import { useFocusTrap } from "../../components/useFocusTrap";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
 
-const INTRO_DISMISSED_KEY = "xchange_communities_intro_dismissed";
+const INTRO_DISMISSED_KEY = "quantivtrade_communities_intro_dismissed";
 
 const TAGS = [
   "Equities",

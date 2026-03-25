@@ -34,10 +34,10 @@ export async function POST(request: Request) {
 
   try {
     const { data, error } = await resend.emails.send({
-      from: "Xchange Feedback <onboarding@resend.dev>",
+      from: "QuantivTrade Feedback <onboarding@resend.dev>",
       to: [TO_EMAIL],
       replyTo: replyEmail || undefined,
-      subject: "Xchange feedback",
+      subject: "QuantivTrade feedback",
       text: textBody,
     });
 

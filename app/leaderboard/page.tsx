@@ -80,7 +80,7 @@ export default function LeaderboardPage() {
     <div className="min-h-screen app-page font-[&quot;Times_New_Roman&quot;,serif]">
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">🏆 Leaderboard</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-zinc-50">Leaderboard</h1>
           <p className="mt-2 text-sm text-zinc-400">Top chat rooms by activity. Join exclusive rooms to get the edge.</p>
           <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
             Demo data — real leaderboard launches with full release.

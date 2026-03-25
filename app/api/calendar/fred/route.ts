@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${encodeURIComponent(sid)}&api_key=${key}&file_type=json&observation_start=${startStr}&observation_end=${endStr}&sort_order=asc&frequency=m`;
+    const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${encodeURIComponent(sid)}&api_key=${key}&file_type=json&observation_start=${startStr}&observation_end=${endStr}&sort_order=asc`;
     const res = await fetch(url, { next: { revalidate: 86400 } });
     if (!res.ok) throw new Error("FRED request failed");
     const data = (await res.json()) as { observations?: Array<{ date: string; value: string }> };

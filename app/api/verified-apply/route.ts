@@ -39,10 +39,10 @@ export async function POST(request: Request) {
 
   try {
     const { data, error } = await resend.emails.send({
-      from: "Xchange Verified <onboarding@resend.dev>",
+      from: "QuantivTrade Verified <onboarding@resend.dev>",
       to: [TO_EMAIL],
       replyTo: email,
-      subject: "Xchange: Verified Trader application",
+      subject: "QuantivTrade: Verified Trader application",
       text: textBody,
     });
 

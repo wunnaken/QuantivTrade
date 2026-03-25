@@ -46,7 +46,7 @@ export const ALL_PROFILE_BUBBLES: ProfileBubble[] = [
 ];
 
 export const MAX_SELECTED_BUBBLES = 6;
-const STORAGE_KEY = "xchange-profile-bubbles";
+const STORAGE_KEY = "quantivtrade-profile-bubbles";
 
 export function getSelectedBubbleIds(): string[] {
   if (typeof window === "undefined") return [];

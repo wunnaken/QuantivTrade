@@ -121,8 +121,8 @@ export function MarketTickerBar() {
         return prevKey === nextKey ? prev : local;
       });
     };
-    window.addEventListener("xchange-header-tickers-changed", onHeaderChanged);
-    return () => window.removeEventListener("xchange-header-tickers-changed", onHeaderChanged);
+    window.addEventListener("quantivtrade-header-tickers-changed", onHeaderChanged);
+    return () => window.removeEventListener("quantivtrade-header-tickers-changed", onHeaderChanged);
   }, []);
 
   useEffect(() => {
@@ -137,8 +137,8 @@ export function MarketTickerBar() {
     };
     void loadWatchlist();
     const onChanged = () => void loadWatchlist();
-    window.addEventListener("xchange-watchlist-changed", onChanged);
-    return () => window.removeEventListener("xchange-watchlist-changed", onChanged);
+    window.addEventListener("quantivtrade-watchlist-changed", onChanged);
+    return () => window.removeEventListener("quantivtrade-watchlist-changed", onChanged);
   }, [config.useWatchlist, config.tickers]);
 
   const list = useMemo(

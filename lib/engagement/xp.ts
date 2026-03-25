@@ -4,7 +4,7 @@
 
 import { getRankTitle, XP_GAIN } from "./constants";
 
-const STORAGE_KEY = "xchange-xp";
+const STORAGE_KEY = "quantivtrade-xp";
 
 export interface XPData {
   total: number;

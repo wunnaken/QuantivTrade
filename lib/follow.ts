@@ -1,4 +1,4 @@
-const FOLLOW_KEY = "xchange-following";
+const FOLLOW_KEY = "quantivtrade-following";
 
 export function getFollowed(): string[] {
   if (typeof window === "undefined") return [];

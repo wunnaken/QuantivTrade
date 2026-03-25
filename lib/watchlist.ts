@@ -1,4 +1,4 @@
-const WATCHLIST_KEY = "xchange-watchlist";
+const WATCHLIST_KEY = "quantivtrade-watchlist";
 
 export type WatchlistItem = {
   ticker: string;

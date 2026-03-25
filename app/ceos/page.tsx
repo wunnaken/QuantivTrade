@@ -23,7 +23,7 @@ const LINK_COLOR = "rgba(30, 58, 95, 0.4)";
 const LINK_HOVER = "rgba(255,255,255,0.9)";
 const PANEL_BG = "#0F1520";
 
-const CEO_PANELS_KEY = "xchange-ceo-panels";
+const CEO_PANELS_KEY = "quantivtrade-ceo-panels";
 
 function getCeoPanelPrefs(): { detailPanelWidth: number; detailPanelCollapsed: boolean; filterPanelCollapsed: boolean } {
   if (typeof window === "undefined") return { detailPanelWidth: 400, detailPanelCollapsed: false, filterPanelCollapsed: false };
@@ -53,7 +53,7 @@ function saveCeoPanelPrefs(prefs: { detailPanelWidth: number; detailPanelCollaps
   }
 }
 
-const CEO_MAP_CAMERA_KEY = "xchange-ceo-map-camera";
+const CEO_MAP_CAMERA_KEY = "quantivtrade-ceo-map-camera";
 
 function getCeoMapCamera(): { k: number; x: number; y: number } | null {
   if (typeof window === "undefined") return null;
@@ -80,7 +80,7 @@ function saveCeoMapCamera(camera: { k: number; x: number; y: number }) {
   }
 }
 
-const CEO_FILTERS_KEY = "xchange-ceo-filters";
+const CEO_FILTERS_KEY = "quantivtrade-ceo-filters";
 
 function getCeoFilters(): FilterState | null {
   if (typeof window === "undefined") return null;
@@ -1225,7 +1225,7 @@ function DetailPanel({
   "sentiment": "Bullish" | "Bearish" | "Neutral",
   "sentiment_reason": "one sentence max",
   "stock_since_tenure_percent_approx": number | null,
-  "stock_since_tenure_summary": "one concise sentence: approximate total shareholder return (price appreciation + dividends) from roughly the start of this CEO's tenure to now for the given exchange-listed ticker, or null/empty if you cannot estimate"
+  "stock_since_tenure_summary": "one concise sentence: approximate total shareholder return (price appreciation + dividends) from roughly the start of this CEO's tenure to now for the given equantivtrade-listed ticker, or null/empty if you cannot estimate"
 }
 
 CEO: ${ceo.name}
@@ -1924,7 +1924,7 @@ export default function CEOsPage() {
     const blob = new Blob([headers + rows], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = "xchange-ceo-list.csv";
+    a.download = "quantivtrade-ceo-list.csv";
     a.click();
     URL.revokeObjectURL(a.href);
   }, []);
