@@ -248,6 +248,8 @@ export default function ProfilePage() {
   const [joinedGroups, setJoinedGroups] = useState<JoinedRoom[]>([]);
   type FollowedProfile = { id: string; name: string; username: string };
   const [followedProfiles, setFollowedProfiles] = useState<FollowedProfile[]>([]);
+  const [selfFollowersCount, setSelfFollowersCount] = useState<number | null>(null);
+  const [selfFollowingCount, setSelfFollowingCount] = useState<number | null>(null);
   const [posts, setPosts] = useState<StoredPost[]>([]);
   const [editingProfile, setEditingProfile] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
@@ -292,6 +294,18 @@ export default function ProfilePage() {
   }, []);
 
   useEffect(() => {
+    if (!user?.id) return;
+    const xp = loadXP();
+    if (xp.total > 0) {
+      fetch("/api/profile/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ xp_total: xp.total }),
+      }).catch(() => {});
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     queueMicrotask(() => {
       try {
@@ -313,6 +327,17 @@ export default function ProfilePage() {
         if (Array.isArray(data.profiles)) setFollowedProfiles(data.profiles);
       })
       .catch(() => setFollowedProfiles([]));
+    if (user?.id) {
+      fetch(`/api/profiles/${user.id}`, { credentials: "include" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data) {
+            setSelfFollowersCount(data.followersCount);
+            setSelfFollowingCount(data.followingCount);
+          }
+        })
+        .catch(() => {});
+    }
   }, []);
 
   useEffect(() => {
@@ -351,6 +376,11 @@ export default function ProfilePage() {
     setSelectedBubbleIds(draftBubbleIds);
     setSelectedBubbleIdsState(draftBubbleIds);
     setEditingBubbles(false);
+    fetch("/api/profile/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bubble_ids: draftBubbleIds }),
+    }).catch(() => {});
   };
 
   const toggleBubble = (id: string) => {
@@ -868,6 +898,18 @@ export default function ProfilePage() {
                   ) : (
                     <p className="mt-2 text-sm text-zinc-500">No bio yet.</p>
                   )}
+                  {(selfFollowingCount !== null || selfFollowersCount !== null) && (
+                    <div className="mt-3 flex items-center gap-5">
+                      <div>
+                        <span className="text-sm font-bold text-zinc-100">{(selfFollowingCount ?? 0).toLocaleString()}</span>
+                        <span className="ml-1.5 text-xs text-zinc-500">Following</span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-bold text-zinc-100">{(selfFollowersCount ?? 0).toLocaleString()}</span>
+                        <span className="ml-1.5 text-xs text-zinc-500">Followers</span>
+                      </div>
+                    </div>
+                  )}
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
                     {user.email}
                     <span
@@ -1333,7 +1375,7 @@ export default function ProfilePage() {
               {followedProfiles.map((p) => (
                 <li key={p.id}>
                   <Link
-                    href={`/messages?with=${p.username}`}
+                    href={`/u/${p.id}`}
                     className="flex items-center gap-3 rounded-lg border border-white/5 bg-black/30 px-3 py-2 text-xs text-zinc-200 transition-colors duration-200 hover:border-[var(--accent-color)]/30 hover:bg-white/5"
                   >
                     <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-semibold text-[var(--accent-color)]">

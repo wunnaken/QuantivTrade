@@ -166,6 +166,17 @@ function tenTwoValueClass(v: number | null): string {
   return "text-zinc-400";
 }
 
+function decodeHtml(s: string): string {
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#([0-9]+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
 function timeAgo(iso: string): string {
   const d = new Date(iso).getTime();
   if (!Number.isFinite(d)) return "";
@@ -212,7 +223,7 @@ export default function BondView() {
 
   useEffect(() => {
     void fetchBonds(false);
-    const id = setInterval(() => void fetchBonds(true), 1800000);
+    const id = setInterval(() => void fetchBonds(true), 300000);
     const clock = setInterval(() => setNowTick(Date.now()), 60000);
     return () => {
       clearInterval(id);
@@ -550,7 +561,7 @@ export default function BondView() {
                     rel="noopener noreferrer"
                     className="rounded-xl border border-white/10 bg-[#050713] p-3 transition hover:border-[var(--accent-color)]/30 hover:bg-white/5"
                   >
-                    <p className="line-clamp-2 text-sm font-medium text-zinc-100">{n.title}</p>
+                    <p className="line-clamp-2 text-sm font-medium text-zinc-100">{decodeHtml(n.title)}</p>
                     <p className="mt-1 text-[11px] text-zinc-500">{n.source} · {timeAgo(n.publishedAt)}</p>
                   </a>
                 ))

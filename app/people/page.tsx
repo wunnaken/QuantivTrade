@@ -42,14 +42,14 @@ function UserCard({
     >
       <div className="flex items-start gap-4">
         <Link
-          href={`/profile?u=${user.id}`}
+          href={`/u/${user.id}`}
           className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)]"
         >
           {getInitials(user.name)}
         </Link>
         <div className="min-w-0 flex-1">
           <Link
-            href={`/profile?u=${user.id}`}
+            href={`/u/${user.id}`}
             className="flex items-center gap-1.5 font-semibold text-zinc-100 hover:text-[var(--accent-color)]"
           >
             {user.name}

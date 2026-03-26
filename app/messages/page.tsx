@@ -298,6 +298,93 @@ function NewGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated:
   );
 }
 
+// ─── Add Member Modal ─────────────────────────────────────────────────────────
+
+function AddMemberModal({ convId, onClose, onAdded }: { convId: string; onClose: () => void; onAdded: () => void }) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<SearchProfile[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (q.length < 2) { setResults([]); return; }
+    const t = setTimeout(async () => {
+      setSearching(true);
+      const res = await fetch(`/api/profiles/search?q=${encodeURIComponent(q)}`);
+      const data = await res.json() as { profiles: SearchProfile[] };
+      setResults(data.profiles ?? []);
+      setSearching(false);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const addMember = async (profile: SearchProfile) => {
+    setAdding(profile.user_id);
+    setError(null);
+    const res = await fetch(`/api/conversations/${convId}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: profile.user_id }),
+    });
+    if (!res.ok) {
+      const data = await res.json() as { error?: string };
+      setError(data.error ?? "Failed to add member");
+    } else {
+      onAdded();
+      onClose();
+    }
+    setAdding(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0F1520] p-5 shadow-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-semibold text-zinc-100">Add Member</h2>
+          <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300">✕</button>
+        </div>
+        <input
+          type="search"
+          placeholder="Search by name or username..."
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
+        />
+        {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+        <ul className="mt-3 space-y-1">
+          {searching && <li className="py-2 text-center text-xs text-zinc-500">Searching…</li>}
+          {!searching && q.length >= 2 && results.length === 0 && (
+            <li className="py-2 text-center text-xs text-zinc-500">No users found</li>
+          )}
+          {results.map((p) => (
+            <li key={p.user_id}>
+              <button
+                type="button"
+                disabled={adding === p.user_id}
+                onClick={() => addMember(p)}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-white/5 disabled:opacity-50"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-[var(--accent-color)]">
+                  {getInitials(p.name)}
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-zinc-100">{p.name}</p>
+                  <p className="text-xs text-zinc-500">@{p.username}</p>
+                </div>
+                <span className="ml-auto text-xs text-[var(--accent-color)]">
+                  {adding === p.user_id ? "Adding…" : "Add"}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 function MessagesContent() {
@@ -320,6 +407,8 @@ function MessagesContent() {
   const [sending, setSending] = useState(false);
   const [showNewDm, setShowNewDm] = useState(false);
   const [showNewGroup, setShowNewGroup] = useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [leavingGroup, setLeavingGroup] = useState(false);
   const [search, setSearch] = useState("");
   const [peopleResults, setPeopleResults] = useState<SearchProfile[]>([]);
   const [peopleSearching, setPeopleSearching] = useState(false);
@@ -727,6 +816,21 @@ function MessagesContent() {
     void loadConversations();
   };
 
+  const handleLeaveGroup = async () => {
+    if (!selectedId) return;
+    if (!confirm("Leave this group? You won't be able to see messages unless re-added.")) return;
+    setLeavingGroup(true);
+    try {
+      const res = await fetch(`/api/conversations/${selectedId}/leave`, { method: "POST" });
+      if (res.ok) {
+        setSelectedId(null);
+        void loadConversations();
+      }
+    } finally {
+      setLeavingGroup(false);
+    }
+  };
+
   const selectedConv = selectedId
     ? [...conversations.community, ...conversations.dms, ...conversations.groups].find((c) => c.id === selectedId) ?? null
     : null;
@@ -758,6 +862,13 @@ function MessagesContent() {
         <NewGroupModal
           onClose={() => setShowNewGroup(false)}
           onCreated={(id) => handleNewConvCreated(id)}
+        />
+      )}
+      {showAddMember && selectedId && (
+        <AddMemberModal
+          convId={selectedId}
+          onClose={() => setShowAddMember(false)}
+          onAdded={() => void loadConversations()}
         />
       )}
 
@@ -945,17 +1056,34 @@ Find a Community
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                 </button>
-                <span className="relative shrink-0">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)]">
-                    {convAvatar(selectedConv)}
+                {selectedConv.type === "dm" && selectedConv.other_user ? (
+                  <Link href={`/u/${selectedConv.other_user.user_id}`} className="relative shrink-0" title={`View ${convDisplayName(selectedConv)}'s profile`}>
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)] transition hover:ring-2 hover:ring-[var(--accent-color)]/40">
+                      {convAvatar(selectedConv)}
+                    </span>
+                    {onlineUserIds.has(selectedConv.other_user.user_id) && (
+                      <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0A0E1A] bg-emerald-400" />
+                    )}
+                  </Link>
+                ) : (
+                  <span className="relative shrink-0">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)]">
+                      {convAvatar(selectedConv)}
+                    </span>
+                    {selectedConv.type === "dm" && selectedConv.other_user && onlineUserIds.has(selectedConv.other_user.user_id) && (
+                      <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0A0E1A] bg-emerald-400" />
+                    )}
                   </span>
-                  {selectedConv.type === "dm" && selectedConv.other_user && onlineUserIds.has(selectedConv.other_user.user_id) && (
-                    <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-[#0A0E1A] bg-emerald-400" />
-                  )}
-                </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <p className="font-medium text-zinc-100">{convDisplayName(selectedConv)}</p>
+                    {selectedConv.type === "dm" && selectedConv.other_user ? (
+                      <Link href={`/u/${selectedConv.other_user.user_id}`} className="font-medium text-zinc-100 hover:text-[var(--accent-color)] transition-colors">
+                        {convDisplayName(selectedConv)}
+                      </Link>
+                    ) : (
+                      <p className="font-medium text-zinc-100">{convDisplayName(selectedConv)}</p>
+                    )}
                     {selectedConv.type === "dm" && selectedConv.other_user?.is_verified && <VerifiedBadge size={14} />}
                     {selectedConv.type === "dm" && selectedConv.other_user?.is_founder && <FounderBadge size={15} />}
                   </div>
@@ -967,6 +1095,33 @@ Find a Community
                       : "Private group"}
                   </p>
                 </div>
+                {selectedConv.type === "group" && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMember(true)}
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-zinc-400 transition hover:border-[var(--accent-color)]/30 hover:text-[var(--accent-color)]"
+                      title="Add member"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                      </svg>
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleLeaveGroup()}
+                      disabled={leavingGroup}
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-zinc-500 transition hover:border-red-500/30 hover:text-red-400 disabled:opacity-40"
+                      title="Leave group"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      Leave
+                    </button>
+                  </div>
+                )}
               </header>
 
               {/* Pinned message banner */}
@@ -1130,7 +1285,7 @@ Find a Community
                               <TickerCardMsg
                                 symbol={msg.content.slice(TICKER_PREFIX.length)}
                               />
-                              <p className={`mt-1 px-1 text-[10px] ${msg.is_mine ? "text-[#020308]/60" : "text-zinc-600"}`}>
+                              <p className={`mt-1 px-1 text-[10px] ${msg.is_mine ? "text-[#020308]/90" : "text-zinc-600"}`}>
                                 {fmtTime(msg.created_at)}
                               </p>
                             </div>
@@ -1141,7 +1296,7 @@ Find a Community
                                 : "border border-white/10 bg-[#0F1520] text-zinc-200"
                             }`}>
                               <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
-                              <p className={`mt-1 text-[10px] ${msg.is_mine ? "text-[#020308]/60" : "text-zinc-600"}`}>
+                              <p className={`mt-1 text-[10px] ${msg.is_mine ? "text-[#020308]/90" : "text-zinc-600"}`}>
                                 {fmtTime(msg.created_at)}{msg.edited_at ? " · edited" : ""}
                               </p>
                             </div>

@@ -41,7 +41,6 @@ const RESOURCES_LINKS = [
 ];
 
 const COMPANY_LINKS_BASE = [
-  { label: "About", href: "/about" },
   { label: "Terms of Service", href: "/terms" },
   { label: "Privacy Policy", href: "/privacy" },
   { label: "Feedback", href: "/feedback" },
@@ -74,8 +73,8 @@ export function SiteFooter() {
   const [apiStatus, setApiStatus] = useState<"ok" | "delayed" | "error" | null>(null);
   const [apiLabel, setApiLabel] = useState<string>("");
   const companyLinks = useMemo(
-    () => [{ label: "Home", href: user ? "/feed" : "/" }, ...COMPANY_LINKS_BASE],
-    [user]
+    () => [{ label: "Home", href: "/home" }, ...COMPANY_LINKS_BASE],
+    []
   );
 
   useEffect(() => {

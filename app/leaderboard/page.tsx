@@ -156,7 +156,7 @@ export default function LeaderboardPage() {
                         {rank <= 3 && <span className="ml-1 text-base" aria-hidden>👑</span>}
                       </td>
                       <td className="px-4 py-3">
-                        <Link href={`/profile?u=${row.id}`} className="flex items-center gap-2">
+                        <Link href={`/u/${row.id}`} className="flex items-center gap-2">
                           <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-zinc-300">{row.name.slice(0, 2)}</span>
                           <VerifiedBadge size={16} />
                           <span className="font-medium text-zinc-100">{row.name}</span>

@@ -138,13 +138,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       async updateProfile(updates) {
         if (!user) return;
-        const dbUpdates: Record<string, unknown> = {};
-        if (updates.name !== undefined) dbUpdates.name = updates.name;
-        if (updates.username !== undefined) dbUpdates.username = updates.username;
-        if (updates.bio !== undefined) dbUpdates.bio = updates.bio;
-        if (updates.profilePicture !== undefined) dbUpdates.avatar_url = updates.profilePicture;
+        const body: Record<string, unknown> = {};
+        if (updates.name !== undefined) body.name = updates.name;
+        if (updates.username !== undefined) body.username = updates.username;
+        if ("bio" in updates) body.bio = updates.bio ?? null;
+        if (updates.profilePicture !== undefined) body.avatar_url = updates.profilePicture;
 
-        await supabase.from("profiles").update(dbUpdates).eq("user_id", user.id);
+        if (Object.keys(body).length > 0) {
+          await fetch("/api/profile/me", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+        }
         setUser((prev) => (prev ? { ...prev, ...updates } : prev));
       },
     }),

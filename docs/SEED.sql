@@ -1,6 +1,7 @@
 -- Run this in the Supabase SQL editor to seed default rooms and optionally suggested profiles.
 -- Rooms are required for Communities join/leave and for the profile "Groups" section.
 
+
 -- Ensure rooms table has required columns (run these if you get "column does not exist" errors)
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS name text;
 ALTER TABLE rooms ADD COLUMN IF NOT EXISTS description text;

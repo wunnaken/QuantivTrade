@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
 import { createRouteHandlerClient } from '@/lib/supabase/route-handler';
+import { getProfileId } from '@/lib/get-profile-id';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +12,7 @@ export async function GET() {
   const authUid = user.id;
 
   const supabase = createServerClient();
+  const profileId = await getProfileId(routeClient);
 
   const { data: memberRows } = await supabase
     .from('room_members')
@@ -53,6 +55,7 @@ export async function GET() {
     ...r,
     member_count: countMap[r.id] ?? 0,
     host_username: hostMap[r.host_user_id] ?? null,
+    is_host: profileId != null && r.host_user_id === profileId,
   }));
 
   return NextResponse.json({ rooms });

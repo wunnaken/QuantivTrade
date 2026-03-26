@@ -20,32 +20,40 @@ import { usePriceContext } from "../lib/price-context";
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_BG = "#0A0E1A";
 
-const MAIN_NAV: { href: string; label: string; icon?: "radar" | "broadcast" | "backtest" }[] = [
-  { href: "/feed", label: "Feed" },
+const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "feedback" | "verify" }[] = [
+  { href: "/social-feed", label: "Social Feed" },
   { href: "/communities", label: "Communities" },
   { href: "/messages", label: "Messages" },
-  { href: "/trade-rooms", label: "Trade Rooms", icon: "broadcast" },
+  { href: "/trade-rooms", label: "Trade Rooms" },
   { href: "/news", label: "News" },
   { href: "/map", label: "Maps" },
   { href: "/bonds", label: "Bonds" },
   { href: "/sentiment", label: "Sentiment Radar" },
+  { href: "/insider-trades", label: "Insider Trades" },
+  { href: "/fiscalwatch", label: "FiscalWatch" },
   { href: "/growth", label: "Growth" },
   { href: "/ceos", label: "CEOs" },
   { href: "/calendar", label: "Calendar" },
+  { href: "/datahub", label: "DataHub" },
+  { href: "/backtest", label: "Backtest" },
   { href: "/journal", label: "Journal" },
   { href: "/predict", label: "PredictNow" },
-  { href: "/datahub", label: "DataHub" },
-  { href: "/insider-trades", label: "InsiderTrades" },
-  { href: "/backtest", label: "Backtest", icon: "backtest" },
   { href: "/watchlist", label: "My Watchlist" },
   { href: "/workspace", label: "Workspace" },
 ];
 
+const SECTIONS: { id: string; label: string; hrefs: string[] }[] = [
+  { id: "community", label: "Community", hrefs: ["/social-feed", "/communities", "/messages", "/trade-rooms"] },
+  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/sentiment", "/insider-trades", "/fiscalwatch"] },
+  { id: "analytics", label: "Analytics", hrefs: ["/growth", "/ceos", "/calendar", "/datahub", "/backtest"] },
+  { id: "personal", label: "Personal", hrefs: ["/journal", "/predict", "/watchlist", "/workspace"] },
+];
+
 const MAIN_NAV_HREFS = MAIN_NAV.map((i) => i.href);
 
-const BOTTOM_NAV: { href: string; label: string }[] = [
-  { href: "/settings", label: "Settings" },
-  { href: "/feedback", label: "Feedback" },
+const BOTTOM_NAV: { href: string; label: string; icon: "settings" | "feedback" | "verify" }[] = [
+  { href: "/settings", label: "Settings", icon: "settings" },
+  { href: "/feedback", label: "Feedback", icon: "feedback" },
 ];
 
 function getInitials(user: User) {
@@ -59,7 +67,7 @@ function getInitials(user: User) {
 function SidebarLogo({ narrow }: { narrow: boolean }) {
   return (
     <Link
-      href="/"
+      href="/home"
       className={`flex items-center transition opacity-90 hover:opacity-100 ${narrow ? "justify-center" : "gap-2.5"}`}
       aria-label="QuantivTrade – Home"
     >
@@ -73,6 +81,34 @@ function SidebarLogo({ narrow }: { narrow: boolean }) {
   );
 }
 
+function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedback" | "verify"; isActive: boolean }) {
+  const cls = "h-5 w-5";
+  const stroke = "currentColor";
+  if (icon === "home") return (
+    <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+    </svg>
+  );
+  if (icon === "settings") return (
+    <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} />
+    </svg>
+  );
+  if (icon === "feedback") return (
+    <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+    </svg>
+  );
+  if (icon === "verify") return (
+    <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    </svg>
+  );
+  return (
+    <span className={`h-1.5 w-1.5 rounded-full transition-transform transition-opacity duration-200 ${isActive ? "scale-125 bg-[var(--accent-color)] opacity-100" : "bg-zinc-500 opacity-40 group-hover:opacity-100 group-hover:scale-125"}`} />
+  );
+}
+
 function NavItem({
   href,
   label,
@@ -82,50 +118,20 @@ function NavItem({
   onClick,
   customizeMode,
   onHide,
-  draggable,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
-  isDragging,
 }: {
   href: string;
   label: string;
-  icon?: "radar" | "broadcast" | "backtest";
+  icon?: "home" | "settings" | "feedback" | "verify";
   isActive: boolean;
   collapsed: boolean;
   onClick?: () => void;
   customizeMode?: boolean;
   onHide?: () => void;
-  draggable?: boolean;
-  onDragStart?: (e: React.DragEvent) => void;
-  onDragOver?: (e: React.DragEvent) => void;
-  onDrop?: (e: React.DragEvent) => void;
-  onDragEnd?: () => void;
-  isDragging?: boolean;
 }) {
   const showControls = customizeMode && !collapsed && onHide !== undefined;
 
   return (
-    <div
-      className={`group flex items-center gap-1 rounded-lg transition-colors duration-200 hover:bg-white/5 ${isDragging ? "opacity-50" : ""}`}
-      draggable={draggable}
-      onDragStart={draggable && onDragStart ? (e) => { e.dataTransfer?.setData("text/plain", href); onDragStart(e); } : undefined}
-      onDragOver={draggable ? onDragOver : undefined}
-      onDrop={draggable ? onDrop : undefined}
-      onDragEnd={draggable ? onDragEnd : undefined}
-    >
-      {customizeMode && !collapsed && (
-        <span
-          className="cursor-grab touch-none shrink-0 rounded p-1 text-zinc-500 hover:text-zinc-400 active:cursor-grabbing"
-          aria-hidden
-          title="Drag to reorder"
-        >
-          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M8 6h2v2H8V6zm0 5h2v2H8v-2zm0 5h2v2H8v-2zm5-10h2v2h-2V6zm0 5h2v2h-2v-2zm0 5h2v2h-2v-2z" />
-          </svg>
-        </span>
-      )}
+    <div className="group flex items-center gap-1 rounded-lg transition-colors duration-200 hover:bg-white/5">
       <Link
         href={href}
         onClick={onClick}
@@ -136,27 +142,7 @@ function NavItem({
         aria-current={isActive ? "page" : undefined}
       >
         <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
-          {icon === "radar" ? (
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          ) : icon === "broadcast" ? (
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-            </svg>
-          ) : icon === "backtest" ? (
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-          ) : (
-            <span
-              className={`h-1.5 w-1.5 rounded-full transition-transform transition-opacity duration-200 ${
-                isActive
-                  ? "scale-125 bg-[var(--accent-color)] opacity-100"
-                  : "bg-zinc-500 opacity-40 group-hover:opacity-100 group-hover:scale-125"
-              }`}
-            />
-          )}
+          <NavItemIcon icon={icon} isActive={isActive} />
         </span>
         {!collapsed && (
           <span className="truncate transform text-sm transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">
@@ -216,7 +202,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [prefs, setPrefs] = useState<SidebarPrefs>(() => ({
     order: [...MAIN_NAV_HREFS],
     hidden: [],
-    collapsed: false,
+    collapsed: true,
+    collapsedSections: [],
   }));
   const [windowWidth, setWindowWidth] = useState(1024);
 
@@ -236,7 +223,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-  const visibleOrder = prefs.order.filter((href) => !prefs.hidden.includes(href));
   const hiddenItems = prefs.hidden
     .map((href) => MAIN_NAV.find((i) => i.href === href))
     .filter((i): i is (typeof MAIN_NAV)[number] => i != null);
@@ -245,8 +231,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setPrefs(next);
     saveSidebarPrefs(next);
   }, []);
-
-  const [draggingHref, setDraggingHref] = useState<string | null>(null);
   const [showWelcomeOverlay, setShowWelcomeOverlay] = useState(false);
   const verified = user?.isVerified ?? false;
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -271,14 +255,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  const moveTo = useCallback(
-    (fromHref: string, toHref: string) => {
-      if (fromHref === toHref) return;
-      const nextOrder = prefs.order.filter((h) => h !== fromHref);
-      const toIdx = nextOrder.indexOf(toHref);
-      if (toIdx < 0) return;
-      nextOrder.splice(toIdx, 0, fromHref);
-      savePrefs({ ...prefs, order: nextOrder });
+  const toggleSection = useCallback(
+    (sectionId: string) => {
+      const next = prefs.collapsedSections.includes(sectionId)
+        ? prefs.collapsedSections.filter((s) => s !== sectionId)
+        : [...prefs.collapsedSections, sectionId];
+      savePrefs({ ...prefs, collapsedSections: next });
     },
     [prefs, savePrefs]
   );
@@ -315,7 +297,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const isActive = useCallback(
     (href: string) => {
       if (href === "/feed") return pathname === "/feed";
-      if (href === "/workspace") return pathname === "/ai" || pathname === "/dashboard" || pathname === "/whiteboard";
+      if (href === "/social-feed") return pathname === "/social-feed";
+      if (href === "/workspace") return pathname === "/ai" || pathname === "/whiteboard" || pathname === "/workspace";
       return pathname === href || pathname.startsWith(href + "/");
     },
     [pathname]
@@ -383,43 +366,72 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
         </div>
 
-        <nav className="flex-1 space-y-0.5 overflow-y-auto p-3" aria-label="Main navigation">
-          {visibleOrder.map((href) => {
-            const item = MAIN_NAV.find((i) => i.href === href);
-            if (!item) return null;
+        <nav className="flex-1 overflow-y-auto p-3" aria-label="Main navigation">
+          {/* Standalone Home item — not in any category */}
+          <div className="mb-2">
+            <NavItem
+              href="/feed"
+              label="Home"
+              icon="home"
+              isActive={isActive("/feed")}
+              collapsed={collapsed}
+              onClick={() => setSidebarOpen(false)}
+            />
+          </div>
+          {SECTIONS.map((section, sIdx) => {
+            const sectionItems = section.hrefs
+              .map((h) => MAIN_NAV.find((i) => i.href === h))
+              .filter((item): item is (typeof MAIN_NAV)[number] => item != null && !prefs.hidden.includes(item.href));
+            const isSectionCollapsed = prefs.collapsedSections.includes(section.id);
             return (
-              <NavItem
-                key={item.href}
-                href={item.href}
-                label={item.label}
-                icon={item.icon}
-                isActive={isActive(item.href)}
-                collapsed={collapsed}
-                onClick={() => setSidebarOpen(false)}
-                customizeMode={customizeMode}
-                onHide={() => hideTab(item.href)}
-                draggable={customizeMode}
-                onDragStart={() => setDraggingHref(item.href)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (draggingHref) moveTo(draggingHref, item.href);
-                  setDraggingHref(null);
-                }}
-                onDragEnd={() => setDraggingHref(null)}
-                isDragging={draggingHref === item.href}
-              />
+              <div key={section.id} className={sIdx > 0 ? "mt-3" : ""}>
+                {!narrow && (
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section.id)}
+                    className="mb-0.5 flex w-full items-center justify-between rounded px-2 py-1 text-left transition-colors hover:bg-white/5"
+                    aria-expanded={!isSectionCollapsed}
+                  >
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors">
+                      {section.label}
+                    </span>
+                    <svg
+                      className={`h-3 w-3 text-zinc-600 transition-transform duration-200 ${isSectionCollapsed ? "-rotate-90" : ""}`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                )}
+                {!isSectionCollapsed && sectionItems.map((item) => (
+                  <NavItem
+                    key={item.href}
+                    href={item.href}
+                    label={item.label}
+                    icon={item.icon}
+                    isActive={isActive(item.href)}
+                    collapsed={collapsed}
+                    onClick={() => setSidebarOpen(false)}
+                    customizeMode={customizeMode}
+                    onHide={() => hideTab(item.href)}
+                  />
+                ))}
+              </div>
             );
           })}
-          <div className={`mt-1 flex flex-col gap-0.5 ${collapsed ? "items-center" : ""}`}>
+          <div className={`mt-3 flex flex-col gap-0.5 ${collapsed ? "items-center" : ""}`}>
             <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => setCustomizeMode((m) => !m)}
-                className="min-w-0 flex-1 rounded-lg px-3 py-2 text-left text-xs font-medium text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-400"
-              >
-                {customizeMode ? (collapsed ? "✓" : "Done") : (collapsed ? "⋯" : "Customize sidebar")}
-              </button>
+              {!collapsed && (
+                <button
+                  type="button"
+                  onClick={() => setCustomizeMode((m) => !m)}
+                  className="min-w-0 flex-1 rounded-lg px-3 py-2 text-left text-xs font-medium text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-400"
+                >
+                  {customizeMode ? "Done" : "Hide items"}
+                </button>
+              )}
               {!isNarrowScreen && (
                 <button
                   type="button"
@@ -489,6 +501,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               key={item.href}
               href={item.href}
               label={item.label}
+              icon={item.icon}
               isActive={isActive(item.href)}
               collapsed={collapsed}
               onClick={() => setSidebarOpen(false)}
@@ -511,7 +524,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               title={collapsed ? "Get Verified" : undefined}
             >
               <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
-                <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 opacity-40 transition-transform transition-opacity duration-200 group-hover:scale-125 group-hover:opacity-100 group-hover:bg-[var(--accent-color)]" />
+                <NavItemIcon icon="verify" isActive={false} />
               </span>
               {!collapsed && <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">Get Verified</span>}
             </Link>
@@ -825,8 +838,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <main className={pathname === "/ceos" || pathname === "/dashboard" || pathname === "/messages" ? "h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden" : "min-h-[calc(100vh-3.5rem)]"}>{children}</main>
-      {pathname !== "/ceos" && pathname !== "/dashboard" && pathname !== "/messages" && <SiteFooter />}
+      <main className={pathname === "/ceos" || pathname === "/messages" ? "h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden" : "min-h-[calc(100vh-3.5rem)]"}>{children}</main>
+      {pathname !== "/ceos" && pathname !== "/messages" && pathname !== "/feed" && <SiteFooter />}
     </div>
   );
 }

@@ -871,7 +871,6 @@ export default function AIPage() {
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-0 rounded-lg border border-white/10 bg-white/5 p-0.5">
                 <span className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-medium text-zinc-100">AI Chat</span>
-                <Link href="/dashboard" className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]" title="Dashboard">Dashboard</Link>
                 <Link
                   href="/whiteboard"
                   className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]"

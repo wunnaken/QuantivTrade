@@ -9,17 +9,16 @@ const PRO_GOLD = "#F59E0B";
 
 const TOOLS: { id: number; name: string; description: string }[] = [
   { id: 1, name: "Options Flow", description: "Live unusual options activity and large block trades" },
-  { id: 2, name: "Insider Trading", description: "SEC Form 4 filings — when executives buy or sell their own stock" },
-  { id: 3, name: "Sector Rotation", description: "11 S&P sectors performance heatmap — where is money flowing?" },
-  { id: 4, name: "Fear & Greed Index", description: "Market sentiment gauge — are investors fearful or greedy?" },
-  { id: 5, name: "IPO Calendar", description: "Upcoming IPOs, expected valuations, and post-IPO performance" },
-  { id: 6, name: "Dividend Calendar", description: "Ex-dividend dates, yields, and payment schedules" },
-  { id: 7, name: "Short Interest", description: "Most shorted stocks, squeeze candidates, and days to cover" },
-  { id: 8, name: "Fed Dashboard", description: "Federal Reserve rates, dot plot, balance sheet, and CME probabilities" },
-  { id: 9, name: "Earnings Whisper", description: "Official estimates vs trader expectations and historical beat rates" },
-  { id: 10, name: "Congress Trades", description: "What politicians are buying and selling — follow the smart money" },
-  { id: 11, name: "Dark Pool", description: "Large institutional off-equantivtrade block trades and smart money flow" },
-  { id: 12, name: "Crypto Dashboard", description: "Dominance, funding rates, stablecoin flows, and fear index" },
+  { id: 2, name: "Sector Rotation", description: "11 S&P sectors performance heatmap — where is money flowing?" },
+  { id: 3, name: "Fear & Greed Index", description: "Market sentiment gauge — are investors fearful or greedy?" },
+  { id: 4, name: "IPO Calendar", description: "Upcoming IPOs, expected valuations, and post-IPO performance" },
+  { id: 5, name: "Dividend Calendar", description: "Ex-dividend dates, yields, and payment schedules" },
+  { id: 6, name: "Short Interest", description: "Most shorted stocks, squeeze candidates, and days to cover" },
+  { id: 7, name: "Fed Dashboard", description: "Federal Reserve rates, dot plot, balance sheet, and CME probabilities" },
+  { id: 8, name: "Earnings Whisper", description: "Official estimates vs trader expectations and historical beat rates" },
+  { id: 9, name: "Congress Trades", description: "What politicians are buying and selling — follow the smart money" },
+  { id: 10, name: "Dark Pool", description: "Large institutional off-equantivtrade block trades and smart money flow" },
+  { id: 11, name: "Crypto Dashboard", description: "Dominance, funding rates, stablecoin flows, and fear index" },
 ];
 
 export default function DataHubPage() {
@@ -27,10 +26,10 @@ export default function DataHubPage() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const goPrev = useCallback(() => {
-    setSelectedTool((t) => (t != null && t > 1 ? t - 1 : 12));
+    setSelectedTool((t) => (t != null && t > 1 ? t - 1 : 11));
   }, []);
   const goNext = useCallback(() => {
-    setSelectedTool((t) => (t != null && t < 12 ? t + 1 : 1));
+    setSelectedTool((t) => (t != null && t < 11 ? t + 1 : 1));
   }, []);
 
   if (selectedTool != null) {
@@ -84,7 +83,7 @@ export default function DataHubPage() {
         {!bannerDismissed && (
           <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-amber-500/20 bg-gradient-to-r from-amber-500/10 to-amber-600/5 px-4 py-3">
             <p className="text-sm text-amber-100">
-              You&apos;re previewing DataHub — data is limited. Upgrade to Pro for full real-time access to all 12 tools.
+              You&apos;re previewing DataHub — data is limited. Upgrade to Pro for full real-time access to all 11 tools.
             </p>
             <button type="button" onClick={() => setBannerDismissed(true)} className="shrink-0 rounded p-1 text-amber-200 hover:bg-amber-500/20" aria-label="Dismiss">
               ×
@@ -118,26 +117,24 @@ function ExpandedToolView({ toolId }: { toolId: number }) {
     case 1:
       return <OptionsFlowView />;
     case 2:
-      return <InsiderTradingView />;
-    case 3:
       return <SectorRotationView />;
-    case 4:
+    case 3:
       return <FearGreedView />;
-    case 5:
+    case 4:
       return <IPOCalendarView />;
-    case 6:
+    case 5:
       return <DividendCalendarView />;
-    case 7:
+    case 6:
       return <ShortInterestView />;
-    case 8:
+    case 7:
       return <FedDashboardView />;
-    case 9:
+    case 8:
       return <EarningsWhisperView />;
-    case 10:
+    case 9:
       return <CongressTradesView />;
-    case 11:
+    case 10:
       return <DarkPoolView />;
-    case 12:
+    case 11:
       return <CryptoDashboardView />;
     default:
       return null;
@@ -270,81 +267,7 @@ function OptionsFlowView() {
   );
 }
 
-// ─── Tool 2: Insider Trading ──────────────────────────────────────────────
-function InsiderTradingView() {
-  return (
-    <div className="space-y-6">
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
-        This tool uses sample data. Real insider filings come from SEC EDGAR Form 4.
-      </div>
-      <InsiderTradingContent />
-    </div>
-  );
-}
-
-function InsiderTradingContent() {
-  // TODO: Replace with Insider Trading (SEC Form 4) API
-  // Endpoint: SEC EDGAR Full-Text Search / company filings, or Quiver Quant https://www.quiverquant.com/ (insider trades)
-  // When: before launch
-  const rows = [
-    { date: "2025-03-10", executive: "Tim Cook", company: "Apple", ticker: "AAPL", transaction: "Buy", shares: 50000, value: 9.5, type: "Buy" },
-    { date: "2025-03-08", executive: "Jensen Huang", company: "NVIDIA", ticker: "NVDA", transaction: "Sell", shares: 120000, value: 18.2, type: "Sell" },
-    { date: "2025-03-05", executive: "Andy Jassy", company: "Amazon", ticker: "AMZN", transaction: "Buy", shares: 25000, value: 4.8, type: "Buy" },
-    { date: "2025-03-01", executive: "Satya Nadella", company: "Microsoft", ticker: "MSFT", transaction: "Sell", shares: 80000, value: 32.1, type: "Sell" },
-  ];
-  return (
-    <>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <p className="text-xs text-zinc-500">Insider buys this month</p>
-          <p className="text-xl font-bold text-emerald-400">12</p>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <p className="text-xs text-zinc-500">Insider sells this month</p>
-          <p className="text-xl font-bold text-red-400">8</p>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <p className="text-xs text-zinc-500">Most bought</p>
-          <p className="text-xl font-bold text-white">AAPL</p>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/5 p-4">
-          <p className="text-xs text-zinc-500">Sentiment</p>
-          <p className="text-xl font-bold text-emerald-400">Bullish</p>
-        </div>
-      </div>
-      <div className="rounded-lg border border-white/10 overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-white/10 bg-white/5">
-              <th className="p-2 font-medium text-zinc-400">Date</th>
-              <th className="p-2 font-medium text-zinc-400">Executive</th>
-              <th className="p-2 font-medium text-zinc-400">Company</th>
-              <th className="p-2 font-medium text-zinc-400">Ticker</th>
-              <th className="p-2 font-medium text-zinc-400">Transaction</th>
-              <th className="p-2 font-medium text-zinc-400">Shares</th>
-              <th className="p-2 font-medium text-zinc-400">Value ($M)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i} className={`border-b border-white/5 ${i % 2 ? "bg-white/[0.02]" : ""}`}>
-                <td className="p-2 text-zinc-300">{r.date}</td>
-                <td className="p-2 text-zinc-300">{r.executive}</td>
-                <td className="p-2 text-white">{r.company}</td>
-                <td className="p-2 font-medium text-white">{r.ticker}</td>
-                <td className={`p-2 font-medium ${r.type === "Buy" ? "text-emerald-400" : "text-red-400"}`}>{r.transaction}</td>
-                <td className="p-2 text-zinc-300">{r.shares.toLocaleString()}</td>
-                <td className="p-2 text-zinc-300">{r.value}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
-
-// ─── Tool 3: Sector Rotation ───────────────────────────────────────────────
+// ─── Tool 2: Sector Rotation ───────────────────────────────────────────────
 function SectorRotationView() {
   const [sectors, setSectors] = useState<{ symbol: string; name: string; changePercent: number }[]>([]);
   const [range, setRange] = useState("1D");

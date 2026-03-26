@@ -142,6 +142,61 @@ async function fetchCountryData(country: string, full: boolean): Promise<Country
   }
 }
 
+/** Territories that share a parent country's polygon but appear in a geographically unexpected location.
+ *  For each, we check the centroid of the rendered polygon to return the correct display name. */
+const TERRITORY_OVERRIDES: Array<{
+  parentName: string;
+  minLat: number; maxLat: number;
+  minLng: number; maxLng: number;
+  displayName: string;
+}> = [
+  // France overseas
+  { parentName: "France", minLat: -10, maxLat: 10,  minLng: -60, maxLng: -45, displayName: "French Guiana" },
+  { parentName: "France", minLat:  14, maxLat: 18,  minLng: -64, maxLng: -58, displayName: "Guadeloupe / Martinique" },
+  { parentName: "France", minLat: -25, maxLat: -18, minLng:  50, maxLng:  60, displayName: "Réunion" },
+  { parentName: "France", minLat: -25, maxLat: -10, minLng: 160, maxLng: 175, displayName: "New Caledonia" },
+  { parentName: "France", minLat: -30, maxLat:  -5, minLng:-155, maxLng:-130, displayName: "French Polynesia" },
+  // Russia exclaves
+  { parentName: "Russia", minLat:  53, maxLat:  57, minLng:  18, maxLng:  23, displayName: "Kaliningrad (Russia)" },
+  // United Kingdom overseas
+  { parentName: "United Kingdom", minLat: -55, maxLat: -50, minLng: -62, maxLng: -55, displayName: "Falkland Islands (UK)" },
+  // Denmark overseas
+  { parentName: "Denmark", minLat:  59, maxLat:  85, minLng: -60, maxLng:  -5, displayName: "Greenland" },
+  // Netherlands overseas
+  { parentName: "Netherlands", minLat: 11, maxLat: 18, minLng: -70, maxLng: -62, displayName: "Caribbean Netherlands" },
+  // Norway overseas
+  { parentName: "Norway", minLat: 73, maxLat: 82, minLng: 10, maxLng: 35, displayName: "Svalbard (Norway)" },
+  // United States non-contiguous (Hawaii/territories — not Alaska which most people know)
+  { parentName: "United States of America", minLat: 17, maxLat: 19, minLng: -68, maxLng: -64, displayName: "US Virgin Islands" },
+  { parentName: "United States of America", minLat: 13, maxLat: 15, minLng: 144, maxLng: 146, displayName: "Guam (US)" },
+];
+
+function polygonCentroid(coords: number[][][]): [number, number] {
+  const ring = coords[0];
+  let lat = 0, lng = 0;
+  for (const [lo, la] of ring) { lat += la; lng += lo; }
+  return [lat / ring.length, lng / ring.length];
+}
+
+function getTerritoryDisplayName(poly: CountryPoly): string {
+  const g = poly.geometry;
+  const coords: number[][][] =
+    g.type === "Polygon"
+      ? (g.coordinates as number[][][])
+      : (g.coordinates as number[][][][])[0];
+  const [cLat, cLng] = polygonCentroid(coords);
+  for (const t of TERRITORY_OVERRIDES) {
+    if (
+      poly.name === t.parentName &&
+      cLat >= t.minLat && cLat <= t.maxLat &&
+      cLng >= t.minLng && cLng <= t.maxLng
+    ) {
+      return t.displayName;
+    }
+  }
+  return poly.name;
+}
+
 function featureToCountryPoly(f: Feature<Geometry>): CountryPoly | null {
   const g = f.geometry;
   if (g.type !== "Polygon" && g.type !== "MultiPolygon") return null;
@@ -725,8 +780,9 @@ export default function MapView() {
           return;
         }
         const p = poly as CountryPoly;
+        const displayName = getTerritoryDisplayName(p);
         setHoveredRef.current((prev) =>
-          prev?.name === p.name && prev?.id === p.id ? prev : { name: p.name, id: p.id },
+          prev?.name === displayName && prev?.id === p.id ? prev : { name: displayName, id: p.id },
         );
       });
 
@@ -834,7 +890,7 @@ export default function MapView() {
           return compareIds.has(p.id) ? "#ffffff" : "#1e293b";
         })
         .polygonAltitude((d: object) => (compareIds.has((d as CountryPoly).id) ? 0.06 : 0.01))
-        .polygonLabel((d: object) => (d as CountryPoly).name);
+        .polygonLabel((d: object) => getTerritoryDisplayName(d as CountryPoly));
 
       g.arcsData([]).pointsData([]).ringsData([]).htmlElementsData([]).customLayerData([]);
       g.onArcClick(() => {});

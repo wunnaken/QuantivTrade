@@ -20,6 +20,7 @@ type Room = {
   created_at: string;
   member_count?: number;
   host_username?: string | null;
+  is_host?: boolean;
 };
 
 function LiveBadge({ isLive, scheduledAt, endedAt }: { isLive: boolean; scheduledAt: string | null; endedAt: string | null }) {
@@ -52,6 +53,7 @@ export default function TradeRoomsPage() {
   const [inviteInput, setInviteInput] = useState("");
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
+  const [leavingId, setLeavingId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -69,6 +71,19 @@ export default function TradeRoomsPage() {
     }
     void load();
   }, [user]);
+
+  async function handleLeaveRoom(roomId: number) {
+    if (!confirm("Leave this trade room?")) return;
+    setLeavingId(roomId);
+    try {
+      const res = await fetch(`/api/rooms/${roomId}/leave`, { method: "POST" });
+      if (res.ok) {
+        setRooms((prev) => prev.filter((r) => r.id !== roomId));
+      }
+    } finally {
+      setLeavingId(null);
+    }
+  }
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -185,13 +200,24 @@ export default function TradeRoomsPage() {
                   {room.description && (
                     <p className="mt-2 line-clamp-2 text-sm text-zinc-400">{room.description}</p>
                   )}
-                  <div className="mt-auto pt-4">
+                  <div className="mt-auto pt-4 flex gap-2">
                     <Link
                       href={`/trade-rooms/${room.id}`}
-                      className="block w-full rounded-lg border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 py-2 text-center text-sm font-medium text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20"
+                      className="flex-1 rounded-lg border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 py-2 text-center text-sm font-medium text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20"
                     >
                       Enter Room
                     </Link>
+                    {!room.is_host && (
+                      <button
+                        type="button"
+                        onClick={() => handleLeaveRoom(room.id)}
+                        disabled={leavingId === room.id}
+                        className="rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-500 transition hover:border-red-500/30 hover:text-red-400 disabled:opacity-40"
+                        title="Leave room"
+                      >
+                        {leavingId === room.id ? "..." : "Leave"}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

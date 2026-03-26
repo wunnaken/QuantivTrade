@@ -4,18 +4,20 @@ import Link from "next/link";
 import { QuantivTradeLogoImage } from "./XchangeLogoImage";
 import { SiteFooter } from "./SiteFooter";
 
-export function LandingPageContent({ hasInvite = false }: { hasInvite?: boolean }) {
+export function LandingPageContent({ hasInvite = false, hideTopBar = false }: { hasInvite?: boolean; hideTopBar?: boolean }) {
   return (
     <>
-      <div className="sticky top-0 z-20 flex items-center justify-center gap-2 border-b border-white/5 bg-[var(--accent-color)]/10 px-4 py-2 text-center text-xs font-medium text-zinc-200">
-        {hasInvite ? (
-          <Link href="/auth/sign-up" className="text-[var(--accent-color)] hover:underline">
-            You&apos;ve been invited! Create your account to get started →
-          </Link>
-        ) : (
-          <span>🚀 QuantivTrade is in Beta — Join the waitlist for early access</span>
-        )}
-      </div>
+      {!hideTopBar && (
+        <div className="sticky top-0 z-20 flex items-center justify-center gap-2 border-b border-white/5 bg-[var(--accent-color)]/10 px-4 py-2 text-center text-xs font-medium text-zinc-200">
+          {hasInvite ? (
+            <Link href="/auth/sign-up" className="text-[var(--accent-color)] hover:underline">
+              You&apos;ve been invited! Create your account to get started →
+            </Link>
+          ) : (
+            <span>🚀 QuantivTrade is in Beta — Join the waitlist for early access</span>
+          )}
+        </div>
+      )}
       <main className="mx-auto flex max-w-6xl flex-col gap-16 px-6 py-16 lg:flex-row lg:items-center lg:gap-20 lg:px-8 lg:py-24">
         <section className="flex-1 space-y-8">
           <div className="inline-flex items-center gap-2 rounded-full border border-[var(--accent-color)]/25 bg-[var(--accent-color)]/5 px-3 py-1 text-xs font-medium text-[var(--accent-color)]">
