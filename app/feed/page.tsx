@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -46,6 +46,27 @@ function fmtPrice(n: number | null | undefined) {
 function fmtPct(n: number | null | undefined) {
   if (n == null) return "—";
   return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
+}
+
+// ── Hooks ─────────────────────────────────────────────────────────────────────
+
+function useCountUp(target: number | null, duration = 1100) {
+  const [value, setValue] = useState(0);
+  const rafRef = useRef<number>(undefined);
+  useEffect(() => {
+    if (target == null) return;
+    setValue(0);
+    const start = Date.now();
+    const run = () => {
+      const t = Math.min((Date.now() - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setValue(target * eased);
+      if (t < 1) rafRef.current = requestAnimationFrame(run);
+    };
+    rafRef.current = requestAnimationFrame(run);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [target, duration]);
+  return value;
 }
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
@@ -115,47 +136,86 @@ function Skel({ n=3 }:{n?:number}) {
   return <div className="space-y-2 pt-1">{Array.from({length:n}).map((_,i)=><div key={i} className="h-3 animate-pulse rounded bg-white/5" style={{width:`${88-i*10}%`}}/>)}</div>;
 }
 
-// ── Odometer Counter ──────────────────────────────────────────────────────────
-// animateFrom: only animate digits at position >= animateFrom from right (0=ones)
-// Default 5 means ten-thousands and up animate; small digits just update silently
+// ── Ambient / overlay components ──────────────────────────────────────────────
 
-function OdometerCounter({ value, className="", animateFrom=5 }: { value: string; className?: string; animateFrom?: number }) {
-  const [digitVersions, setDigitVersions] = useState<Record<number,number>>({});
-  const prevRef = useRef(value);
-
-  useEffect(()=>{
-    const prev = prevRef.current;
-    if(prev === value) return;
-    const newVers: Record<number,number> = { ...digitVersions };
-    let changed = false;
-    const maxLen = Math.max(prev.length, value.length);
-    for(let ri=0; ri<maxLen; ri++){
-      if(ri < animateFrom) continue; // skip animation for small (rightmost) digits
-      const pc = prev[prev.length-1-ri] ?? "";
-      const vc = value[value.length-1-ri] ?? "";
-      if(vc && /[0-9]/.test(vc) && pc !== vc){
-        newVers[ri] = (newVers[ri]??0)+1;
-        changed = true;
-      }
-    }
-    if(changed) setDigitVersions(newVers);
-    prevRef.current = value;
-  },[value]);
-
+function AmbientParticles() {
   return (
-    <span className={`inline-flex font-mono tabular-nums ${className}`}>
-      {value.split("").map((char,i)=>{
-        if(!/[0-9]/.test(char)) return <span key={`s${i}`} className="opacity-60">{char}</span>;
-        const ri = value.length-1-i;
-        const v = digitVersions[ri]??0;
-        return (
-          <span key={`d${ri}-${v}`} className="inline-block overflow-hidden leading-none"
-            style={{animation: v>0?"digitSlideUp 0.18s ease-out":"none"}}>
-            {char}
-          </span>
-        );
-      })}
-    </span>
+    <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden style={{ zIndex: 0 }}>
+      {[8,23,41,59,77,91].map((left, i) => (
+        <div key={i}
+          className="absolute h-1 w-1 rounded-full bg-[var(--accent-color)]"
+          style={{
+            left: `${left}%`, bottom: "-4px", opacity: 0,
+            animation: `ambient-float ${18 + i * 4}s ease-in infinite`,
+            animationDelay: `${i * 3.1}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ParallaxGrid() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const handle = (e: MouseEvent) => {
+      const dx = (e.clientX / window.innerWidth - 0.5) * 10;
+      const dy = (e.clientY / window.innerHeight - 0.5) * 10;
+      el.style.backgroundPosition = `${dx}px ${dy}px`;
+    };
+    window.addEventListener("mousemove", handle, { passive: true });
+    return () => window.removeEventListener("mousemove", handle);
+  }, []);
+  return (
+    <div ref={ref}
+      className="pointer-events-none fixed inset-0"
+      aria-hidden
+      style={{
+        zIndex: 0,
+        backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px)",
+        backgroundSize: "36px 36px",
+        transition: "background-position 0.15s ease-out",
+      }}
+    />
+  );
+}
+
+function MarketOpenFlash() {
+  const [flash, setFlash] = useState<{ label: string; isOpen: boolean } | null>(null);
+  useEffect(() => {
+    const check = () => {
+      const etStr = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+      const et = new Date(etStr);
+      const h = et.getHours(), m = et.getMinutes(), s = et.getSeconds();
+      const isWeekday = et.getDay() >= 1 && et.getDay() <= 5;
+      if (!isWeekday) return;
+      if (h === 9 && m === 30 && s < 15) {
+        setFlash({ label: "Markets just opened", isOpen: true });
+        setTimeout(() => setFlash(null), 9000);
+      } else if (h === 16 && m === 0 && s < 15) {
+        setFlash({ label: "Markets just closed", isOpen: false });
+        setTimeout(() => setFlash(null), 9000);
+      }
+    };
+    const id = setInterval(check, 5000);
+    check();
+    return () => clearInterval(id);
+  }, []);
+  if (!flash) return null;
+  return (
+    <div
+      className={`mb-4 flex items-center gap-2.5 rounded-xl border px-4 py-2.5 text-sm font-semibold ${
+        flash.isOpen
+          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+          : "border-amber-500/30 bg-amber-500/10 text-amber-400"
+      }`}
+      style={{ animation: "market-flash-in 0.5s ease-out" }}
+    >
+      <span className={`h-2 w-2 rounded-full sonar-dot ${flash.isOpen ? "bg-emerald-400 text-emerald-400" : "bg-amber-400 text-amber-400"}`} />
+      {flash.label}
+    </div>
   );
 }
 
@@ -417,84 +477,48 @@ function PriceAlertsCard({delay}:{delay:number}) {
 
 function JournalCard({delay}:{delay:number}) {
   const { user } = useAuth();
-  const [entries,setEntries] = useState<any[]>([]);
+  const [stats,setStats] = useState<{total:number;wins:number;totalPnl:number;bestPnl:number|null}|null>(null);
   const [loading,setLoading] = useState(true);
   useEffect(()=>{
     if(!user){setLoading(false);return;}
     fetch("/api/trades").then(r=>r.json()).then(d=>{
-      const items=Array.isArray(d)?d:d?.trades??[];
-      setEntries(items.slice(0,3));
+      const items:any[]=Array.isArray(d)?d:d?.trades??[];
+      const getPnl=(e:any)=>{const v=e.pnlDollars??e.pnl_dollars??e.pnl??e.profit_loss;return v!=null?+(v):null;};
+      const closed=items.filter(e=>getPnl(e)!=null);
+      const wins=closed.filter(e=>(getPnl(e)??0)>=0).length;
+      const totalPnl=closed.reduce((s,e)=>s+(getPnl(e)??0),0);
+      const bestPnl=closed.length>0?Math.max(...closed.map(e=>getPnl(e)??-Infinity)):null;
+      setStats({total:items.length,wins,totalPnl,bestPnl:bestPnl===-Infinity?null:bestPnl});
     }).catch(()=>{}).finally(()=>setLoading(false));
   },[user]);
+  const winRate=stats?Math.round((stats.wins/Math.max(stats.total,1))*100):0;
+  const animTotal   = useCountUp(stats?.total ?? null);
+  const animWinRate = useCountUp(stats?Math.round((stats.wins/Math.max(stats.total,1))*100):null);
+  const animPnl     = useCountUp(stats?.totalPnl ?? null, 1300);
+  const animBest    = useCountUp(stats?.bestPnl ?? null, 1300);
   return (
-    <BentoCard href="/journal" title="Trade Journal" icon={I.bookOpen} delay={delay} loading={loading} className="min-h-[180px]">
-      {entries.length===0?<p className="pt-1 text-xs text-zinc-600">{user?"No journal entries yet":"Sign in to see journal"}</p>:(
-        <ul className="space-y-2 pt-1">
-          {entries.map((e:any,i:number)=>{
-            const pnl=e.pnlDollars??e.pnl_dollars??e.pnl??e.profit_loss;
-            const up=pnl==null||pnl>=0;
-            return(
-              <li key={i} className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-zinc-300">{e.asset??e.ticker??e.symbol??"—"}</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-zinc-600">{e.direction??e.type??e.side??""}</span>
-                  {pnl!=null&&<span className={`font-semibold ${up?"text-emerald-400":"text-red-400"}`}>{up?"+":""}{(+pnl).toFixed(2)}</span>}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+    <BentoCard href="/journal" title="Trade Analytics" icon={I.bookOpen} delay={delay} loading={loading} className="min-h-[200px]">
+      {!user?<p className="pt-1 text-xs text-zinc-600">Sign in to see analytics</p>:
+      stats==null||stats.total===0?<p className="pt-1 text-xs text-zinc-600">No trades recorded yet</p>:(
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <p className="text-[9px] uppercase tracking-wider text-zinc-600">Total Trades</p>
+            <p className="mt-0.5 text-xl font-bold text-zinc-200">{Math.round(animTotal)}</p>
+          </div>
+          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <p className="text-[9px] uppercase tracking-wider text-zinc-600">Win Rate</p>
+            <p className={`mt-0.5 text-xl font-bold ${winRate>=50?"text-emerald-400":"text-red-400"}`}>{Math.round(animWinRate)}%</p>
+          </div>
+          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <p className="text-[9px] uppercase tracking-wider text-zinc-600">Total P&amp;L</p>
+            <p className={`mt-0.5 text-sm font-bold ${stats.totalPnl>=0?"text-emerald-400":"text-red-400"}`}>{animPnl>=0?"+":""}{animPnl.toFixed(2)}</p>
+          </div>
+          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-2.5">
+            <p className="text-[9px] uppercase tracking-wider text-zinc-600">Best Trade</p>
+            <p className={`mt-0.5 text-sm font-bold ${(stats.bestPnl??0)>=0?"text-emerald-400":"text-zinc-400"}`}>{stats.bestPnl!=null?`${animBest>=0?"+":""}${animBest.toFixed(2)}`:"—"}</p>
+          </div>
+        </div>
       )}
-    </BentoCard>
-  );
-}
-
-// ── CENTER: Market Pulse ──────────────────────────────────────────────────────
-
-const PULSE_TICKERS = [
-  {symbol:"SPY",label:"S&P 500",href:"/search/SPY"},{symbol:"QQQ",label:"NASDAQ 100",href:"/search/QQQ"},
-  {symbol:"DIA",label:"Dow Jones",href:"/search/DIA"},{symbol:"IWM",label:"Russell 2K",href:"/search/IWM"},
-  {symbol:"BTC-USD",label:"Bitcoin",href:"/search/BTC-USD"},{symbol:"ETH-USD",label:"Ethereum",href:"/search/ETH-USD"},
-  {symbol:"GC=F",label:"Gold",href:"/search/GC%3DF"},{symbol:"^VIX",label:"VIX",href:"/sentiment"},
-];
-
-function MarketPulseCard({delay}:{delay:number}) {
-  const [quotes,setQuotes] = useState<Record<string,Q>>({});
-  const [loading,setLoading] = useState(true);
-
-  const fetchAll = useCallback(async()=>{
-    const out:Record<string,Q>={};
-    await Promise.allSettled(PULSE_TICKERS.map(async({symbol})=>{
-      try{const r=await fetch(`/api/ticker-quote?symbol=${encodeURIComponent(symbol)}`);if(r.ok)out[symbol]=await r.json();}catch{}
-    }));
-    setQuotes(out);setLoading(false);
-  },[]);
-
-  useEffect(()=>{fetchAll();const id=setInterval(fetchAll,30000);return()=>clearInterval(id);},[fetchAll]);
-
-  return (
-    <BentoCard href="/map" title="Market Pulse" icon={I.activity} delay={delay} loading={loading} className="min-h-[380px]">
-      <div className="grid grid-cols-2 gap-2 pt-1 lg:grid-cols-4">
-        {PULSE_TICKERS.map(({symbol,label,href})=>{
-          const q=quotes[symbol]; const up=(q?.changePercent??0)>=0;
-          return (
-            <div key={symbol} onClick={e=>{e.stopPropagation();window.location.assign(href);}}
-              className="flex flex-col gap-0.5 rounded-xl border border-white/5 bg-white/[0.02] p-3 transition hover:border-white/10 cursor-pointer">
-              <p className="truncate text-[10px] text-zinc-600">{label}</p>
-              {q?.price!=null ? <>
-                <p className="text-sm font-bold leading-tight text-zinc-100">{fmtPrice(q.price)}</p>
-                <p className={`text-[10px] font-semibold ${up?"text-emerald-400":"text-red-400"}`}>{fmtPct(q.changePercent)}</p>
-              </> : <>
-                <div className="h-4 w-14 animate-pulse rounded bg-white/5"/>
-                <div className="h-3 w-8 animate-pulse rounded bg-white/5"/>
-              </>}
-            </div>
-          );
-        })}
-      </div>
-      <div className="mt-3 flex items-center gap-1.5 text-[10px] text-zinc-700">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"/>Live · updates every 30s
-      </div>
     </BentoCard>
   );
 }
@@ -525,7 +549,7 @@ function TopMoversCard({delay}:{delay:number}) {
     .slice(0,5);
 
   return (
-    <BentoCard href="/news" title="Top Movers" icon={I.arrowUp} delay={delay} loading={loading} className="min-h-[260px]">
+    <BentoCard href="/screener" title="Top Movers" icon={I.arrowUp} delay={delay} loading={loading} className="min-h-[260px]">
       <div className="mb-3 flex gap-1">
         {(["gainers","losers"] as const).map(t=>(
           <button key={t} onClick={e=>{e.stopPropagation();setTab(t);}}
@@ -579,6 +603,18 @@ function LiveChartCard({delay}:{delay:number}) {
   useEffect(()=>{loadChart(symbol);const id=setInterval(()=>loadChart(symbol),60000);return()=>clearInterval(id);},[symbol,loadChart]);
 
   const up=(quote?.changePercent??0)>=0;
+  const prevPriceRef = useRef<number|null>(null);
+  const [priceTick, setPriceTick] = useState(false);
+  const [tickKey, setTickKey] = useState(0);
+  useEffect(()=>{
+    if(quote?.price!=null&&prevPriceRef.current!=null&&quote.price!==prevPriceRef.current){
+      setTickKey(k=>k+1);
+      setPriceTick(true);
+      const t=setTimeout(()=>setPriceTick(false),800);
+      return()=>clearTimeout(t);
+    }
+    prevPriceRef.current=quote?.price??null;
+  },[quote?.price]);
   const minV = data.length>0?Math.min(...data.map(d=>d.close)):0;
   const maxV = data.length>0?Math.max(...data.map(d=>d.close)):100;
   const pad  = (maxV-minV)*0.1||1;
@@ -591,7 +627,7 @@ function LiveChartCard({delay}:{delay:number}) {
           <span className="flex h-4 w-4 items-center justify-center text-zinc-600">{I.barChart}</span>
           <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Live Chart</span>
           {quote?.price!=null&&<>
-            <span className="text-sm font-bold text-zinc-200">{fmtPrice(quote.price)}</span>
+            <span key={tickKey} className={`text-sm font-bold text-zinc-200${priceTick?" price-tick":""}`}>{fmtPrice(quote.price)}</span>
             <span className={`text-xs font-semibold ${up?"text-emerald-400":"text-red-400"}`}>{fmtPct(quote.changePercent)}</span>
           </>}
         </div>
@@ -602,24 +638,36 @@ function LiveChartCard({delay}:{delay:number}) {
         </form>
       </div>
       <div className="flex-1 min-h-0 px-2 pb-3">
-        {loading?<div className="flex h-full min-h-[320px] items-center justify-center"><div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--accent-color)] border-t-transparent"/></div>
-        :data.length>0?(
-          <ResponsiveContainer width="100%" height={340}>
-            <AreaChart data={data} margin={{top:8,right:4,bottom:0,left:-18}}>
-              <defs>
-                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--accent-color)" stopOpacity={0.2}/>
-                  <stop offset="95%" stopColor="var(--accent-color)" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" tick={{fill:"#52525b",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>String(v).slice(-5)}/>
-              <YAxis domain={[minV-pad,maxV+pad]} tick={{fill:"#52525b",fontSize:9}} axisLine={false} tickLine={false}/>
-              <Tooltip contentStyle={{backgroundColor:"#0F1520",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,fontSize:11}} labelStyle={{color:"#a1a1aa"}}
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                formatter={(v:any)=>[`$${Number(v).toFixed(2)}`,"Price"]} cursor={{stroke:"rgba(255,255,255,0.08)"}}/>
-              <Area type="monotone" dataKey="close" stroke="var(--accent-color)" strokeWidth={1.5} fill="url(#chartGrad)" dot={false} activeDot={{r:3,fill:"var(--accent-color)"}}/>
-            </AreaChart>
-          </ResponsiveContainer>
+        {loading?(
+          <div className="flex h-[340px] flex-col justify-around py-4 px-2" aria-label="Loading chart">
+            {Array.from({length:6}).map((_,i)=>(
+              <div key={i} className="h-px rounded bg-white/10"
+                style={{animation:"grid-line-draw 0.55s ease-out forwards",animationDelay:`${i*0.09}s`,transform:"scaleX(0)",transformOrigin:"left"}}/>
+            ))}
+          </div>
+        ):data.length>0?(
+          <div className="relative">
+            <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+              <div className="absolute left-0 right-0 h-px bg-gradient-to-r from-transparent via-[var(--accent-color)]/50 to-transparent"
+                style={{position:"absolute",animation:"scan-sweep 5s ease-in-out infinite",animationDelay:"2s"}}/>
+            </div>
+            <ResponsiveContainer width="100%" height={340}>
+              <AreaChart data={data} margin={{top:8,right:4,bottom:0,left:-18}}>
+                <defs>
+                  <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--accent-color)" stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor="var(--accent-color)" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" tick={{fill:"#52525b",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>String(v).slice(-5)}/>
+                <YAxis domain={[minV-pad,maxV+pad]} tick={{fill:"#52525b",fontSize:9}} axisLine={false} tickLine={false}/>
+                <Tooltip contentStyle={{backgroundColor:"#0F1520",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,fontSize:11}} labelStyle={{color:"#a1a1aa"}}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  formatter={(v:any)=>[`$${Number(v).toFixed(2)}`,"Price"]} cursor={{stroke:"rgba(255,255,255,0.08)"}}/>
+                <Area type="monotone" dataKey="close" stroke="var(--accent-color)" strokeWidth={1.5} fill="url(#chartGrad)" dot={false} activeDot={{r:3,fill:"var(--accent-color)"}}/>
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
         ):(
           <div className="flex h-[340px] items-center justify-center text-xs text-zinc-600">No chart data for {symbol}</div>
         )}
@@ -649,7 +697,7 @@ function InsiderTradesCard({delay}:{delay:number}) {
     <BentoCard href="/insider-trades" title="Congressional Trades" icon={I.institution} delay={delay} loading={loading} className="min-h-[300px]">
       {todayCount>0&&(
         <div className="mb-2 flex items-center gap-2 rounded-lg bg-[var(--accent-color)]/10 px-3 py-1.5">
-          <span className="h-2 w-2 rounded-full bg-[var(--accent-color)] animate-pulse"/>
+          <span className="h-2 w-2 rounded-full bg-[var(--accent-color)] sonar-dot text-[var(--accent-color)]"/>
           <span className="text-xs font-semibold text-[var(--accent-color)]">{todayCount} new trade{todayCount!==1?"s":""} today</span>
         </div>
       )}
@@ -684,83 +732,46 @@ function InsiderTradesCard({delay}:{delay:number}) {
 
 // ── CENTER: FiscalWatch mini ──────────────────────────────────────────────────
 
-// US annual deficit ~$1.8–2T → ~$57k/second new debt
-const DEBT_TICK = 57000;
-
 function FiscalWatchCard({delay}:{delay:number}) {
-  const [baseDebt,setBaseDebt] = useState<number|null>(null);
-  const [liveDebt,setLiveDebt] = useState<number|null>(null);
   const [contracts,setContracts] = useState<{recipient:string;amount:number;date:string}[]>([]);
-  const startRef = useRef<number>(0);
-  const year = new Date().getFullYear();
+  const [loading,setLoading] = useState(true);
 
   useEffect(()=>{
     fetch("/api/fiscalwatch").then(r=>r.json()).then(d=>{
-      // Use debt acquired this year (not total debt)
-      const v=d?.debtThisYear??d?.currentDebt??null;
-      if(v!=null){
-        const base=Number(v);
-        setBaseDebt(base);
-        setLiveDebt(base);
-        startRef.current=Date.now();
-      }
-      // From the most recent batch, pick the 3 with the biggest amounts
+      // From the most recent batch, pick the 5 with the biggest amounts
       const ctrs=[...(d?.contracts??[])]
         .sort((a:any,b:any)=>b.amount-a.amount)
-        .slice(0,3)
+        .slice(0,5)
         .map((c:any)=>({recipient:c.recipient,amount:c.amount,date:c.date??""}));
       setContracts(ctrs);
-    }).catch(()=>{});
+    }).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
-
-  useEffect(()=>{
-    if(baseDebt==null) return;
-    // Update every 2s — adds ~$114k per tick so only hundred-thousands+ digits change
-    const id=setInterval(()=>{
-      const elapsed=(Date.now()-startRef.current)/1000;
-      setLiveDebt(baseDebt+elapsed*DEBT_TICK);
-    },2000);
-    return()=>clearInterval(id);
-  },[baseDebt]);
 
   const fmtAmt=(n:number)=>{
     if(n>=1e9) return`$${(n/1e9).toFixed(1)}B`;
     if(n>=1e6) return`$${(n/1e6).toFixed(0)}M`;
     return`$${n.toLocaleString()}`;
   };
-  const debtStr = liveDebt!=null ? Math.floor(liveDebt).toLocaleString("en-US") : null;
 
   return (
-    <BentoCard href="/fiscalwatch" title="FiscalWatch" icon={I.dollarSign} delay={delay} className="min-h-[240px]">
-      <div className="pt-1 flex flex-col gap-3">
-        <div>
-          <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">New Debt in {year} · Live</p>
-          {debtStr!=null
-            ?<div className="flex items-baseline gap-1.5">
-                <span className="text-lg font-bold text-red-400 font-mono opacity-70">$</span>
-                <OdometerCounter value={debtStr} className="text-lg font-bold text-red-400 leading-tight"/>
-              </div>
-            :<div className="h-6 w-48 animate-pulse rounded bg-white/5"/>}
-          <p className="text-[9px] text-zinc-700 mt-0.5">↑ ~$57k/sec · click for full breakdown</p>
-        </div>
-        <div>
-          <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1.5">Most Recent Gov Contracts</p>
-          {contracts.length>0?(
-            <ul className="space-y-2">
-              {contracts.map((c,i)=>(
-                <li key={i} className="flex items-start justify-between gap-2 text-[10px]">
-                  <div className="min-w-0">
-                    <p className="truncate text-zinc-400 leading-snug">{c.recipient}</p>
-                    {c.date&&<p className="text-zinc-700">{new Date(c.date+"T12:00:00Z").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</p>}
-                  </div>
-                  <span className="shrink-0 font-semibold text-red-400">{fmtAmt(c.amount)}</span>
-                </li>
-              ))}
-            </ul>
-          ):(
-            <p className="text-[10px] text-zinc-600">Contract data loading…</p>
-          )}
-        </div>
+    <BentoCard href="/fiscalwatch" title="FiscalWatch" icon={I.dollarSign} delay={delay} loading={loading} className="min-h-[240px]">
+      <div className="pt-1">
+        <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-2">Top Gov Contracts · Most Recent</p>
+        {contracts.length>0?(
+          <ul className="space-y-2.5">
+            {contracts.map((c,i)=>(
+              <li key={i} className="flex items-start justify-between gap-2 text-[10px]">
+                <div className="min-w-0">
+                  <p className="truncate text-zinc-300 leading-snug font-medium">{c.recipient}</p>
+                  {c.date&&<p className="text-zinc-600">{new Date(c.date+"T12:00:00Z").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</p>}
+                </div>
+                <span className="shrink-0 font-bold text-red-400">{fmtAmt(c.amount)}</span>
+              </li>
+            ))}
+          </ul>
+        ):(
+          <p className="text-[10px] text-zinc-600">Contract data loading…</p>
+        )}
       </div>
     </BentoCard>
   );
@@ -771,17 +782,27 @@ function FiscalWatchCard({delay}:{delay:number}) {
 function MarketNewsCard({delay}:{delay:number}) {
   const [news,setNews] = useState<NewsItem[]>([]);
   const [loading,setLoading] = useState(true);
-  const load=useCallback(()=>{
-    fetch("/api/news?category=all").then(r=>r.json()).then(d=>{
+  const [geo,setGeo] = useState(false);
+  const load=useCallback((isGeo:boolean)=>{
+    setLoading(true);
+    fetch(`/api/news?category=${isGeo?"geopolitical":"all"}`).then(r=>r.json()).then(d=>{
       const items=Array.isArray(d)?d:d?.articles??d?.news??[];
       setNews(items.slice(0,7));
     }).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
-  useEffect(()=>{load();const id=setInterval(load,5*60*1000);return()=>clearInterval(id);},[load]);
+  useEffect(()=>{load(geo);const id=setInterval(()=>load(geo),5*60*1000);return()=>clearInterval(id);},[geo,load]);
   return (
     <BentoCard href="/news" title="Market News" icon={I.newspaper} delay={delay} loading={loading} className="min-h-[420px]">
+      <div className="mb-2 flex gap-1">
+        {([{key:false,label:"Markets"},{key:true,label:"Geopolitical"}] as const).map(({key,label})=>(
+          <button key={String(key)} onClick={e=>{e.stopPropagation();setGeo(key);}}
+            className={`rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors ${geo===key?"bg-[var(--accent-color)]/20 text-[var(--accent-color)]":"text-zinc-600 hover:text-zinc-400"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
       {news.length===0?<Skel n={6}/>:(
-        <ul className="space-y-3 pt-1">
+        <ul className="space-y-3">
           {news.map((n,i)=>(
             <li key={i} className="border-b border-white/5 pb-3 last:border-0 last:pb-0">
               <a href={n.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} className="block">
@@ -871,24 +892,31 @@ function EconomicCalendarCard({delay}:{delay:number}) {
   const [events,setEvents] = useState<EconEvent[]>([]);
   const [loading,setLoading] = useState(true);
   useEffect(()=>{
-    fetch("/api/calendar").then(r=>r.json()).then(d=>{
-      const items=Array.isArray(d)?d:d?.economic??d?.events??[];
-      const today=new Date().toISOString().slice(0,10);
-      const upcoming=items.filter((e:any)=>e?.date&&e.date>=today).slice(0,4);
-      setEvents(upcoming);
+    // Fetch a 30-day window (past 7 + next 30) so we always get events even if FRED dates shift
+    const today=new Date();
+    const from=new Date(today);from.setDate(from.getDate()-7);
+    const to=new Date(today);to.setDate(to.getDate()+30);
+    const fromStr=from.toISOString().slice(0,10);
+    const toStr=to.toISOString().slice(0,10);
+    fetch(`/api/calendar?type=economic&from=${fromStr}&to=${toStr}`).then(r=>r.json()).then(d=>{
+      const items:EconEvent[]=Array.isArray(d)?d:d?.economic??d?.events??[];
+      const todayStr=today.toISOString().slice(0,10);
+      // Prefer upcoming, fall back to most recent past events if none upcoming
+      const upcoming=items.filter((e:any)=>e?.date&&e.date>=todayStr).slice(0,5);
+      setEvents(upcoming.length>0?upcoming:items.slice(-4));
     }).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
   const dot=(impact:string)=>impact==="HIGH"?"bg-red-500":impact==="MEDIUM"?"bg-amber-500":"bg-emerald-500";
   return (
     <BentoCard href="/calendar" title="Economic Calendar" icon={I.calendar} delay={delay} loading={loading} className="min-h-[200px]">
-      {events.length===0?<p className="pt-1 text-xs text-zinc-600">No upcoming events</p>:(
+      {events.length===0?<p className="pt-1 text-xs text-zinc-600">No events · check back soon</p>:(
         <ul className="space-y-2.5 pt-1">
           {events.map(ev=>(
             <li key={ev.id} className="flex items-start gap-2.5">
               <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot(ev.impact)}`}/>
               <div className="min-w-0">
                 <p className="truncate text-xs font-medium text-zinc-300">{ev.name}</p>
-                <p className="text-[10px] text-zinc-600">{new Date(ev.date).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})} · {ev.country}</p>
+                <p className="text-[10px] text-zinc-600">{new Date(ev.date+"T12:00:00Z").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})} · {ev.country}</p>
               </div>
             </li>
           ))}
@@ -914,32 +942,13 @@ function SentimentRadarCard({delay}:{delay:number}) {
   },[]);
   const color=score==null?"#52525b":score>=60?"#10b981":score>=40?"#f59e0b":"#ef4444";
   const label=score==null?"—":score>=70?"Bullish":score>=55?"Mildly Bullish":score>=45?"Neutral":score>=30?"Mildly Bearish":"Bearish";
+  const animScore = useCountUp(score, 1500);
   return (
     <BentoCard href="/sentiment" title="Sentiment Radar" icon={I.target} delay={delay} loading={loading} className="min-h-[140px]">
       <div className="flex items-center gap-4 pt-1">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold" style={{borderColor:color,color}}>{score??48}</div>
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold" style={{borderColor:color,color}}>{score!=null?Math.round(animScore):48}</div>
         <div><p className="text-sm font-bold" style={{color}}>{label}</p><p className="mt-0.5 text-[10px] text-zinc-600">Market mood · 0–100</p></div>
       </div>
-    </BentoCard>
-  );
-}
-
-// ── RIGHT: Growth Profiles ────────────────────────────────────────────────────
-
-function GrowthCard({delay}:{delay:number}) {
-  const PROFILES = [{name:"Conservative",risk:"Low",color:"text-emerald-400",pct:"6–10%"},{name:"Balanced",risk:"Med",color:"text-amber-400",pct:"10–18%"},{name:"Aggressive",risk:"High",color:"text-red-400",pct:"18–30%+"}];
-  return (
-    <BentoCard href="/growth" title="Growth Profiles" icon={I.shield} delay={delay} className="min-h-[180px]">
-      <div className="grid grid-cols-3 gap-2 pt-1">
-        {PROFILES.map(p=>(
-          <div key={p.name} className="rounded-xl border border-white/5 bg-white/[0.02] p-2 text-center">
-            <p className={`text-[10px] font-bold ${p.color}`}>{p.risk}</p>
-            <p className="mt-0.5 text-[9px] text-zinc-500">{p.name}</p>
-            <p className={`mt-1 text-xs font-semibold ${p.color}`}>{p.pct}</p>
-          </div>
-        ))}
-      </div>
-      <p className="mt-2 text-[10px] text-zinc-600">Est. annual returns · tap to explore</p>
     </BentoCard>
   );
 }
@@ -998,7 +1007,7 @@ function TradeRoomsCard({delay}:{delay:number}) {
           {rooms.map((r:any,i:number)=>(
             <li key={i} className="flex items-center justify-between text-xs">
               <div className="min-w-0"><p className="truncate font-medium text-zinc-300">{r.name??r.title??"Room"}</p><p className="text-[10px] text-zinc-600">{r.participant_count??r.members??0} live</p></div>
-              <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500 animate-pulse"/>
+              <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500 sonar-dot text-emerald-500"/>
             </li>
           ))}
         </ul>
@@ -1051,7 +1060,7 @@ function GlobeCard({delay}:{delay:number}) {
         })}
       </div>
       <div className="mt-2 flex items-center gap-1.5 text-[10px] text-zinc-700">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"/>
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 sonar-dot text-emerald-500"/>
         Live · updates every 60s
       </div>
     </BentoCard>
@@ -1082,26 +1091,105 @@ function DataHubCard({delay}:{delay:number}) {
 
 // ── RIGHT: Backtest ───────────────────────────────────────────────────────────
 
+const BACKTEST_PREVIEW = [
+  {strategy:"SMA Crossover",ticker:"SPY",cagr:"+12.4%",sharpe:"1.31",win:"58%",up:true},
+  {strategy:"RSI Reversion",ticker:"QQQ",cagr:"+9.8%",sharpe:"1.07",win:"54%",up:true},
+  {strategy:"Momentum",ticker:"NVDA",cagr:"+21.3%",sharpe:"1.54",win:"61%",up:true},
+  {strategy:"Buy & Hold",ticker:"AAPL",cagr:"+14.7%",sharpe:"0.92",win:"—",up:true},
+];
+
 function BacktestCard({delay}:{delay:number}) {
-  const router = useRouter();
-  const [ticker,setTicker] = useState("SPY");
-  const [strategy,setStrategy] = useState("sma_crossover");
   return (
-    <BentoCard href="/backtest" title="Quick Backtest" icon={I.zap} delay={delay} className="min-h-[140px]">
-      <form onSubmit={e=>{e.preventDefault();e.stopPropagation();router.push(`/backtest?ticker=${encodeURIComponent(ticker)}&strategy=${encodeURIComponent(strategy)}`);}} onClick={e=>e.stopPropagation()} className="flex flex-col gap-2 pt-1">
-        <div className="flex gap-2">
-          <input type="text" value={ticker} onChange={e=>setTicker(e.target.value.toUpperCase())} placeholder="Ticker"
-            className="h-7 flex-1 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-zinc-300 outline-none focus:border-[var(--accent-color)]/40"/>
-          <select value={strategy} onChange={e=>setStrategy(e.target.value)}
-            className="h-7 flex-1 rounded-lg border border-white/10 bg-[#050713] px-1.5 text-[10px] text-zinc-400 outline-none">
-            <option value="sma_crossover">SMA Cross</option>
-            <option value="rsi_mean_reversion">RSI Rev</option>
-            <option value="momentum">Momentum</option>
-            <option value="buy_and_hold">Buy&Hold</option>
-          </select>
-        </div>
-        <button type="submit" className="w-full rounded-lg bg-[var(--accent-color)]/20 py-1.5 text-xs font-bold text-[var(--accent-color)] hover:bg-[var(--accent-color)]/30 transition">Run →</button>
-      </form>
+    <BentoCard href="/backtest" title="Backtesting Engine" icon={I.zap} delay={delay} className="min-h-[300px]">
+      <p className="mb-3 text-[10px] text-zinc-600">Recent strategy results · click to run your own</p>
+      <div className="space-y-2">
+        {BACKTEST_PREVIEW.map((b,i)=>(
+          <div key={i} className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-semibold text-zinc-300">{b.strategy}</p>
+                <p className="text-[9px] text-zinc-600">{b.ticker}</p>
+              </div>
+              <span className={`text-sm font-bold ${b.up?"text-emerald-400":"text-red-400"}`}>{b.cagr}</span>
+            </div>
+            <div className="mt-1.5 flex gap-3 text-[9px] text-zinc-600">
+              <span>Sharpe <span className="text-zinc-400">{b.sharpe}</span></span>
+              <span>Win Rate <span className="text-zinc-400">{b.win}</span></span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </BentoCard>
+  );
+}
+
+// ── RIGHT: Market Rates ───────────────────────────────────────────────────────
+
+function MarketRatesCard({delay}:{delay:number}) {
+  const [yields,setYields] = useState<{label:string;value:number|null}[]>([]);
+  const [loading,setLoading] = useState(true);
+  useEffect(()=>{
+    fetch("/api/bonds/history").then(r=>r.json()).then(d=>{
+      const h:any[]=d?.history??[];
+      const labels=["2Y","5Y","10Y","30Y"];
+      setYields(labels.map(lbl=>{
+        const series=h.find((s:any)=>s.label===lbl);
+        const val=series?.data?.at(-1)?.value??null;
+        return{label:lbl,value:val!=null?+val:null};
+      }));
+    }).catch(()=>{}).finally(()=>setLoading(false));
+  },[]);
+  return (
+    <BentoCard href="/bonds" title="Market Rates" icon={I.activity} delay={delay} loading={loading} className="min-h-[180px]">
+      <div className="grid grid-cols-2 gap-2 pt-1">
+        {(yields.length>0?yields:[{label:"2Y",value:null},{label:"5Y",value:null},{label:"10Y",value:null},{label:"30Y",value:null}]).map(r=>(
+          <div key={r.label} className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5">
+            <p className="text-[9px] uppercase tracking-wider text-zinc-600">US {r.label}</p>
+            {r.value!=null
+              ?<p className="mt-0.5 text-sm font-bold text-zinc-200">{r.value.toFixed(2)}<span className="ml-0.5 text-[9px] font-normal text-zinc-600">%</span></p>
+              :<div className="mt-1 h-4 w-12 animate-pulse rounded bg-white/5"/>}
+          </div>
+        ))}
+      </div>
+    </BentoCard>
+  );
+}
+
+// ── LEFT: Screener Preview ────────────────────────────────────────────────────
+
+function ScreenerPreviewCard({delay}:{delay:number}) {
+  const [stocks,setStocks] = useState<{symbol:string;price:number|null;dayChangePct:number|null;sector:string|null}[]>([]);
+  const [loading,setLoading] = useState(true);
+  useEffect(()=>{
+    // Use a small set of known movers via ticker-quote to avoid the heavy screener endpoint
+    const TICKERS=["NVDA","META","TSLA","AMZN","MSFT","AAPL","AMD","PLTR"];
+    const out:Record<string,any>={};
+    Promise.allSettled(TICKERS.map(async sym=>{
+      const r=await fetch(`/api/ticker-quote?symbol=${encodeURIComponent(sym)}`);
+      if(r.ok)out[sym]=await r.json();
+    })).then(()=>{
+      const sorted=TICKERS.map(sym=>({symbol:sym,price:out[sym]?.price??null,dayChangePct:out[sym]?.changePercent??null,sector:null}))
+        .filter(s=>s.price!=null).sort((a,b)=>Math.abs(b.dayChangePct??0)-Math.abs(a.dayChangePct??0)).slice(0,5);
+      setStocks(sorted);
+    }).finally(()=>setLoading(false));
+  },[]);
+  return (
+    <BentoCard href="/screener" title="Stock Screener" icon={I.barChart} delay={delay} loading={loading} className="min-h-[240px]">
+      {stocks.length===0?<p className="pt-1 text-xs text-zinc-600">Loading data…</p>:(
+        <ul className="space-y-1 pt-1">
+          {stocks.map(s=>{const up=(s.dayChangePct??0)>=0;return(
+            <li key={s.symbol} onClick={e=>{e.stopPropagation();window.location.assign(`/search/${encodeURIComponent(s.symbol)}`);}}
+              className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5 cursor-pointer">
+              <span className="text-sm font-bold text-zinc-200">{s.symbol}</span>
+              <div className="text-right">
+                <p className="text-xs text-zinc-400">{fmtPrice(s.price)}</p>
+                <p className={`text-[10px] font-bold ${up?"text-emerald-400":"text-red-400"}`}>{up?"+":""}{(s.dayChangePct??0).toFixed(2)}%</p>
+              </div>
+            </li>
+          );})}
+        </ul>
+      )}
+      <p className="mt-2 text-[10px] text-zinc-600">Open full screener to filter 200+ stocks →</p>
     </BentoCard>
   );
 }
@@ -1114,13 +1202,17 @@ export default function BentoDashboard() {
   const rightY = useTransform(scrollY, [0,1000], [0, 40]);
 
   return (
-    <div className="overflow-x-hidden p-4 pb-16 md:p-6 md:pb-20" style={{ backgroundColor: "#070B14" }}>
+    <div className="relative overflow-x-hidden p-4 pb-16 md:p-6 md:pb-20" style={{ backgroundColor: "#070B14" }}>
+      <ParallaxGrid />
+      <AmbientParticles />
+      <div className="relative z-[1]">
       <DashboardHeader />
+      <MarketOpenFlash />
 
       <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,28%)_minmax(0,1fr)_minmax(0,28%)]">
 
         {/* ── LEFT COLUMN ── */}
-        <motion.div className="flex min-w-0 flex-col gap-4" style={{ y: leftY }}>
+        <motion.div className="flex min-w-0 flex-col gap-4" style={{ y: leftY }} initial={{x:-10}} animate={{x:0}} transition={{duration:0.55,ease:"easeOut"}}>
           <BondYieldCurveCard delay={0.05} />
           <GlobeCard          delay={0.08} />
           <CEOAlertsCard      delay={0.11} />
@@ -1135,24 +1227,25 @@ export default function BentoDashboard() {
         {/* ── CENTER COLUMN ── */}
         <div className="flex min-w-0 flex-col gap-4">
           <SocialFeedCard    delay={0.00} />
-          <MarketPulseCard   delay={0.08} />
-          <LiveChartCard     delay={0.12} />
-          <InsiderTradesCard delay={0.18} />
-          <FiscalWatchCard   delay={0.22} />
+          <LiveChartCard     delay={0.08} />
+          <InsiderTradesCard delay={0.14} />
+          <FiscalWatchCard   delay={0.20} />
         </div>
 
         {/* ── RIGHT COLUMN ── */}
-        <motion.div className="flex min-w-0 flex-col gap-4" style={{ y: rightY }}>
+        <motion.div className="flex min-w-0 flex-col gap-4" style={{ y: rightY }} initial={{x:10}} animate={{x:0}} transition={{duration:0.55,ease:"easeOut"}}>
           <MarketNewsCard        delay={0.05} />
           <WatchlistCard         delay={0.10} />
           <TopMoversCard         delay={0.14} />
-          <EconomicCalendarCard  delay={0.18} />
-          <SentimentRadarCard    delay={0.22} />
-          <GrowthCard            delay={0.25} />
-          <PredictionMarketsCard delay={0.28} />
-          <BacktestCard          delay={0.31} />
+          <MarketRatesCard       delay={0.17} />
+          <ScreenerPreviewCard   delay={0.20} />
+          <EconomicCalendarCard  delay={0.23} />
+          <SentimentRadarCard    delay={0.26} />
+          <PredictionMarketsCard delay={0.29} />
+          <BacktestCard          delay={0.32} />
         </motion.div>
 
+      </div>
       </div>
     </div>
   );

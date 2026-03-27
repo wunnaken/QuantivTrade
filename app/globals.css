@@ -577,6 +577,72 @@ html[data-theme="light"] .dark-bg-section .text-zinc-500 {
   --color-primary: var(--accent-color) !important;
 }
 
+/* ── Feed dashboard animations ───────────────────────────────────────────── */
+
+/* Ambient background particles */
+@keyframes ambient-float {
+  0%   { transform: translateY(0) translateX(0); opacity: 0; }
+  10%  { opacity: 0.1; }
+  90%  { opacity: 0.05; }
+  100% { transform: translateY(-100vh) translateX(15px); opacity: 0; }
+}
+
+/* Chart grid-lines draw in left-to-right on load */
+@keyframes grid-line-draw {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Horizontal scan line sweeping top-to-bottom over live chart */
+@keyframes scan-sweep {
+  0%   { top: 4%;  opacity: 0; }
+  8%   { opacity: 0.7; }
+  92%  { opacity: 0.45; }
+  100% { top: 96%; opacity: 0; }
+}
+
+/* Price glow burst when a new tick arrives */
+@keyframes price-glow {
+  0%   { text-shadow: none; }
+  30%  { text-shadow: 0 0 10px var(--accent-color), 0 0 22px color-mix(in srgb, var(--accent-color) 35%, transparent); }
+  100% { text-shadow: none; }
+}
+.price-tick {
+  animation: price-glow 0.75s ease-out forwards;
+}
+
+/* Market open / close banner entrance */
+@keyframes market-flash-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Sonar ring on live indicator dots */
+.sonar-dot {
+  position: relative;
+  display: inline-block;
+}
+.sonar-dot::before,
+.sonar-dot::after {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  border: 1px solid currentColor;
+  opacity: 0;
+  animation: sonar-ring 2.5s ease-out infinite;
+}
+.sonar-dot::before {
+  inset: -3px;
+}
+.sonar-dot::after {
+  inset: -6px;
+  animation-delay: 0.55s;
+}
+@keyframes sonar-ring {
+  0%   { transform: scale(0.5); opacity: 0.75; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
 /* Legal pages: print-friendly */
 @media print {
   .legal-page-print {
