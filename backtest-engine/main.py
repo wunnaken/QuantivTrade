@@ -11,9 +11,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from routers import backtest, data
+from routers import backtest, data, correlations
 app.include_router(backtest.router, prefix="/backtest")
 app.include_router(data.router, prefix="/data")
+app.include_router(correlations.router, prefix="/correlations")
 
 
 @app.get("/health")

@@ -21,7 +21,8 @@
       "Bash(find G:/quantivtrade/app -type d -name auth -o -type f -name *sign-in* -o -type f -name *sign-up*)",
       "Bash(xargs grep:*)",
       "Bash(find G:/quantivtrade -type f \\\\\\(-name *.sql -o -name schema* -o -name migration* \\\\\\))",
-      "Bash(find G:/quantivtrade -maxdepth 2 -type f \\\\\\(-name .env* -o -name README* -o -name SETUP* \\\\\\))"
+      "Bash(find G:/quantivtrade -maxdepth 2 -type f \\\\\\(-name .env* -o -name README* -o -name SETUP* \\\\\\))",
+      "Bash(npx next:*)"
     ]
   }
 }

@@ -72,6 +72,7 @@ function useCountUp(target: number | null, duration = 1100) {
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
 
 const I = {
+  link:          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>,
   trendingUp:    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>,
   building:      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 22V12h6v10M9 7h1m4 0h1M9 11h1m4 0h1"/></svg>,
   bell:          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>,
@@ -1194,6 +1195,107 @@ function ScreenerPreviewCard({delay}:{delay:number}) {
   );
 }
 
+// ── RIGHT: Market Relations ────────────────────────────────────────────────────
+
+type MRPair = { assetA: string; assetB: string; classA: string; classB: string; correlation: number };
+
+const MR_CLASS_COLORS: Record<string, string> = {
+  us_indices:"#6366f1", global_indices:"#8b5cf6", precious_metals:"#f59e0b",
+  commodities:"#f97316", forex:"#06b6d4", bonds:"#3b82f6", crypto:"#a855f7", volatility:"#ef4444",
+};
+
+function detectMRRegime(perf: Record<string,Record<string,{["1m"]?:number|null}>>): {label:string;color:string;icon:string} {
+  const spy = perf?.us_indices?.SPY?.["1m"] ?? 0;
+  const tlt = perf?.bonds?.TLT?.["1m"] ?? 0;
+  const gld = perf?.precious_metals?.GLD?.["1m"] ?? 0;
+  const uso = perf?.commodities?.USO?.["1m"] ?? 0;
+  const uup = perf?.forex?.UUP?.["1m"] ?? 0;
+  if (spy < -4 && tlt > 2 && gld > 2)  return { label:"Risk-Off",   color:"#f87171", icon:"🔴" };
+  if (uso > 5  && tlt < -2)             return { label:"Stagflation", color:"#fbbf24", icon:"🟡" };
+  if (spy < -6 && uup > 3 && tlt > 4)  return { label:"Deflation",   color:"#a1a1aa", icon:"⚫" };
+  if (spy > 3  && tlt < 0 && Math.abs(uup) < 2) return { label:"Risk-On", color:"#4ade80", icon:"🟢" };
+  return { label:"Goldilocks", color:"#60a5fa", icon:"🔵" };
+}
+
+function MarketRelationsCard({delay}:{delay:number}) {
+  const [pairs, setPairs]   = useState<MRPair[]>([]);
+  const [regime, setRegime] = useState<{label:string;color:string;icon:string}|null>(null);
+  const [total, setTotal]   = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(()=>{
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), 20_000);
+    fetch("/api/market-relations/correlations?days=90", { signal: ctrl.signal })
+      .then(r=>r.json())
+      .then(d=>{
+        const sp: MRPair[] = d?.surprisingPairs ?? [];
+        setPairs(sp.slice(0, 4));
+        setTotal(sp.length);
+        const perf = d?.performance ?? {};
+        setRegime(detectMRRegime(perf));
+      })
+      .catch(()=>{})
+      .finally(()=>{ clearTimeout(t); setLoading(false); });
+    return ()=>ctrl.abort();
+  },[]);
+
+  return (
+    <BentoCard href="/market-relations" title="Market Relations" icon={I.link} delay={delay} loading={loading} className="min-h-[260px]">
+      {/* Regime badge */}
+      {regime && (
+        <div className="mb-3 flex items-center justify-between pt-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm">{regime.icon}</span>
+            <span className="text-xs font-semibold" style={{color:regime.color}}>{regime.label}</span>
+            <span className="text-[10px] text-zinc-600">regime</span>
+          </div>
+          {total > 0 && (
+            <span className="rounded-full bg-[var(--accent-color)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-color)]">
+              {total} surprising links
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Surprising pairs list */}
+      {pairs.length === 0 && !loading ? (
+        <p className="pt-1 text-xs text-zinc-600">No cross-class correlations above threshold</p>
+      ) : (
+        <ul className="space-y-2">
+          {pairs.map((p,i)=>{
+            const clrA = MR_CLASS_COLORS[p.classA] ?? "#71717a";
+            const clrB = MR_CLASS_COLORS[p.classB] ?? "#71717a";
+            const absC = Math.abs(p.correlation);
+            return (
+              <li key={i} className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2">
+                <span className="text-[10px] font-bold" style={{color:clrA}}>{p.assetA}</span>
+                <span className="text-[10px] font-black" style={{color:p.correlation>=0?"#4ade80":"#f87171"}}>
+                  {p.correlation>=0?"↑↑":"↑↓"}
+                </span>
+                <span className="text-[10px] font-bold" style={{color:clrB}}>{p.assetB}</span>
+                <div className="ml-auto flex items-center gap-1.5">
+                  {/* Strength bar */}
+                  <div className="h-1 w-12 overflow-hidden rounded-full bg-white/10">
+                    <div className="h-full rounded-full" style={{
+                      width:`${absC*100}%`,
+                      background:p.correlation>=0?"#4ade80":"#f87171",
+                    }}/>
+                  </div>
+                  <span className={`tabular-nums text-[10px] font-semibold ${p.correlation>=0?"text-emerald-400":"text-red-400"}`}>
+                    {(p.correlation>=0?"+":"")+p.correlation.toFixed(2)}
+                  </span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <p className="mt-2 text-[10px] text-zinc-600">Cross-asset correlation intelligence →</p>
+    </BentoCard>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function BentoDashboard() {
@@ -1242,7 +1344,8 @@ export default function BentoDashboard() {
           <EconomicCalendarCard  delay={0.23} />
           <SentimentRadarCard    delay={0.26} />
           <PredictionMarketsCard delay={0.29} />
-          <BacktestCard          delay={0.32} />
+          <BacktestCard              delay={0.32} />
+          <MarketRelationsCard       delay={0.35} />
         </motion.div>
 
       </div>

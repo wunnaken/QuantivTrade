@@ -1144,6 +1144,48 @@ export function CommunityFeedWidget({ onLoaded }: WidgetContentProps) {
   );
 }
 
+export function ForexRatesWidget({ onLoaded }: WidgetContentProps) {
+  const [pairs, setPairs] = useState<{ symbol: string; rate: number; changePct: number; baseFlag: string; quoteFlag: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    fetch("/api/forex/rates")
+      .then((r) => r.json())
+      .then((d) => {
+        const majors = (d.majors ?? []) as { symbol: string; rate: number; changePct: number; baseFlag: string; quoteFlag: string }[];
+        setPairs(majors.slice(0, 8));
+        onLoaded?.();
+      })
+      .catch(() => onLoaded?.())
+      .finally(() => setLoading(false));
+  }, [onLoaded]);
+
+  if (loading) return <div className="flex h-full items-center justify-center text-xs text-zinc-500">Loading…</div>;
+  if (!pairs.length) return <div className="p-3 text-xs text-zinc-500">No data</div>;
+
+  return (
+    <div className="flex h-full flex-col gap-1 overflow-y-auto p-3">
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-zinc-300">Major Pairs</span>
+        <a href="/forex" className="text-[10px] text-[var(--accent-color)] hover:underline">View all →</a>
+      </div>
+      {pairs.map((p) => (
+        <div key={p.symbol} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm">{p.baseFlag}{p.quoteFlag}</span>
+            <span className="text-xs font-medium text-zinc-200">{p.symbol}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-200">{p.rate.toFixed(4)}</span>
+            <span className={`text-[11px] font-medium ${p.changePct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {p.changePct >= 0 ? "+" : ""}{p.changePct.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const PLACEHOLDERS: Partial<Record<WidgetId, { title: string; href: string; label?: string }>> = {};
 
 export function WidgetContent({ widgetId, onLoaded }: WidgetContentProps) {
@@ -1186,6 +1228,8 @@ export function WidgetContent({ widgetId, onLoaded }: WidgetContentProps) {
       return <CommunityFeedWidget widgetId={widgetId} onLoaded={onLoaded} />;
     case "sentiment-radar":
       return <SentimentRadarWidget onLoaded={onLoaded} />;
+    case "forex-rates":
+      return <ForexRatesWidget widgetId={widgetId} onLoaded={onLoaded} />;
     default: {
       const p = PLACEHOLDERS[widgetId] as { title: string; href: string; label?: string } | undefined;
       if (p) return <PlaceholderWidget title={p.title} href={p.href} label={p.label} />;

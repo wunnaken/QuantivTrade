@@ -23,7 +23,8 @@ export type WidgetId =
   | "custom-note"
   | "sector-heatmap"
   | "top-movers"
-  | "sentiment-radar";
+  | "sentiment-radar"
+  | "forex-rates";
 
 export type DashboardTheme = {
   background?: string;
@@ -130,6 +131,7 @@ export const WIDGET_CONFIG: Record<
   "sector-heatmap": { name: "Sector Heatmap", icon: "", minW: 4, minH: 3, defaultW: 6, defaultH: 4, category: "Market Data", description: "11 sector performance tiles" },
   "top-movers": { name: "Top Movers", icon: "", minW: 2, minH: 3, defaultW: 3, defaultH: 4, category: "Market Data", description: "Top gainers and losers today" },
   "sentiment-radar": { name: "Sentiment Radar", icon: "", minW: 4, minH: 4, defaultW: 6, defaultH: 5, category: "Market Data", description: "Community and news sentiment by sector" },
+  "forex-rates": { name: "Forex Rates", icon: "", minW: 3, minH: 3, defaultW: 4, defaultH: 4, category: "Market Data", description: "Live forex exchange rates for major currency pairs" },
 };
 
 function defaultLayout(): LayoutItem[] {

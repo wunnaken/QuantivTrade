@@ -20,7 +20,7 @@ import { usePriceContext } from "../lib/price-context";
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_BG = "#0A0E1A";
 
-const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "feedback" | "verify" | "screener" }[] = [
+const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" }[] = [
   { href: "/social-feed", label: "Social Feed" },
   { href: "/communities", label: "Communities" },
   { href: "/messages", label: "Messages" },
@@ -28,6 +28,8 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/news", label: "News" },
   { href: "/map", label: "Maps" },
   { href: "/bonds", label: "Bonds" },
+  { href: "/forex", label: "Forex" },
+  { href: "/market-relations", label: "Market Relations" },
   { href: "/market-rates", label: "Market Rates" },
   { href: "/sentiment", label: "Sentiment Radar" },
   { href: "/insider-trades", label: "Insider Trades" },
@@ -46,7 +48,7 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
 
 const SECTIONS: { id: string; label: string; hrefs: string[] }[] = [
   { id: "community", label: "Community", hrefs: ["/social-feed", "/communities", "/messages", "/trade-rooms"] },
-  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/market-rates", "/sentiment", "/insider-trades", "/fiscalwatch"] },
+  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/forex", "/market-relations", "/market-rates", "/sentiment", "/insider-trades", "/fiscalwatch"] },
   { id: "analytics", label: "Analytics", hrefs: ["/growth", "/ceos", "/calendar", "/screener", "/datahub", "/backtest"] },
   { id: "personal", label: "Personal", hrefs: ["/journal", "/predict", "/watchlist", "/workspace"] },
 ];
@@ -83,7 +85,7 @@ function SidebarLogo({ narrow }: { narrow: boolean }) {
   );
 }
 
-function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedback" | "verify" | "screener"; isActive: boolean }) {
+function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex"; isActive: boolean }) {
   const cls = "h-5 w-5";
   const stroke = "currentColor";
   if (icon === "home") return (
@@ -111,6 +113,11 @@ function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedbac
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
     </svg>
   );
+  if (icon === "forex") return (
+    <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
   return (
     <span className={`h-1.5 w-1.5 rounded-full transition-transform transition-opacity duration-200 ${isActive ? "scale-125 bg-[var(--accent-color)] opacity-100" : "bg-zinc-500 opacity-40 group-hover:opacity-100 group-hover:scale-125"}`} />
   );
@@ -128,7 +135,7 @@ function NavItem({
 }: {
   href: string;
   label: string;
-  icon?: "home" | "settings" | "feedback" | "verify" | "screener";
+  icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex";
   isActive: boolean;
   collapsed: boolean;
   onClick?: () => void;
