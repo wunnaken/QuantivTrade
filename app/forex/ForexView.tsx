@@ -295,7 +295,7 @@ function DXYPanel({ dxy }: { dxy: ForexData["dxy"] }) {
                 axisLine={false} width={32} tickCount={4} tickFormatter={(v: number) => v.toFixed(1)} />
               <RechartTooltip
                 contentStyle={{ background: "#0f1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
-                formatter={(v: number) => [v.toFixed(2), "DXY"]}
+                formatter={(v) => [typeof v === "number" ? v.toFixed(2) : v, "DXY"]}
               />
               <ReferenceLine y={dxy.history[0]?.value ?? 100} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
               <Line type="monotone" dataKey="value" stroke={strong ? "#4ade80" : "#f87171"}
