@@ -148,7 +148,7 @@ function NavItem({
 }: {
   href: string;
   label: string;
-  icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase";
+  icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict";
   isActive: boolean;
   collapsed: boolean;
   onClick?: () => void;
