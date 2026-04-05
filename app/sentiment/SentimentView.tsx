@@ -381,7 +381,7 @@ function HistoryChart({ score }: { score: number }) {
           <Line type="monotone" dataKey="score" stroke="var(--accent-color)" strokeWidth={2} dot={false} />
           <Tooltip
             contentStyle={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
-            formatter={(v: number) => [v, "Score"]}
+            formatter={(v) => [v, "Score"]}
             labelFormatter={(l) => String(l)}
           />
         </LineChart>

@@ -345,7 +345,7 @@ function TermStructureChart({
           />
           <Tooltip
             contentStyle={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
-            formatter={(v: number) => [fmtSmart(v), "Price"]}
+            formatter={(v) => [fmtSmart(v as number), "Price"]}
           />
           <Line
             type="monotone" dataKey="price"
