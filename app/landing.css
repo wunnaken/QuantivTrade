@@ -1,0 +1,141 @@
+/* ─── Landing page — pure black, electric blue accent ───────────────────── */
+
+.landing-page {
+  background: #000000;
+  color: #ffffff;
+}
+
+/* Hero headline accent — white to electric blue */
+.hero-accent {
+  background: linear-gradient(135deg, #ffffff 0%, #a8caff 50%, #4f9cf9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  /* Extra padding so descenders (g, y) never clip */
+  padding-bottom: 0.1em;
+  display: inline-block;
+}
+
+/* Overline section labels */
+.overline-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #4f9cf9;
+}
+
+/* Glass card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
+}
+
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(79, 156, 249, 0.35);
+  box-shadow: 0 0 24px rgba(79, 156, 249, 0.08);
+}
+
+/* Primary CTA */
+.cta-primary {
+  background: #4f9cf9;
+  color: #000000;
+  font-weight: 700;
+  transition: opacity 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+.cta-primary:hover {
+  opacity: 0.88;
+  box-shadow: 0 0 28px rgba(79, 156, 249, 0.45);
+}
+
+/* Secondary CTA */
+.cta-secondary {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.6);
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.cta-secondary:hover {
+  border-color: rgba(79, 156, 249, 0.5);
+  color: #ffffff;
+  background: rgba(79, 156, 249, 0.06);
+}
+
+/* Pro pricing card */
+.pricing-card-pro {
+  background: rgba(79, 156, 249, 0.04);
+  border: 1px solid rgba(79, 156, 249, 0.3);
+  box-shadow: 0 0 40px rgba(79, 156, 249, 0.07);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.pricing-card-pro:hover {
+  box-shadow: 0 0 60px rgba(79, 156, 249, 0.14);
+  border-color: rgba(79, 156, 249, 0.5);
+}
+
+/* Horizontal divider */
+.section-rule {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* Toggle track */
+.toggle-track {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: background 0.2s ease, border-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: left 0.2s ease;
+}
+
+/* Badge */
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 100px;
+  border: 1px solid rgba(79, 156, 249, 0.2);
+  background: rgba(79, 156, 249, 0.05);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 500;
+  color: rgba(79, 156, 249, 0.8);
+}
+
+@keyframes badge-pulse {
+  0%, 100% { opacity: 1; }
+  50%        { opacity: 0.6; }
+}
+.badge-pulse { animation: badge-pulse 3s ease-in-out infinite; }
+
+@keyframes scroll-bounce {
+  0%, 100% { transform: translateY(0);   opacity: 0.5; }
+  50%       { transform: translateY(8px); opacity: 0.15; }
+}
+.scroll-dot { animation: scroll-bounce 2s ease-in-out infinite; }
+
+@keyframes typewriter-cursor {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+.typewriter-cursor { animation: typewriter-cursor 1s ease-in-out infinite; }

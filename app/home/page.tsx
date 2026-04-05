@@ -1,7 +1,5 @@
-"use client";
-
-import { LandingPageContent } from "../../components/LandingPageContent";
+import { redirect } from "next/navigation";
 
 export default function HomePage() {
-  return <LandingPageContent hideTopBar />;
+  redirect("/");
 }

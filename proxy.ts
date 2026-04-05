@@ -28,6 +28,9 @@ const PROTECTED_PATHS = [
   "/watchlist",
   "/datahub",
   "/verify",
+  "/portfolios",
+  "/futures",
+  "/crypto",
 ];
 
 function isProtectedPath(pathname: string): boolean {
@@ -61,10 +64,6 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const pathname = request.nextUrl.pathname;
 
-  if (pathname === "/" && user) {
-    return NextResponse.redirect(new URL("/feed", request.url), 307);
-  }
-
   if (isProtectedPath(pathname) && !user) {
     const signInUrl = new URL("/auth/sign-in", request.url);
     signInUrl.searchParams.set("from", pathname);
@@ -76,7 +75,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/",
     "/feed",
     "/feed/:path*",
     "/communities",
@@ -126,5 +124,11 @@ export const config = {
     "/datahub/:path*",
     "/verify",
     "/verify/:path*",
+    "/portfolios",
+    "/portfolios/:path*",
+    "/futures",
+    "/futures/:path*",
+    "/crypto",
+    "/crypto/:path*",
   ],
 };

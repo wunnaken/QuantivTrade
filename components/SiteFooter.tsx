@@ -16,7 +16,7 @@ const SOCIAL_LINKS = [
 ];
 
 const PLATFORM_LINKS = [
-  { label: "Feed", href: "/feed" },
+  { label: "Dashboard", href: "/feed" },
   { label: "Communities", href: "/communities" },
   { label: "Trade Journal", href: "/journal" },
   { label: "Growth Profiles", href: "/growth#choose-profile" },
@@ -73,7 +73,7 @@ export function SiteFooter() {
   const [apiStatus, setApiStatus] = useState<"ok" | "delayed" | "error" | null>(null);
   const [apiLabel, setApiLabel] = useState<string>("");
   const companyLinks = useMemo(
-    () => [{ label: "Home", href: "/home" }, ...COMPANY_LINKS_BASE],
+    () => [{ label: "Home", href: "/" }, ...COMPANY_LINKS_BASE],
     []
   );
 

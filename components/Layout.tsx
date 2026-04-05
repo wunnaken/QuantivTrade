@@ -20,7 +20,7 @@ import { usePriceContext } from "../lib/price-context";
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_BG = "#0A0E1A";
 
-const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" }[] = [
+const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict" }[] = [
   { href: "/social-feed", label: "Social Feed" },
   { href: "/communities", label: "Communities" },
   { href: "/messages", label: "Messages" },
@@ -29,11 +29,14 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/map", label: "Maps" },
   { href: "/bonds", label: "Bonds" },
   { href: "/forex", label: "Forex" },
+  { href: "/futures", label: "Futures" },
+  { href: "/crypto", label: "Crypto" },
   { href: "/market-relations", label: "Market Relations" },
   { href: "/market-rates", label: "Market Rates" },
   { href: "/sentiment", label: "Sentiment Radar" },
   { href: "/insider-trades", label: "Insider Trades" },
   { href: "/fiscalwatch", label: "FiscalWatch" },
+  { href: "/portfolios", label: "Portfolios" },
   { href: "/growth", label: "Growth" },
   { href: "/ceos", label: "CEOs" },
   { href: "/calendar", label: "Calendar" },
@@ -41,14 +44,14 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/datahub", label: "DataHub" },
   { href: "/backtest", label: "Backtest" },
   { href: "/journal", label: "Journal" },
-  { href: "/predict", label: "PredictNow" },
+  { href: "/predict", label: "Prediction Markets", icon: "predict" },
   { href: "/watchlist", label: "My Watchlist" },
   { href: "/workspace", label: "Workspace" },
 ];
 
 const SECTIONS: { id: string; label: string; hrefs: string[] }[] = [
   { id: "community", label: "Community", hrefs: ["/social-feed", "/communities", "/messages", "/trade-rooms"] },
-  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/forex", "/market-relations", "/market-rates", "/sentiment", "/insider-trades", "/fiscalwatch"] },
+  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/forex", "/futures", "/crypto", "/market-relations", "/market-rates", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
   { id: "analytics", label: "Analytics", hrefs: ["/growth", "/ceos", "/calendar", "/screener", "/datahub", "/backtest"] },
   { id: "personal", label: "Personal", hrefs: ["/journal", "/predict", "/watchlist", "/workspace"] },
 ];
@@ -71,9 +74,9 @@ function getInitials(user: User) {
 function SidebarLogo({ narrow }: { narrow: boolean }) {
   return (
     <Link
-      href="/home"
+      href="/feed"
       className={`flex items-center transition opacity-90 hover:opacity-100 ${narrow ? "justify-center" : "gap-2.5"}`}
-      aria-label="QuantivTrade – Home"
+      aria-label="QuantivTrade – Dashboard"
     >
       <QuantivTradeLogoImage size={42} />
       {!narrow && (
@@ -85,7 +88,7 @@ function SidebarLogo({ narrow }: { narrow: boolean }) {
   );
 }
 
-function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex"; isActive: boolean }) {
+function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict"; isActive: boolean }) {
   const cls = "h-5 w-5";
   const stroke = "currentColor";
   if (icon === "home") return (
@@ -118,6 +121,16 @@ function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedbac
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
     </svg>
   );
+  if (icon === "briefcase") return (
+    <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+    </svg>
+  );
+  if (icon === "predict") return (
+    <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    </svg>
+  );
   return (
     <span className={`h-1.5 w-1.5 rounded-full transition-transform transition-opacity duration-200 ${isActive ? "scale-125 bg-[var(--accent-color)] opacity-100" : "bg-zinc-500 opacity-40 group-hover:opacity-100 group-hover:scale-125"}`} />
   );
@@ -135,7 +148,7 @@ function NavItem({
 }: {
   href: string;
   label: string;
-  icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex";
+  icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase";
   isActive: boolean;
   collapsed: boolean;
   onClick?: () => void;
@@ -385,7 +398,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <div className="mb-2">
             <NavItem
               href="/feed"
-              label="Home"
+              label="Dashboard"
               icon="home"
               isActive={isActive("/feed")}
               collapsed={collapsed}

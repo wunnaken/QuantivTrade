@@ -8,17 +8,13 @@ const CARD_BG = "#0F1520";
 const PRO_GOLD = "#F59E0B";
 
 const TOOLS: { id: number; name: string; description: string }[] = [
-  { id: 1, name: "Options Flow", description: "Live unusual options activity and large block trades" },
-  { id: 2, name: "Sector Rotation", description: "11 S&P sectors performance heatmap — where is money flowing?" },
-  { id: 3, name: "Fear & Greed Index", description: "Market sentiment gauge — are investors fearful or greedy?" },
-  { id: 4, name: "IPO Calendar", description: "Upcoming IPOs, expected valuations, and post-IPO performance" },
-  { id: 5, name: "Dividend Calendar", description: "Ex-dividend dates, yields, and payment schedules" },
-  { id: 6, name: "Short Interest", description: "Most shorted stocks, squeeze candidates, and days to cover" },
-  { id: 7, name: "Fed Dashboard", description: "Federal Reserve rates, dot plot, balance sheet, and CME probabilities" },
-  { id: 8, name: "Earnings Whisper", description: "Official estimates vs trader expectations and historical beat rates" },
-  { id: 9, name: "Congress Trades", description: "What politicians are buying and selling — follow the smart money" },
-  { id: 10, name: "Dark Pool", description: "Large institutional off-equantivtrade block trades and smart money flow" },
-  { id: 11, name: "Crypto Dashboard", description: "Dominance, funding rates, stablecoin flows, and fear index" },
+  { id: 1, name: "Options Flow",     description: "Live unusual options activity and large block trades" },
+  { id: 2, name: "Sector Rotation",  description: "11 S&P sectors performance heatmap — where is money flowing?" },
+  { id: 3, name: "IPO Calendar",     description: "Upcoming IPOs, expected valuations, and post-IPO performance" },
+  { id: 4, name: "Dividend Calendar",description: "Ex-dividend dates, yields, and payment schedules" },
+  { id: 5, name: "Short Interest",   description: "Most shorted stocks, squeeze candidates, and days to cover" },
+  { id: 6, name: "Earnings Whisper", description: "Official estimates vs trader expectations and historical beat rates" },
+  { id: 7, name: "Dark Pool",        description: "Large institutional off-equantivtrade block trades and smart money flow" },
 ];
 
 export default function DataHubView() {
@@ -26,10 +22,10 @@ export default function DataHubView() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const goPrev = useCallback(() => {
-    setSelectedTool((t) => (t != null && t > 1 ? t - 1 : 11));
+    setSelectedTool((t) => (t != null && t > 1 ? t - 1 : 7));
   }, []);
   const goNext = useCallback(() => {
-    setSelectedTool((t) => (t != null && t < 11 ? t + 1 : 1));
+    setSelectedTool((t) => (t != null && t < 7 ? t + 1 : 1));
   }, []);
 
   if (selectedTool != null) {
@@ -83,7 +79,7 @@ export default function DataHubView() {
         {!bannerDismissed && (
           <div className="mb-6 flex items-center justify-between gap-4 rounded-xl border border-amber-500/20 bg-gradient-to-r from-amber-500/10 to-amber-600/5 px-4 py-3">
             <p className="text-sm text-amber-100">
-              You&apos;re previewing DataHub — data is limited. Upgrade to Pro for full real-time access to all 11 tools.
+              You&apos;re previewing DataHub — data is limited. Upgrade to Pro for full real-time access to all 7 tools.
             </p>
             <button type="button" onClick={() => setBannerDismissed(true)} className="shrink-0 rounded p-1 text-amber-200 hover:bg-amber-500/20" aria-label="Dismiss">
               ×
@@ -114,30 +110,14 @@ export default function DataHubView() {
 
 function ExpandedToolView({ toolId }: { toolId: number }) {
   switch (toolId) {
-    case 1:
-      return <OptionsFlowView />;
-    case 2:
-      return <SectorRotationView />;
-    case 3:
-      return <FearGreedView />;
-    case 4:
-      return <IPOCalendarView />;
-    case 5:
-      return <DividendCalendarView />;
-    case 6:
-      return <ShortInterestView />;
-    case 7:
-      return <FedDashboardView />;
-    case 8:
-      return <EarningsWhisperView />;
-    case 9:
-      return <CongressTradesView />;
-    case 10:
-      return <DarkPoolView />;
-    case 11:
-      return <CryptoDashboardView />;
-    default:
-      return null;
+    case 1: return <OptionsFlowView />;
+    case 2: return <SectorRotationView />;
+    case 3: return <IPOCalendarView />;
+    case 4: return <DividendCalendarView />;
+    case 5: return <ShortInterestView />;
+    case 6: return <EarningsWhisperView />;
+    case 7: return <DarkPoolView />;
+    default: return null;
   }
 }
 
@@ -326,50 +306,7 @@ function SectorRotationView() {
   );
 }
 
-// ─── Tool 4: Fear & Greed ──────────────────────────────────────────────────
-function FearGreedView() {
-  const [score, setScore] = useState(55);
-  const [label, setLabel] = useState("Greed");
-  useEffect(() => {
-    fetch("/api/datahub/crypto-fng")
-      .then((r) => r.json())
-      .then((d) => { setScore(d.value ?? 55); setLabel(d.label ?? "Greed"); })
-      .catch(() => {});
-  }, []);
-  const currentLabel = score <= 25 ? "Extreme Fear" : score <= 45 ? "Fear" : score <= 55 ? "Neutral" : score <= 75 ? "Greed" : "Extreme Greed";
-  const needleAngle = -90 + (score / 100) * 180;
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col items-center">
-        <div className="relative h-44 w-80 overflow-visible pt-2">
-          <svg viewBox="-8 -12 216 112" className="h-full w-full overflow-visible" preserveAspectRatio="xMidYMid meet">
-            <defs>
-              <linearGradient id="fgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#EF4444" />
-                <stop offset="50%" stopColor="#F59E0B" />
-                <stop offset="100%" stopColor="#22C55E" />
-              </linearGradient>
-            </defs>
-            <path d="M 28 88 A 80 80 0 0 1 188 88" fill="none" stroke="url(#fgGrad)" strokeWidth="12" />
-            <g transform={`rotate(${needleAngle}, 100, 88)`}>
-              <line x1="100" y1="88" x2="100" y2="32" stroke="white" strokeWidth="3" strokeLinecap="round" />
-              <polygon points="100,18 96,34 104,34" fill="white" />
-            </g>
-          </svg>
-        </div>
-        <p className="mt-4 text-4xl font-bold text-white">{score}</p>
-        <p className="text-lg text-zinc-400">{currentLabel}</p>
-        <p className="mt-4 text-xs text-zinc-500">Previous close: 52 | 1 week ago: 48 | 1 month ago: 45</p>
-      </div>
-      <div className="h-32 rounded-lg border border-white/10 bg-white/5 p-4">
-        <p className="text-xs text-zinc-500">Last 30 days (placeholder)</p>
-        <div className="mt-2 h-20 w-full rounded bg-white/5" />
-      </div>
-    </div>
-  );
-}
-
-// ─── Tool 5: IPO Calendar ──────────────────────────────────────────────────
+// ─── Tool 3: IPO Calendar ──────────────────────────────────────────────────
 function IPOCalendarView() {
   const [ipo, setIpo] = useState<Array<{ name: string; date: string; equantivtrade: string; priceRangeLow?: number; priceRangeHigh?: number; status: string }>>([]);
   const [range, setRange] = useState<"week" | "month" | "quarter">("week");
@@ -433,10 +370,8 @@ function IPOCalendarView() {
   );
 }
 
-// ─── Tool 6–7: Placeholder views ────────────────────────────────────────────
+// ─── Tools 4–5: Placeholder views ───────────────────────────────────────────
 // TODO: Replace with Dividend Calendar API
-// Endpoint: Finnhub /calendar/dividend or similar (ex-dividend dates, yields)
-// When: before launch
 function DividendCalendarView() {
   return (
     <div className="space-y-4">
@@ -514,126 +449,8 @@ function ShortInterestContent() {
   );
 }
 
-// ─── Tool 8: Fed Dashboard ──────────────────────────────────────────────────
-function FedDashboardView() {
-  const [fred, setFred] = useState<{ current: number; lastChanged: string; history: { date: string; value: number }[]; balanceSheet: number; balanceSheetPeak: number } | null>(null);
-  const [hoverPoint, setHoverPoint] = useState<{ date: string; value: number; x: number; y: number } | null>(null);
-  useEffect(() => {
-    fetch("/api/datahub/fred").then((r) => r.json()).then(setFred).catch(() => setFred({ current: 4.5, lastChanged: "2024-09-18", history: [], balanceSheet: 7.2, balanceSheetPeak: 8.9 }));
-  }, []);
-
-  const history = fred?.history ?? [];
-  const maxRate = Math.max(6, ...history.map((h) => h.value), 1);
-  const chartW = 900;
-  const chartH = 320;
-  const pad = { left: 44, right: 24, top: 16, bottom: 32 };
-  const innerW = chartW - pad.left - pad.right;
-  const innerH = chartH - pad.top - pad.bottom;
-
-  return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-white/10 bg-white/5 p-6">
-        <h3 className="text-sm font-medium text-zinc-500">CURRENT RATES</h3>
-        <p className="mt-2 text-4xl font-bold text-white">{fred?.current ?? 4.5}%</p>
-        <p className="text-sm text-zinc-400">Fed Funds Rate · Last changed: {fred?.lastChanged ?? "2024-09-18"}</p>
-        <p className="mt-2 text-sm text-zinc-400">Next meeting: March 19, 2025 — 6 days away</p>
-        <p className="text-sm text-zinc-400">Expected move: 78% chance of 25bp cut (CME FedWatch)</p>
-      </section>
-      <section className="rounded-lg border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-zinc-500">RATE HISTORY</h3>
-        <p className="text-xs text-zinc-500 mt-1">Hover over the line to see date and rate.</p>
-        <div className="mt-4 flex items-center gap-2">
-          <div className="rounded bg-black/20 relative w-full" style={{ maxWidth: 900, height: 320 }}>
-            {history.length ? (
-              <>
-                <svg width={chartW} height={chartH} className="overflow-visible">
-                  <defs>
-                    <linearGradient id="fredLine" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--accent-color,#22c55e)" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="var(--accent-color,#22c55e)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  {/* Y axis labels */}
-                  {[0, 1, 2, 3, 4, 5, 6].filter((v) => v <= maxRate).map((v) => (
-                    <text key={v} x={pad.left - 8} y={pad.top + innerH - (v / maxRate) * innerH} textAnchor="end" className="fill-zinc-500 text-[10px]" fontSize={10}>{v}%</text>
-                  ))}
-                  {/* X axis label (year range) */}
-                  {history.length > 0 && (
-                    <>
-                      <text x={pad.left} y={chartH - 8} className="fill-zinc-500 text-[10px]" fontSize={10}>{history[0]?.date?.slice(0, 4) ?? ""}</text>
-                      <text x={pad.left + innerW} y={chartH - 8} textAnchor="end" className="fill-zinc-500 text-[10px]" fontSize={10}>{history[history.length - 1]?.date?.slice(0, 4) ?? ""}</text>
-                    </>
-                  )}
-                  {/* Line */}
-                  <path
-                    d={history
-                      .map((h, i) => {
-                        const x = pad.left + (i / Math.max(1, history.length - 1)) * innerW;
-                        const y = pad.top + innerH - (h.value / maxRate) * innerH;
-                        return `${i === 0 ? "M" : "L"} ${x} ${y}`;
-                      })
-                      .join(" ")}
-                    fill="none"
-                    stroke="var(--accent-color,#22c55e)"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                  {/* Invisible hover segments */}
-                  {history.map((h, i) => {
-                    const x = pad.left + (i / Math.max(1, history.length - 1)) * innerW;
-                    const y = pad.top + innerH - (h.value / maxRate) * innerH;
-                    const w = Math.max(4, innerW / history.length);
-                    return (
-                      <rect
-                        key={i}
-                        x={x - w / 2}
-                        y={pad.top}
-                        width={w}
-                        height={innerH}
-                        fill="transparent"
-                        onMouseEnter={() => setHoverPoint({ date: h.date, value: h.value, x: x + 8, y: y })}
-                        onMouseLeave={() => setHoverPoint(null)}
-                      />
-                    );
-                  })}
-                </svg>
-                {hoverPoint && (
-                  <div className="pointer-events-none absolute rounded bg-[#0F1520] border border-white/20 px-2 py-1 text-xs text-white shadow-lg" style={{ left: hoverPoint.x, top: hoverPoint.y, transform: "translate(0,-50%)" }}>
-                    {hoverPoint.date}: {hoverPoint.value}%
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex h-full items-center justify-center text-zinc-500 text-sm">Loading...</div>
-            )}
-          </div>
-          <div className="flex flex-col gap-1 text-[10px] text-zinc-500">
-            <span>Y: Rate %</span>
-            <span>X: Year</span>
-          </div>
-        </div>
-      </section>
-      <section className="rounded-lg border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-zinc-500">BALANCE SHEET</h3>
-        <p className="mt-2 text-2xl font-bold text-white">${fred?.balanceSheet ?? 7.2} trillion</p>
-        <p className="text-xs text-zinc-500">Peak: $8.9T (June 2022)</p>
-        <div className="mt-2 h-4 w-full rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-blue-500/60" style={{ width: `${((fred?.balanceSheet ?? 7.2) / 8.9) * 100}%` }} />
-        </div>
-        <p className="mt-3 text-xs text-zinc-400">The Fed’s balance sheet is the total assets held by the Federal Reserve (mainly Treasury and mortgage-backed securities). When the Fed buys bonds (QE), the balance sheet grows; when it runs off or sells (QT), it shrinks. Size affects liquidity and long-term rates.</p>
-      </section>
-      <section className="rounded-lg border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-zinc-500">DOT PLOT (Latest projections)</h3>
-        <p className="mt-2 text-xs text-zinc-400">End 2024: 4.25% · End 2025: 3.75% · End 2026: 3.25%</p>
-      </section>
-    </div>
-  );
-}
-
-// ─── Tools 9–11: Placeholders ───────────────────────────────────────────────
+// ─── Tools 6–7: Placeholders ────────────────────────────────────────────────
 // TODO: Replace with Earnings Whisper API
-// Endpoint: Earnings Whispers (earningswhisper.com) or similar (whisper numbers, implied move, beat rates)
-// When: before launch
 function EarningsWhisperView() {
   return (
     <div className="space-y-4">
@@ -648,26 +465,7 @@ function EarningsWhisperView() {
   );
 }
 
-// TODO: Replace with Congress Trades API
-// Endpoint: Quiver Quant https://www.quiverquant.com/ (congress trades) or Capitol Trades / Senate/House disclosure APIs
-// When: before launch
-function CongressTradesView() {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
-        This tool uses sample data. Real politician trades come from disclosure databases (e.g. Capitol Trades, QuiverQuant).
-      </div>
-      <p className="text-zinc-400">Congress trades — sample.</p>
-      <div className="rounded-lg border border-white/10 p-4">
-        <p className="text-sm text-zinc-500">Date | Politician | Party | Chamber | Ticker | Company | Transaction | Amount Range</p>
-      </div>
-    </div>
-  );
-}
-
 // TODO: Replace with Dark Pool / Block Trades API
-// Endpoint: Unusual Whales or similar (dark pool volume, block trades, smart money flow)
-// When: before launch
 function DarkPoolView() {
   return (
     <div className="space-y-4">
@@ -682,102 +480,3 @@ function DarkPoolView() {
   );
 }
 
-// ─── Tool 12: Crypto Dashboard ─────────────────────────────────────────────
-function CryptoDashboardView() {
-  const [crypto, setCrypto] = useState<{ dominance: number; top10: Array<{ rank: number; name: string; symbol: string; price: number; change24h: number; change7d: number; marketCap: number; volume: number }> } | null>(null);
-  const [fng, setFng] = useState<{ value: number; label: string } | null>(null);
-  const [memecoins, setMemecoins] = useState<Array<{ rank: number; name: string; symbol: string; price: number; change24h: number; change7d: number; marketCap: number; volume: number }>>([]);
-
-  const fetchCrypto = useCallback(() => {
-    Promise.all([
-      fetch("/api/datahub/crypto").then((r) => r.json()),
-      fetch("/api/datahub/crypto-fng").then((r) => r.json()),
-      fetch("/api/datahub/memecoins").then((r) => r.json()),
-    ])
-      .then(([c, f, m]) => {
-        setCrypto(c);
-        setFng(f);
-        setMemecoins(m.memecoins ?? []);
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    fetchCrypto();
-    const t = setInterval(fetchCrypto, 60000);
-    return () => clearInterval(t);
-  }, [fetchCrypto]);
-
-  return (
-    <div className="space-y-6">
-      <p className="text-sm text-zinc-400">Live data from CoinGecko and alternative.me. 24h and 7d % are real; table refreshes every 60 seconds.</p>
-      <section className="rounded-lg border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-zinc-500">BTC DOMINANCE</h3>
-        <p className="mt-2 text-4xl font-bold text-white">{crypto?.dominance ?? 52}%</p>
-      </section>
-      <section className="rounded-lg border border-white/10 overflow-x-auto">
-        <h3 className="border-b border-white/10 bg-white/5 p-2 text-sm font-medium text-zinc-400">TOP 10 CRYPTO</h3>
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-white/10 bg-white/5">
-              <th className="p-2 font-medium text-zinc-400">Rank</th>
-              <th className="p-2 font-medium text-zinc-400">Name</th>
-              <th className="p-2 font-medium text-zinc-400">Price</th>
-              <th className="p-2 font-medium text-zinc-400">24h %</th>
-              <th className="p-2 font-medium text-zinc-400">7d %</th>
-              <th className="p-2 font-medium text-zinc-400">Market Cap</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(crypto?.top10 ?? []).map((c) => (
-              <tr key={c.symbol} className="border-b border-white/5">
-                <td className="p-2 text-zinc-300">{c.rank}</td>
-                <td className="p-2 font-medium text-white">{c.name}</td>
-                <td className="p-2 text-zinc-300">${c.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                <td className={`p-2 font-medium ${c.change24h >= 0 ? "text-emerald-400" : "text-red-400"}`}>{c.change24h >= 0 ? "+" : ""}{c.change24h.toFixed(2)}%</td>
-                <td className={`p-2 ${c.change7d >= 0 ? "text-emerald-400" : "text-red-400"}`}>{c.change7d >= 0 ? "+" : ""}{(c.change7d ?? 0).toFixed(2)}%</td>
-                <td className="p-2 text-zinc-400">${(c.marketCap / 1e9).toFixed(2)}B</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-      <section className="rounded-lg border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-zinc-500">CRYPTO FEAR & GREED</h3>
-        <p className="mt-2 text-2xl font-bold text-white">{fng?.value ?? 55}</p>
-        <p className="text-sm text-zinc-400">{fng?.label ?? "Greed"}</p>
-      </section>
-      <section className="rounded-lg border border-white/10 overflow-x-auto">
-        <h3 className="border-b border-white/10 bg-white/5 p-2 text-sm font-medium text-zinc-400">TOP MEMECOIN DASHBOARD</h3>
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-white/10 bg-white/5">
-              <th className="p-2 font-medium text-zinc-400">Rank</th>
-              <th className="p-2 font-medium text-zinc-400">Name</th>
-              <th className="p-2 font-medium text-zinc-400">Price</th>
-              <th className="p-2 font-medium text-zinc-400">24h %</th>
-              <th className="p-2 font-medium text-zinc-400">7d %</th>
-              <th className="p-2 font-medium text-zinc-400">Market Cap</th>
-            </tr>
-          </thead>
-          <tbody>
-            {memecoins.map((c) => (
-              <tr key={c.symbol} className="border-b border-white/5">
-                <td className="p-2 text-zinc-300">{c.rank}</td>
-                <td className="p-2 font-medium text-white">{c.name}</td>
-                <td className="p-2 text-zinc-300">${c.price.toLocaleString(undefined, { maximumFractionDigits: 6 })}</td>
-                <td className={`p-2 font-medium ${c.change24h >= 0 ? "text-emerald-400" : "text-red-400"}`}>{c.change24h >= 0 ? "+" : ""}{c.change24h.toFixed(2)}%</td>
-                <td className={`p-2 ${c.change7d >= 0 ? "text-emerald-400" : "text-red-400"}`}>{c.change7d >= 0 ? "+" : ""}{(c.change7d ?? 0).toFixed(2)}%</td>
-                <td className="p-2 text-zinc-400">${(c.marketCap / 1e9).toFixed(2)}B</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
-      <section className="rounded-lg border border-white/10 p-4">
-        <h3 className="text-sm font-medium text-zinc-500">STABLECOIN FLOWS</h3>
-        <p className="mt-2 text-zinc-300">What is a stablecoin? A stablecoin is a cryptocurrency pegged to a stable asset (usually the US dollar, e.g. USDT, USDC). Traders use them to move in and out of crypto without leaving the ecosystem. Total stablecoin market cap is ~$150B; when stablecoin supply grows (inflows), it often signals dry powder for buying and can be a bullish signal.</p>
-      </section>
-    </div>
-  );
-}

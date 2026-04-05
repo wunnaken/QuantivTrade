@@ -1,791 +1,933 @@
 "use client";
 
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuth } from "../../components/AuthContext";
-import { useToast } from "../../components/ToastContext";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
-  addMarket,
-  addPoints,
-  addPredictNotification,
-  canClaimDaily,
-  claimDailyBonus,
-  CREATOR_BONUS_XP,
-  deductPoints,
-  getLeaderboard,
-  getPoints,
-  getProbability,
-  loadBets,
-  loadMarkets,
-  markMarketAwaiting,
-  placeBet,
-  potentialPayout,
-  profitIfWin,
-  resolveMarket,
-  saveBets,
-  saveMarkets,
-  type PredictBet,
-  type PredictCategory,
-  type PredictMarket,
-} from "../../lib/predict";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid, Cell } from "recharts";
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+} from "recharts";
 
-const CATEGORIES: { key: PredictCategory | "Trending"; label: string }[] = [
-  { key: "Trending", label: "Trending" },
-  { key: "Finance", label: "Finance" },
-  { key: "Macro", label: "Macro" },
-  { key: "Crypto", label: "Crypto" },
-  { key: "Politics", label: "Politics" },
-  { key: "All", label: "All Markets" },
-];
+// ─── Types ───────────────────────────────────────────────────────────────────
 
-const CATEGORY_COLORS: Record<string, string> = {
-  Finance: "#3B82F6",
-  Crypto: "#F59E0B",
-  Macro: "#10B981",
-  Politics: "#8B5CF6",
-  All: "#6B7280",
+type Source = "polymarket" | "kalshi" | "manifold" | "predictit";
+type TabId = "all" | "political" | "crypto" | "economics" | "sports" | "arbitrage" | "ai";
+type SortKey = "volume" | "liquidity" | "endDate" | "probability";
+
+interface PredictMarket {
+  id: string;
+  source: Source;
+  question: string;
+  probability: number;
+  volume: number;
+  liquidity: number;
+  endDate: string | null;
+  category: string;
+  yesPrice: number;
+  noPrice: number;
+  url: string;
+  resolution?: string;
+}
+
+interface MarketsData {
+  markets: PredictMarket[];
+  categories: string[];
+  topByVolume: PredictMarket[];
+  topByLiquidity: PredictMarket[];
+  recentlyResolved: (PredictMarket & { resolution?: string })[];
+  lastUpdated: string;
+}
+
+interface ArbOpp {
+  question: string;
+  sourceA: Source;
+  priceA: number;
+  urlA: string;
+  sourceB: Source;
+  priceB: number;
+  urlB: string;
+  spread: number;
+  totalCost: number;
+  potentialProfit: number;
+}
+
+interface RoundIssue {
+  id: string;
+  source: Source;
+  question: string;
+  yesPrice: number;
+  noPrice: number;
+  total: number;
+  gap: number;
+  type: "over" | "under";
+  url: string;
+}
+
+interface AiAnalysis {
+  fairValue: number | null;
+  confidence: "low" | "medium" | "high";
+  summary: string;
+  bullishFactors: string[];
+  bearishFactors: string[];
+  baseRate: string;
+  mispricing: number | null;
+  keyRisks: string;
+}
+
+interface Mispricing {
+  question: string;
+  currentProbability: number;
+  fairValue: number;
+  reasoning: string;
+  direction: "overpriced" | "underpriced";
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const SOURCE_COLORS: Record<Source, string> = {
+  polymarket: "bg-blue-500/15 text-blue-400 border-blue-500/20",
+  kalshi: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+  manifold: "bg-purple-500/15 text-purple-400 border-purple-500/20",
+  predictit: "bg-amber-500/15 text-amber-400 border-amber-500/20",
 };
 
-function formatTimeAgo(iso: string): string {
-  const d = new Date(iso);
-  const now = Date.now();
-  const diff = now - d.getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "Just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const day = Math.floor(h / 24);
-  if (day < 7) return `${day}d ago`;
-  return d.toLocaleDateString();
+const SOURCE_LABELS: Record<Source, string> = {
+  polymarket: "Polymarket",
+  kalshi: "Kalshi",
+  manifold: "Manifold",
+  predictit: "PredictIt",
+};
+
+function probColor(p: number) {
+  if (p >= 70) return "text-emerald-400";
+  if (p >= 40) return "text-amber-400";
+  return "text-red-400";
 }
 
-function formatCloseDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr + "T12:00:00");
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  } catch {
-    return dateStr;
-  }
+function probBarColor(p: number) {
+  if (p >= 70) return "bg-emerald-500";
+  if (p >= 40) return "bg-amber-500";
+  return "bg-red-500";
 }
 
-function daysUntilClose(closeDate: string): number {
-  const close = new Date(closeDate + "T23:59:59").getTime();
-  const now = new Date().setHours(0, 0, 0, 0);
-  return Math.max(0, Math.ceil((close - now) / (24 * 60 * 60 * 1000)));
+function fmtVol(n: number) {
+  if (!n) return "—";
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
+  return `$${n.toFixed(0)}`;
 }
 
-function PointsBalance({ points: pointsProp }: { points?: number }) {
-  const [localPoints, setLocalPoints] = useState(getPoints());
-  const [showTooltip, setShowTooltip] = useState(false);
+function daysLeft(endDate: string | null) {
+  if (!endDate) return null;
+  const d = new Date(endDate).getTime() - Date.now();
+  if (d < 0) return null;
+  return Math.ceil(d / 86400000);
+}
+
+function useTracked() {
+  const [tracked, setTracked] = useState<string[]>([]);
   useEffect(() => {
-    setLocalPoints(getPoints());
-    const onStorage = () => setLocalPoints(getPoints());
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
+    try {
+      const saved = localStorage.getItem("predict_tracked");
+      if (saved) setTracked(JSON.parse(saved));
+    } catch { /* ignore */ }
   }, []);
-  const display = pointsProp ?? localPoints;
+  const toggle = useCallback((id: string) => {
+    setTracked((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      try { localStorage.setItem("predict_tracked", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
+  return { tracked, toggle };
+}
+
+// ─── SourceBadge ─────────────────────────────────────────────────────────────
+
+function SourceBadge({ source }: { source: Source }) {
   return (
-    <div className="relative flex items-center gap-2">
-      <button
-        type="button"
-        onClick={() => setShowTooltip((s) => !s)}
-        onBlur={() => setTimeout(() => setShowTooltip(false), 150)}
-        className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-sm font-medium text-amber-400"
-      >
-        <span aria-hidden>XP</span>
-        <span>{(display ?? 0).toLocaleString()} XP</span>
-      </button>
-      {showTooltip && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-xs text-zinc-300 shadow-xl">
-          Virtual points — real money markets coming soon
-        </div>
-      )}
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${SOURCE_COLORS[source]}`}>
+      {SOURCE_LABELS[source]}
+    </span>
+  );
+}
+
+// ─── ProbBar ─────────────────────────────────────────────────────────────────
+
+function ProbBar({ prob }: { prob: number }) {
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+      <div
+        className={`h-full rounded-full ${probBarColor(prob)}`}
+        style={{ width: `${prob}%` }}
+      />
     </div>
   );
 }
+
+// ─── Stats Bar ───────────────────────────────────────────────────────────────
+
+function StatsBar({ data }: { data: MarketsData | null }) {
+  if (!data) return null;
+  const { markets } = data;
+  const totalVol = markets.reduce((s, m) => s + m.volume, 0);
+  const catCounts: Record<string, number> = {};
+  markets.forEach((m) => { catCounts[m.category] = (catCounts[m.category] ?? 0) + 1; });
+  const topCat = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ?? "—";
+  const bigMover = [...markets].sort((a, b) => Math.abs(b.probability - 50) - Math.abs(a.probability - 50))[0];
+
+  const stats = [
+    { label: "Markets Tracked", value: markets.length.toString(), sub: "across all platforms" },
+    { label: "24h Volume", value: fmtVol(totalVol), sub: "combined" },
+    { label: "Top Category", value: topCat.charAt(0).toUpperCase() + topCat.slice(1), sub: `${catCounts[topCat] ?? 0} markets` },
+    { label: "Highest Conviction", value: bigMover ? `${bigMover.probability}%` : "—", sub: bigMover ? bigMover.question.slice(0, 28) + "…" : "" },
+  ];
+
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {stats.map((s) => (
+        <div key={s.label} className="rounded-xl border border-white/5 bg-[#050713] px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wider text-zinc-500">{s.label}</p>
+          <p className="mt-0.5 text-sm font-semibold text-zinc-100">{s.value}</p>
+          <p className="truncate text-[10px] text-zinc-600">{s.sub}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Expanded Card ───────────────────────────────────────────────────────────
+
+interface HistoryPoint { t: number; p: number }
+
+function ExpandedCard({
+  market,
+  onClose,
+  onAnalyze,
+}: {
+  market: PredictMarket;
+  onClose: () => void;
+  onAnalyze: (m: PredictMarket) => void;
+}) {
+  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  useEffect(() => {
+    if (market.source !== "polymarket") return;
+    const rawId = market.id.replace("polymarket-", "");
+    setLoadingHistory(true);
+    fetch(`https://gamma-api.polymarket.com/markets/${rawId}/history`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        const pts: HistoryPoint[] = Array.isArray(d)
+          ? d.map((x: { t?: number; timestamp?: number; p?: number; price?: number }) => ({
+              t: x.t ?? x.timestamp ?? 0,
+              p: Math.round((x.p ?? x.price ?? 0) * 100),
+            }))
+          : [];
+        setHistory(pts.filter((x) => x.t && x.p != null));
+      })
+      .catch(() => { /* no history */ })
+      .finally(() => setLoadingHistory(false));
+  }, [market]);
+
+  const chartData = history.map((h) => ({
+    date: new Date(h.t * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    prob: h.p,
+  }));
+
+  return (
+    <div className="col-span-full mt-1 rounded-2xl border border-[var(--accent-color)]/20 bg-[#050713] p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <SourceBadge source={market.source} />
+            <span className="text-[10px] uppercase tracking-wider text-zinc-500">{market.category}</span>
+          </div>
+          <p className="text-sm font-medium text-zinc-100">{market.question}</p>
+        </div>
+        <button onClick={onClose} className="flex-shrink-0 text-zinc-600 hover:text-zinc-300">
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          { l: "YES", v: `${market.yesPrice}%`, c: probColor(market.yesPrice) },
+          { l: "NO", v: `${market.noPrice}%`, c: "text-zinc-300" },
+          { l: "Volume", v: fmtVol(market.volume), c: "text-zinc-300" },
+          { l: "Days Left", v: daysLeft(market.endDate) != null ? `${daysLeft(market.endDate)}d` : "—", c: "text-zinc-300" },
+        ].map((s) => (
+          <div key={s.l} className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-center">
+            <p className="text-[10px] text-zinc-500">{s.l}</p>
+            <p className={`text-lg font-bold ${s.c}`}>{s.v}</p>
+          </div>
+        ))}
+      </div>
+
+      {market.source === "polymarket" && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">Probability History</p>
+          {loadingHistory ? (
+            <div className="h-24 animate-pulse rounded-xl bg-white/5" />
+          ) : chartData.length > 1 ? (
+            <ResponsiveContainer width="100%" height={120}>
+              <LineChart data={chartData}>
+                <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#71717a" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: "#71717a" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+                <Tooltip
+                  contentStyle={{ background: "#0a0b14", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 11 }}
+                  formatter={(v: number) => [`${v}%`, "Probability"]}
+                />
+                <ReferenceLine y={50} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
+                <Line type="monotone" dataKey="prob" stroke="var(--accent-color)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-xs text-zinc-600">No history data available for this market.</p>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <a
+          href={market.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:bg-white/[0.08]"
+        >
+          Open on {SOURCE_LABELS[market.source]} ↗
+        </a>
+        <button
+          onClick={() => onAnalyze(market)}
+          className="rounded-lg border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-3 py-1.5 text-xs text-[var(--accent-color)] transition-colors hover:bg-[var(--accent-color)]/20"
+        >
+          Analyze with AI
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Market Card ─────────────────────────────────────────────────────────────
 
 function MarketCard({
   market,
-  onBet,
-  onShare,
-  onResolve,
-  onMarkAwaiting,
-  isCreator,
-  recentBetsCount,
-  traderCount,
+  expanded,
+  onToggle,
+  onAnalyze,
+  tracked,
+  onTrack,
 }: {
   market: PredictMarket;
-  onBet: (m: PredictMarket, side: "yes" | "no") => void;
-  onShare: (m: PredictMarket) => void;
-  onResolve?: (m: PredictMarket, outcome: "yes" | "no") => void;
-  onMarkAwaiting?: (m: PredictMarket) => void;
-  isCreator?: boolean;
-  recentBetsCount?: number;
-  traderCount?: number;
+  expanded: boolean;
+  onToggle: () => void;
+  onAnalyze: (m: PredictMarket) => void;
+  tracked: boolean;
+  onTrack: () => void;
 }) {
-  const { yes, no } = getProbability(market.yesPoints, market.noPoints);
-  const yesPct = Math.round(yes * 100);
-  const noPct = Math.round(no * 100);
-  const daysLeft = daysUntilClose(market.closeDate);
-  const isTrending = (recentBetsCount ?? 0) >= 3 || (market.lastBetAt && (Date.now() - new Date(market.lastBetAt).getTime() < 60 * 60 * 1000));
-  const totalWagered = market.yesPoints + market.noPoints;
-  const tradersLabel = typeof traderCount === "number" ? traderCount : "—";
+  const days = daysLeft(market.endDate);
 
   return (
-    <div
-      className={`rounded-xl border bg-[#0F1520] p-4 transition-all hover:border-white/20 hover:shadow-lg hover:shadow-[var(--accent-color)]/5 ${
-        isTrending ? "ring-1 ring-amber-500/30" : "border-white/10"
-      }`}
-    >
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <span
-          className="rounded-full px-2 py-0.5 text-xs font-medium"
-          style={{ backgroundColor: `${CATEGORY_COLORS[market.category] ?? "#6B7280"}30`, color: CATEGORY_COLORS[market.category] ?? "#9CA3AF" }}
-        >
-          {market.category}
-        </span>
-        {market.status === "awaiting" && (
-          <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-400">Awaiting Resolution</span>
-        )}
-        {market.status === "resolved" && (
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${market.outcome === "yes" ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
-            {market.outcome === "yes" ? "YES WON" : "NO WON"}
+    <div className={`rounded-2xl border bg-[#050713] transition-colors ${expanded ? "border-[var(--accent-color)]/30" : "border-white/10 hover:border-white/20"}`}>
+      <div className="cursor-pointer p-4" onClick={onToggle}>
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <SourceBadge source={market.source} />
+          {days != null && (
+            <span className={`flex-shrink-0 text-[10px] font-medium ${days <= 7 ? "text-amber-400" : "text-zinc-500"}`}>
+              {days}d left
+            </span>
+          )}
+        </div>
+        <p className="mb-3 line-clamp-2 text-sm font-medium leading-snug text-zinc-200">{market.question}</p>
+        <div className="mb-2 flex items-baseline gap-2">
+          <span className={`text-2xl font-bold tabular-nums ${probColor(market.probability)}`}>
+            {market.probability}%
           </span>
-        )}
-        {isTrending && (
-          <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs text-amber-400">Trending</span>
-        )}
-      </div>
-      <h3 className="mb-1 text-sm font-semibold text-zinc-100">{market.question}</h3>
-      <p className="mb-3 text-xs text-zinc-500">
-        @{market.createdBy} · {formatTimeAgo(market.createdAt)}
-      </p>
-      {market.status === "open" && (
-        <p className={`mb-2 text-xs ${daysLeft <= 3 ? "text-red-400" : "text-zinc-500"}`}>
-          Closes in {daysLeft} days · {formatCloseDate(market.closeDate)}
-        </p>
-      )}
-      {market.status === "open" && (
-        <>
-          <div className="mb-3 flex h-2 overflow-hidden rounded-full bg-zinc-800">
-            <div
-              className="h-full rounded-l-full bg-[#00C896] transition-all duration-500"
-              style={{ width: `${yesPct}%` }}
-            />
-            <div
-              className="h-full bg-[#EF4444] transition-all duration-500"
-              style={{ width: `${noPct}%` }}
-            />
-          </div>
-          <p className="mb-3 text-center text-xs text-zinc-400">
-            YES {yesPct}% ←————————→ {noPct}% NO
-          </p>
-          <div className="mb-3 flex gap-2">
-            <button
-              type="button"
-              onClick={() => onBet(market, "yes")}
-              className="flex-1 rounded-lg bg-[#00C896]/20 py-2 text-sm font-medium text-[#00C896] hover:bg-[#00C896]/30"
-            >
-              YES {yesPct}%
-            </button>
-            <button
-              type="button"
-              onClick={() => onBet(market, "no")}
-              className="flex-1 rounded-lg bg-[#EF4444]/20 py-2 text-sm font-medium text-[#EF4444] hover:bg-[#EF4444]/30"
-            >
-              NO {noPct}%
-            </button>
-          </div>
-        </>
-      )}
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span>{tradersLabel} traders · {totalWagered.toLocaleString()} XP wagered</span>
-        <div className="flex flex-wrap gap-1">
-          <button type="button" onClick={() => onShare(market)} className="rounded px-2 py-1 hover:bg-white/5 hover:text-zinc-300">
-            Share
-          </button>
-          {isCreator && market.status === "open" && onMarkAwaiting && (
-            <button type="button" onClick={() => onMarkAwaiting(market)} className="rounded px-2 py-1 text-amber-400 hover:bg-white/5">
-              Mark awaiting
-            </button>
-          )}
-          {isCreator && market.status === "awaiting" && onResolve && (
-            <>
-              <button type="button" onClick={() => onResolve(market, "yes")} className="rounded px-2 py-1 text-emerald-400 hover:bg-white/5">
-                Resolve YES
-              </button>
-              <button type="button" onClick={() => onResolve(market, "no")} className="rounded px-2 py-1 text-red-400 hover:bg-white/5">
-                Resolve NO
-              </button>
-            </>
-          )}
+          <span className="text-xs text-zinc-500">YES</span>
+          <span className="ml-auto text-xs text-zinc-600">{100 - market.probability}% NO</span>
+        </div>
+        <ProbBar prob={market.probability} />
+        <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-600">
+          <span>Vol {fmtVol(market.volume)}</span>
+          <span>Liq {fmtVol(market.liquidity)}</span>
         </div>
       </div>
-    </div>
-  );
-}
-
-function BetModal({
-  market,
-  side,
-  onClose,
-  onConfirm,
-}: {
-  market: PredictMarket;
-  side: "yes" | "no";
-  onClose: () => void;
-  onConfirm: (amount: number) => void;
-}) {
-  const { yes, no } = getProbability(market.yesPoints, market.noPoints);
-  const oddsPct = Math.round((side === "yes" ? yes : no) * 100);
-  const maxPoints = getPoints();
-  const [amount, setAmount] = useState(Math.min(100, maxPoints));
-  const payout = potentialPayout(amount, side === "yes" ? yes : no);
-  const profit = profitIfWin(amount, side === "yes" ? yes : no);
-  const quickAmounts = [50, 100, 250, 500, maxPoints];
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <div
-        className="w-full max-w-md rounded-t-2xl border border-white/10 bg-[#0F1520] p-6 shadow-xl sm:max-h-[85vh] sm:overflow-y-auto sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="mb-1 truncate text-sm font-semibold text-zinc-100">{market.question}</h3>
-        <p className="mb-3 text-xs text-zinc-500">
-          Your choice: <span className={side === "yes" ? "text-[#00C896]" : "text-[#EF4444]"}>{side.toUpperCase()}</span> · Current odds: {oddsPct}%
-        </p>
-        <div className="mb-4">
-          <label className="mb-2 block text-xs text-zinc-400">Bet amount (XP)</label>
-          <input
-            type="number"
-            min={10}
-            max={maxPoints}
-            value={amount}
-            onChange={(e) => setAmount(Math.min(maxPoints, Math.max(10, parseInt(e.target.value, 10) || 10)))}
-            className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-zinc-100"
-          />
-          <div className="mt-2 flex flex-wrap gap-2">
-            {quickAmounts.map((q) => (
-              <button
-                key={q}
-                type="button"
-                onClick={() => setAmount(q)}
-                className="rounded-lg border border-white/10 px-2 py-1 text-xs hover:bg-white/5"
-              >
-                {q === maxPoints ? "ALL IN" : q}
-              </button>
-            ))}
-          </div>
-          <input
-            type="range"
-            min={10}
-            max={maxPoints}
-            value={amount}
-            onChange={(e) => setAmount(parseInt(e.target.value, 10))}
-            className="mt-2 w-full"
-          />
-        </div>
-        <p className="mb-2 text-xs text-zinc-400">
-          If {side.toUpperCase()} wins: +{profit} XP (total {payout} XP)
-        </p>
-        <p className="mb-4 text-xs text-zinc-500">If {side === "yes" ? "NO" : "YES"} wins: -{amount} XP (your bet)</p>
-        <p className="mb-4 text-xs text-zinc-500">Current odds based on total XP wagered on YES vs NO.</p>
-        <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-white/20 py-2 text-sm">
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={() => onConfirm(amount)}
-            className={`flex-1 rounded-lg py-2 text-sm font-medium text-white ${side === "yes" ? "bg-[#00C896]" : "bg-[#EF4444]"}`}
-          >
-            Confirm
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CreateMarketModal({
-  onClose,
-  onCreate,
-  userId,
-  userName,
-}: {
-  onClose: () => void;
-  onCreate: (input: { question: string; category: PredictCategory; closeDate: string; resolutionCriteria?: string; initialYesPercent: number }) => void;
-  userId: string;
-  userName: string;
-}) {
-  const [question, setQuestion] = useState("");
-  const [category, setCategory] = useState<PredictCategory>("Finance");
-  const [closeDate, setCloseDate] = useState("");
-  const [criteria, setCriteria] = useState("");
-  const [initialYes, setInitialYes] = useState(50);
-  const minDate = new Date().toISOString().slice(0, 10);
-
-  const handleSubmit = () => {
-    if (!question.trim()) return;
-    let date = closeDate || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    if (date < minDate) date = minDate;
-    onCreate({ question: question.trim(), category: category === "All" ? "Finance" : category, closeDate: date, resolutionCriteria: criteria.trim() || undefined, initialYesPercent: initialYes });
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center" onClick={onClose}>
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-white/10 bg-[#0F1520] p-6 shadow-xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-        <h2 className="mb-4 text-lg font-semibold text-zinc-100">Create Market</h2>
-        <p className="mb-2 text-xs text-zinc-500">Your question must have a clear YES or NO answer (e.g. &quot;Will X happen by [date]?&quot;)</p>
-        <input
-          type="text"
-          placeholder="e.g. Will the S&P 500 close above 6,000 by end of 2026?"
-          value={question}
-          onChange={(e) => setQuestion(e.target.value)}
-          className="mb-4 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-zinc-100 placeholder:text-zinc-500"
-        />
-        <label className="mb-2 block text-xs text-zinc-400">Category</label>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value as PredictCategory)}
-          className="mb-4 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-zinc-100"
+      <div className="flex border-t border-white/5">
+        <button
+          onClick={() => onAnalyze(market)}
+          className="flex-1 rounded-bl-2xl py-2 text-[10px] font-medium text-zinc-600 transition-colors hover:bg-white/[0.03] hover:text-zinc-300"
         >
-          {["Finance", "Crypto", "Macro", "Politics"].map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <label className="mb-2 block text-xs text-zinc-400">Closing date</label>
-        <input
-          type="date"
-          min={minDate}
-          value={closeDate}
-          onChange={(e) => setCloseDate(e.target.value)}
-          className="mb-4 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-zinc-100"
-        />
-        <label className="mb-2 block text-xs text-zinc-400">Resolution criteria (optional)</label>
-        <textarea
-          placeholder="How will this market be resolved? What source will confirm the outcome?"
-          value={criteria}
-          onChange={(e) => setCriteria(e.target.value)}
-          rows={2}
-          className="mb-4 w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-zinc-100 placeholder:text-zinc-500"
-        />
-        <label className="mb-2 block text-xs text-zinc-400">Starting YES probability: {initialYes}%</label>
-        <input type="range" min={10} max={90} value={initialYes} onChange={(e) => setInitialYes(parseInt(e.target.value, 10))} className="mb-4 w-full" />
-        <div className="mb-4 rounded-lg border border-white/10 p-3 text-xs text-zinc-500">
-          Preview: &quot;{question || "Your question"}&quot; · {category} · Closes {closeDate || "—"} · YES {initialYes}% / NO {100 - initialYes}%
-        </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-white/20 py-2 text-sm">
-            Cancel
-          </button>
-          <button type="button" onClick={handleSubmit} disabled={!question.trim()} className="flex-1 rounded-lg bg-[var(--accent-color)] py-2 text-sm font-medium text-[#020308] disabled:opacity-50">
-            Submit
-          </button>
-        </div>
+          AI Analyze
+        </button>
+        <div className="w-px bg-white/5" />
+        <button
+          onClick={(e) => { e.stopPropagation(); onTrack(); }}
+          className={`flex-1 rounded-br-2xl py-2 text-[10px] font-medium transition-colors ${
+            tracked
+              ? "bg-[var(--accent-color)]/5 text-[var(--accent-color)]"
+              : "text-zinc-600 hover:bg-white/[0.03] hover:text-zinc-300"
+          }`}
+        >
+          {tracked ? "Tracking ✓" : "Track"}
+        </button>
       </div>
     </div>
   );
 }
 
-export default function PredictView() {
-  const { user } = useAuth();
-  const toast = useToast();
-  const userId = user?.id ?? user?.email ?? "anon";
-  const userName = user?.username?.trim() || user?.name?.trim() || "trader";
+// ─── Markets Grid ─────────────────────────────────────────────────────────────
 
-  const [markets, setMarkets] = useState<PredictMarket[]>([]);
-  const [bets, setBets] = useState<PredictBet[]>([]);
-  const [tab, setTab] = useState<PredictCategory | "Trending">("Trending");
-  const [betModal, setBetModal] = useState<{ market: PredictMarket; side: "yes" | "no" } | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [points, setPoints] = useState(0);
+function MarketsGrid({
+  markets,
+  tracked,
+  onTrack,
+  onAnalyze,
+}: {
+  markets: PredictMarket[];
+  tracked: string[];
+  onTrack: (id: string) => void;
+  onAnalyze: (m: PredictMarket) => void;
+}) {
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [platform, setPlatform] = useState<"all" | Source>("all");
+  const [sort, setSort] = useState<SortKey>("volume");
 
-  const refresh = useCallback(() => {
-    setMarkets(loadMarkets(userId));
-    setBets(loadBets());
-    setPoints(getPoints());
-  }, [userId]);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  // Daily bonus check on mount
-  useEffect(() => {
-    if (canClaimDaily()) {
-      const claimed = claimDailyBonus();
-      if (claimed) {
-        toast.showToast("Daily bonus: +50 XP claimed!", "success");
-        addPredictNotification("Daily bonus: +50 XP added", "/predict");
-        refresh();
-      }
+  const filtered = useMemo(() => {
+    let list = markets;
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter((m) => m.question.toLowerCase().includes(q));
     }
-  }, [refresh]);
-
-  const filteredMarkets = useMemo(() => {
-    let list = [...markets];
-    if (tab === "Trending") {
-      list = list
-        .filter((m) => m.status === "open")
-        .sort((a, b) => (b.lastBetAt ?? "").localeCompare(a.lastBetAt ?? ""));
-    } else if (tab !== "All") {
-      list = list.filter((m) => m.category === tab);
-    }
-    return list;
-  }, [markets, tab]);
-
-  const myBets = useMemo(() => bets.filter((b) => b.userId === userId), [bets, userId]);
-  const activeBets = myBets.filter((b) => b.status === "open");
-  const myResolvedBets = useMemo(() => myBets.filter((b) => b.status === "won" || b.status === "lost"), [myBets]);
-  const performanceStats = useMemo(() => {
-    const wins = myResolvedBets.filter((b) => b.status === "won").length;
-    const losses = myResolvedBets.filter((b) => b.status === "lost").length;
-    let pl = 0;
-    myResolvedBets.forEach((b) => {
-      if (b.status === "won" && b.payout != null) pl += b.payout - b.amount;
-      else if (b.status === "lost") pl -= b.amount;
-    });
-    return { wins, losses, totalTrades: wins + losses, pl };
-  }, [myResolvedBets]);
-  const performanceChartData = useMemo(() => [
-    { name: "Won", count: performanceStats.wins, fill: "#00C896" },
-    { name: "Lost", count: performanceStats.losses, fill: "#EF4444" },
-  ], [performanceStats.wins, performanceStats.losses]);
-  const plOverTimeData = useMemo(() => {
-    const sorted = [...myResolvedBets].sort((a, b) => (a.resolvedAt ?? a.placedAt).localeCompare(b.resolvedAt ?? b.placedAt));
-    let cum = 0;
-    return sorted.map((b) => {
-      if (b.status === "won" && b.payout != null) cum += b.payout - b.amount;
-      else if (b.status === "lost") cum -= b.amount;
-      return { trade: sorted.indexOf(b) + 1, pl: cum, date: (b.resolvedAt ?? b.placedAt).slice(0, 10) };
-    });
-  }, [myResolvedBets]);
-  const leaderboardAll = useMemo(() => getLeaderboard(bets, "all"), [bets]);
-  const leaderboardWeek = useMemo(() => getLeaderboard(bets, "week"), [bets]);
-  const [leaderboardTab, setLeaderboardTab] = useState<"week" | "all">("all");
-  const recentlyResolved = useMemo(() => markets.filter((m) => m.status === "resolved").slice(0, 5), [markets]);
-
-  const handleBetConfirm = useCallback(
-    (amount: number) => {
-      if (!betModal) return;
-      const result = placeBet(markets, bets, betModal.market.id, userId, userName, betModal.side, amount);
-      if (result.success && result.updatedMarkets && result.updatedBets) {
-        setMarkets(result.updatedMarkets);
-        setBets(result.updatedBets);
-        setPoints(getPoints());
-        toast.showToast(`Bet placed! ${amount} XP on ${betModal.side.toUpperCase()}`, "success");
-        setBetModal(null);
-      } else {
-        toast.showToast(result.error ?? "Bet failed", "warning");
+    if (platform !== "all") list = list.filter((m) => m.source === platform);
+    return [...list].sort((a, b) => {
+      if (sort === "volume") return b.volume - a.volume;
+      if (sort === "liquidity") return b.liquidity - a.liquidity;
+      if (sort === "probability") return b.probability - a.probability;
+      if (sort === "endDate") {
+        const da = a.endDate ? new Date(a.endDate).getTime() : Infinity;
+        const db = b.endDate ? new Date(b.endDate).getTime() : Infinity;
+        return da - db;
       }
-    },
-    [betModal, markets, bets, userId, userName, toast]
-  );
+      return 0;
+    });
+  }, [markets, search, platform, sort]);
 
-  const handleCreateMarket = useCallback(
-    (input: { question: string; category: PredictCategory; closeDate: string; resolutionCriteria?: string; initialYesPercent: number }) => {
-      const { market, updated } = addMarket(markets, {
-        ...input,
-        createdBy: userId,
-        createdByName: userName,
-      });
-      setMarkets(updated);
-      addPoints(CREATOR_BONUS_XP);
-      setPoints(getPoints());
-      toast.showToast("Market created! Share it to get more traders", "success");
-      addPredictNotification(`New market: @${userName} created a ${input.category} market`, `/predict`);
-      setCreateOpen(false);
-    },
-    [markets, userId, userName, toast]
-  );
-
-  const handleResolve = useCallback(
-    (market: PredictMarket, outcome: "yes" | "no") => {
-      const myBet = bets.find((b) => b.marketId === market.id && b.userId === userId && b.status === "open");
-      const { updatedMarkets, updatedBets } = resolveMarket(markets, bets, market.id, outcome, userId);
-      setMarkets(updatedMarkets);
-      setBets(updatedBets);
-      setPoints(getPoints());
-      toast.showToast(`Market resolved: ${outcome.toUpperCase()} won`, "success");
-      const iWon = myBet && myBet.side === outcome;
-      if (iWon) {
-        const payout = myBet ? potentialPayout(myBet.amount, myBet.oddsAtBet) : 0;
-        addPredictNotification(`You predicted correctly! +${payout} XP added to your balance`, "/predict");
-      }
-    },
-    [markets, bets, userId, toast]
-  );
-
-  const handleMarkAwaiting = useCallback(
-    (market: PredictMarket) => {
-      setMarkets(markMarketAwaiting(markets, market.id));
-    },
-    [markets]
-  );
-
-  const handleShare = useCallback((market: PredictMarket) => {
-    const url = typeof window !== "undefined" ? `${window.location.origin}/predict?m=${market.id}` : "";
-    navigator.clipboard.writeText(url);
-    toast.showToast("Link copied to clipboard", "info");
-  }, [toast]);
+  const btnBase = "rounded-lg px-2.5 py-1 text-[10px] font-medium transition-colors";
+  const btnActive = "bg-[var(--accent-color)]/15 text-[var(--accent-color)]";
+  const btnInactive = "text-zinc-500 hover:text-zinc-300";
 
   return (
-    <div className="min-h-screen bg-[#0A0E1A] text-zinc-200">
-      <div className="mx-auto max-w-7xl px-4 py-6">
-        {/* Header */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-zinc-100">Prediction Markets</h1>
-            <p className="text-sm text-zinc-500">Trade on outcomes. Earn XP. Prove your edge.</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <PointsBalance points={points} />
-            <button
-              type="button"
-              onClick={() => setCreateOpen(true)}
-              className="rounded-lg bg-[var(--accent-color)] px-4 py-2 text-sm font-semibold text-[#020308] hover:opacity-90"
-            >
-              Create Market
-            </button>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          {CATEGORIES.map(({ key, label }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setTab(key)}
-              className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                tab === key ? "bg-white/15 text-zinc-100" : "bg-white/5 text-zinc-400 hover:bg-white/10"
-              }`}
-            >
-              {label}
+    <div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search markets…"
+          className="w-full max-w-xs rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-[var(--accent-color)]/40"
+        />
+        <div className="flex flex-wrap gap-1 rounded-lg border border-white/5 bg-white/[0.02] p-0.5">
+          {(["all", "polymarket", "kalshi", "manifold", "predictit"] as const).map((p) => (
+            <button key={p} onClick={() => setPlatform(p)} className={`${btnBase} ${platform === p ? btnActive : btnInactive}`}>
+              {p === "all" ? "All" : SOURCE_LABELS[p]}
             </button>
           ))}
         </div>
+        <div className="flex gap-1 rounded-lg border border-white/5 bg-white/[0.02] p-0.5">
+          {(["volume", "liquidity", "probability", "endDate"] as SortKey[]).map((s) => (
+            <button key={s} onClick={() => setSort(s)} className={`${btnBase} ${sort === s ? btnActive : btnInactive}`}>
+              {s === "endDate" ? "Expiry" : s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        <div className="flex gap-6">
-          {/* Main grid */}
-          <div className="min-w-0 flex-1">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
-              {filteredMarkets.map((market) => (
-                <MarketCard
-                  key={market.id}
-                  market={market}
-                  onBet={(m, side) => setBetModal({ market: m, side })}
-                  onShare={handleShare}
-                  onResolve={market.createdBy === userId && market.status === "awaiting" ? handleResolve : undefined}
-                  onMarkAwaiting={market.createdBy === userId && market.status === "open" ? handleMarkAwaiting : undefined}
-                  isCreator={market.createdBy === userId}
-                  recentBetsCount={bets.filter((b) => b.marketId === market.id && Date.now() - new Date(b.placedAt).getTime() < 3600000).length}
-                  traderCount={new Set(bets.filter((b) => b.marketId === market.id).map((b) => b.userId)).size}
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-white/5 bg-[#050713] p-12 text-center text-sm text-zinc-600">
+          No markets found.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {filtered.map((m) => (
+            <React.Fragment key={m.id}>
+              <MarketCard
+                market={m}
+                expanded={expandedId === m.id}
+                onToggle={() => setExpandedId(expandedId === m.id ? null : m.id)}
+                onAnalyze={onAnalyze}
+                tracked={tracked.includes(m.id)}
+                onTrack={() => onTrack(m.id)}
+              />
+              {expandedId === m.id && (
+                <ExpandedCard
+                  market={m}
+                  onClose={() => setExpandedId(null)}
+                  onAnalyze={onAnalyze}
                 />
-              ))}
+              )}
+            </React.Fragment>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Arbitrage Tab ────────────────────────────────────────────────────────────
+
+function ArbitrageTab() {
+  const [data, setData] = useState<{ opportunities: ArbOpp[]; roundIssues: RoundIssue[] } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/predict/arbitrage")
+      .then((r) => r.json())
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="h-96 animate-pulse rounded-2xl bg-white/5" />;
+
+  const opps = data?.opportunities ?? [];
+  const rounds = data?.roundIssues ?? [];
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
+        <p className="text-xs font-semibold text-amber-400">How Arbitrage Works</p>
+        <p className="mt-1 text-xs text-zinc-400">
+          When the same event is priced differently across platforms, buy YES on the cheaper platform and NO on the more expensive one. If the combined cost is under 100¢, you lock in a guaranteed profit regardless of outcome. Gaps typically close within hours.
+        </p>
+      </div>
+
+      <div>
+        <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Cross-Platform Discrepancies</p>
+        {opps.length === 0 ? (
+          <div className="rounded-2xl border border-white/5 bg-[#050713] p-8 text-center text-sm text-zinc-600">
+            No significant cross-platform discrepancies detected right now.
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-2xl border border-white/5">
+            <table className="w-full min-w-[600px]">
+              <thead className="border-b border-white/5 bg-white/[0.02]">
+                <tr>
+                  <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-zinc-500">Question</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-zinc-500">Buy YES</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-zinc-500">Buy NO</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-zinc-500">Spread</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-zinc-500">Profit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {opps.map((o, i) => {
+                  const spreadColor = o.spread >= 5 ? "text-red-400" : o.spread >= 2 ? "text-amber-400" : "text-zinc-400";
+                  return (
+                    <tr key={i} className={`border-b border-white/[0.03] hover:bg-white/[0.02] ${o.potentialProfit > 0 ? "" : ""}`}>
+                      <td className="max-w-xs px-3 py-2">
+                        <span className="line-clamp-2 text-xs text-zinc-200">{o.question}</span>
+                        {o.potentialProfit > 0 && (
+                          <span className="mt-1 inline-block rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-400">⚡ Risk-free</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <SourceBadge source={o.sourceA} />
+                        <p className="mt-1 text-xs font-medium text-emerald-400">{o.priceA}¢</p>
+                        <a href={o.urlA} target="_blank" rel="noopener noreferrer" className="text-[10px] text-zinc-600 hover:text-zinc-400">View ↗</a>
+                      </td>
+                      <td className="px-3 py-2">
+                        <SourceBadge source={o.sourceB} />
+                        <p className="mt-1 text-xs font-medium text-red-400">{100 - o.priceB}¢</p>
+                        <a href={o.urlB} target="_blank" rel="noopener noreferrer" className="text-[10px] text-zinc-600 hover:text-zinc-400">View ↗</a>
+                      </td>
+                      <td className={`px-3 py-2 text-sm font-bold tabular-nums ${spreadColor}`}>{o.spread}%</td>
+                      <td className={`px-3 py-2 text-xs font-medium ${o.potentialProfit > 0 ? "text-emerald-400" : "text-zinc-500"}`}>
+                        {o.potentialProfit > 0 ? `+${o.potentialProfit.toFixed(1)}¢` : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {rounds.length > 0 && (
+        <div>
+          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Round Anomalies — YES + NO ≠ 100%</p>
+          <div className="overflow-x-auto rounded-2xl border border-white/5">
+            <table className="w-full min-w-[500px]">
+              <thead className="border-b border-white/5 bg-white/[0.02]">
+                <tr>
+                  {["Question", "Platform", "YES", "NO", "Total", "Type"].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left text-[10px] font-medium uppercase tracking-wider text-zinc-500">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rounds.map((r) => (
+                  <tr key={r.id} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                    <td className="max-w-xs px-3 py-2">
+                      <a href={r.url} target="_blank" rel="noopener noreferrer" className="line-clamp-1 text-xs text-zinc-200 hover:text-zinc-100">{r.question}</a>
+                    </td>
+                    <td className="px-3 py-2"><SourceBadge source={r.source} /></td>
+                    <td className="px-3 py-2 text-xs text-zinc-300">{r.yesPrice}%</td>
+                    <td className="px-3 py-2 text-xs text-zinc-300">{r.noPrice}%</td>
+                    <td className={`px-3 py-2 text-xs font-medium ${r.type === "under" ? "text-emerald-400" : "text-red-400"}`}>{r.total}%</td>
+                    <td className="px-3 py-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${r.type === "under" ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"}`}>
+                        {r.type === "under" ? "Under-round" : "Over-round"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[10px] text-zinc-600">Under-round (total &lt;100%): potentially profitable regardless of outcome (minus fees). Over-round: vig — the house wins in aggregate.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── AI Analysis Tab ──────────────────────────────────────────────────────────
+
+function AITab({ prefillMarket }: { prefillMarket: PredictMarket | null }) {
+  const [question, setQuestion] = useState(prefillMarket?.question ?? "");
+  const [currentProb, setCurrentProb] = useState(prefillMarket ? String(prefillMarket.probability) : "");
+  const [analysis, setAnalysis] = useState<AiAnalysis | null>(null);
+  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
+
+  const [scanning, setScanning] = useState(false);
+  const [mispricings, setMispricings] = useState<Mispricing[]>([]);
+  const [scanError, setScanError] = useState("");
+
+  // Auto-run if prefilled from market card
+  useEffect(() => {
+    if (prefillMarket) {
+      setQuestion(prefillMarket.question);
+      setCurrentProb(String(prefillMarket.probability));
+    }
+  }, [prefillMarket]);
+
+  const runAnalysis = useCallback(async () => {
+    if (!question.trim()) return;
+    setLoadingAnalysis(true);
+    setAnalysisError("");
+    setAnalysis(null);
+    try {
+      const res = await fetch("/api/predict/ai-analysis", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: question.trim(), currentProbability: currentProb ? parseFloat(currentProb) : null }),
+      });
+      const d = await res.json();
+      if (d.error) { setAnalysisError(d.error); return; }
+      setAnalysis(d);
+    } catch { setAnalysisError("Request failed"); }
+    finally { setLoadingAnalysis(false); }
+  }, [question, currentProb]);
+
+  const runScan = useCallback(async () => {
+    setScanning(true);
+    setScanError("");
+    setMispricings([]);
+    try {
+      const res = await fetch("/api/predict/ai-analysis");
+      const d = await res.json();
+      if (d.error) { setScanError(d.error); return; }
+      setMispricings(d.mispricings ?? []);
+    } catch { setScanError("Scan failed"); }
+    finally { setScanning(false); }
+  }, []);
+
+  const confColor = (c?: string) =>
+    c === "high" ? "text-emerald-400" : c === "medium" ? "text-amber-400" : "text-red-400";
+
+  return (
+    <div className="space-y-6">
+      {/* Probability Scanner */}
+      <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+        <p className="mb-1 text-sm font-semibold text-zinc-100">Probability Scanner</p>
+        <p className="mb-4 text-xs text-zinc-500">Ask Claude to estimate a fair probability and analyze key factors for any question.</p>
+        <div className="space-y-3">
+          <textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder='e.g. "Will the Fed cut rates in September 2025?"'
+            rows={3}
+            className="w-full resize-none rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-200 placeholder-zinc-600 outline-none focus:border-[var(--accent-color)]/40"
+          />
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              value={currentProb}
+              onChange={(e) => setCurrentProb(e.target.value)}
+              placeholder="Current market % (optional)"
+              type="number"
+              min="0"
+              max="100"
+              className="max-w-[180px] rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-[var(--accent-color)]/40"
+            />
+            <button
+              onClick={runAnalysis}
+              disabled={!question.trim() || loadingAnalysis}
+              className="rounded-xl bg-[var(--accent-color)] px-4 py-2 text-xs font-semibold text-black transition-opacity disabled:opacity-40 hover:opacity-90"
+            >
+              {loadingAnalysis ? "Analyzing…" : "Analyze"}
+            </button>
+          </div>
+        </div>
+
+        {analysisError && <p className="mt-3 text-xs text-red-400">{analysisError}</p>}
+
+        {analysis && (
+          <div className="mt-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-center">
+                <p className="text-[10px] text-zinc-500">Fair Value</p>
+                <p className={`text-2xl font-bold ${probColor(analysis.fairValue ?? 50)}`}>
+                  {analysis.fairValue != null ? `${analysis.fairValue}%` : "—"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-center">
+                <p className="text-[10px] text-zinc-500">Confidence</p>
+                <p className={`text-sm font-semibold capitalize ${confColor(analysis.confidence)}`}>{analysis.confidence ?? "—"}</p>
+              </div>
+              {analysis.mispricing != null && (
+                <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-center">
+                  <p className="text-[10px] text-zinc-500">vs Market</p>
+                  <p className={`text-sm font-semibold ${analysis.mispricing > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {analysis.mispricing > 0 ? "+" : ""}{analysis.mispricing.toFixed(1)}%
+                  </p>
+                </div>
+              )}
             </div>
-            {filteredMarkets.length === 0 && (
-              <div className="rounded-xl border border-white/10 bg-[#0F1520] p-8 text-center text-zinc-500">
-                No markets in this category. Create one!
+
+            <p className="text-sm text-zinc-300">{analysis.summary}</p>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-emerald-500/10 bg-emerald-500/5 p-3">
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-emerald-500">Bullish Factors</p>
+                <ul className="space-y-1">
+                  {(analysis.bullishFactors ?? []).map((f, i) => <li key={i} className="text-xs text-zinc-300">• {f}</li>)}
+                </ul>
+              </div>
+              <div className="rounded-xl border border-red-500/10 bg-red-500/5 p-3">
+                <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-red-500">Bearish Factors</p>
+                <ul className="space-y-1">
+                  {(analysis.bearishFactors ?? []).map((f, i) => <li key={i} className="text-xs text-zinc-300">• {f}</li>)}
+                </ul>
+              </div>
+            </div>
+
+            {analysis.baseRate && (
+              <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
+                <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Historical Base Rate</p>
+                <p className="text-xs text-zinc-400">{analysis.baseRate}</p>
               </div>
             )}
-
-            {/* Mobile: Performance, Active bets & leaderboard */}
-            <div className="mt-6 space-y-4 lg:hidden">
-              <div className="rounded-xl border border-white/10 bg-[#0F1520] p-4">
-                <h3 className="mb-3 text-sm font-semibold text-zinc-100">Your Performance</h3>
-                {performanceStats.totalTrades === 0 ? (
-                  <p className="text-xs text-zinc-500">Resolve some markets to see your wins, losses, and P/L here.</p>
-                ) : (
-                  <>
-                    <div className="mb-2 flex items-center justify-between text-xs">
-                      <span className="text-zinc-400">Total: <strong className="text-zinc-200">{performanceStats.totalTrades}</strong> trades</span>
-                      <span className={performanceStats.pl >= 0 ? "text-[#00C896]" : "text-[#EF4444]"}>
-                        P/L: {performanceStats.pl >= 0 ? "+" : ""}{performanceStats.pl} XP
-                      </span>
-                    </div>
-                    <div className="h-20 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={performanceChartData} margin={{ top: 2, right: 2, left: 2, bottom: 0 }}>
-                          <XAxis dataKey="name" tick={{ fontSize: 9, fill: "#9CA3AF" }} />
-                          <YAxis hide />
-                          <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                            {performanceChartData.map((entry, i) => (
-                              <Cell key={i} fill={entry.fill} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </>
-                )}
+            {analysis.keyRisks && (
+              <div className="rounded-xl border border-amber-500/10 bg-amber-500/5 p-3">
+                <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-amber-500">Key Risks</p>
+                <p className="text-xs text-zinc-400">{analysis.keyRisks}</p>
               </div>
-              <div className="rounded-xl border border-white/10 bg-[#0F1520] p-4">
-                <h3 className="mb-3 text-sm font-semibold text-zinc-100">Your Active Bets</h3>
-                {activeBets.length === 0 ? (
-                  <p className="text-xs text-zinc-500">No active bets yet. Pick a market and make your prediction!</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {activeBets.slice(0, 3).map((bet) => {
-                      const m = markets.find((x) => x.id === bet.marketId);
-                      const prob = m ? getProbability(m.yesPoints, m.noPoints) : { yes: 0.5, no: 0.5 };
-                      const odds = bet.side === "yes" ? prob.yes : prob.no;
-                      const payout = potentialPayout(bet.amount, bet.oddsAtBet);
-                      return (
-                        <li key={bet.id} className="rounded-lg border border-white/5 p-2 text-xs">
-                          <p className="truncate text-zinc-300">{m?.question ?? "Market"}</p>
-                          <p className="mt-1">{bet.side.toUpperCase()} · {bet.amount} XP · {Math.round(odds * 100)}% · +{payout - bet.amount} XP</p>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-              <div className="rounded-xl border border-white/10 bg-[#0F1520] p-4">
-                <h3 className="mb-2 text-sm font-semibold text-zinc-100">Top Predictors</h3>
-                <ul className="space-y-1 text-xs text-zinc-400">
-                  {(leaderboardTab === "all" ? leaderboardAll : leaderboardWeek).slice(0, 5).map((u, i) => (
-                    <li key={u.userId}>#{i + 1} {u.userName} · +{u.xpEarned} XP</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+            )}
           </div>
-
-          {/* Right sidebar */}
-          <aside className="hidden w-72 shrink-0 space-y-4 lg:block">
-            {/* Your Performance graph */}
-            <div className="rounded-xl border border-white/10 bg-[#0F1520] p-4">
-              <h3 className="mb-3 text-sm font-semibold text-zinc-100">Your Performance</h3>
-              {performanceStats.totalTrades === 0 ? (
-                <p className="text-xs text-zinc-500">Resolve some markets to see your wins, losses, and P/L here.</p>
-              ) : (
-                <>
-                  <div className="mb-3 flex items-center justify-between text-xs">
-                    <span className="text-zinc-400">Total trades: <strong className="text-zinc-200">{performanceStats.totalTrades}</strong></span>
-                    <span className={performanceStats.pl >= 0 ? "text-[#00C896]" : "text-[#EF4444]"}>
-                      P/L: {performanceStats.pl >= 0 ? "+" : ""}{performanceStats.pl} XP
-                    </span>
-                  </div>
-                  <div className="h-24 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={performanceChartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={{ stroke: "#374151" }} />
-                        <YAxis tick={{ fontSize: 10, fill: "#9CA3AF" }} axisLine={{ stroke: "#374151" }} allowDecimals={false} />
-                        <Tooltip
-                          contentStyle={{ backgroundColor: "#0F1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }}
-                          labelStyle={{ color: "#D1D5DB" }}
-                          formatter={(value: unknown) => [typeof value === "number" ? value : 0, "trades"]}
-                        />
-                        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                          {performanceChartData.map((entry, i) => (
-                            <Cell key={i} fill={entry.fill} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  {plOverTimeData.length > 1 && (
-                    <div className="mt-3 h-16 w-full">
-                      <p className="mb-1 text-[10px] text-zinc-500">P/L over time</p>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={plOverTimeData} margin={{ top: 2, right: 2, left: 2, bottom: 0 }}>
-                          <CartesianGrid strokeDasharray="2 2" stroke="#374151" />
-                          <XAxis dataKey="trade" tick={{ fontSize: 9, fill: "#6B7280" }} />
-                          <YAxis tick={{ fontSize: 9, fill: "#6B7280" }} width={28} />
-                          <Tooltip
-                            contentStyle={{ backgroundColor: "#0F1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }}
-                            formatter={(value: unknown) => [typeof value === "number" ? (value >= 0 ? `+${value} XP` : `${value} XP`) : "", "Cumulative P/L"]}
-                            labelFormatter={(_, payload) => payload?.[0]?.payload?.date ?? ""}
-                          />
-                          <Line type="monotone" dataKey="pl" stroke="#F59E0B" strokeWidth={2} dot={{ r: 2 }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-            <div className="rounded-xl border border-white/10 bg-[#0F1520] p-4">
-              <h3 className="mb-3 text-sm font-semibold text-zinc-100">Your Active Bets</h3>
-              {activeBets.length === 0 ? (
-                <p className="text-xs text-zinc-500">No active bets yet. Pick a market and make your prediction!</p>
-              ) : (
-                <ul className="space-y-2">
-                  {activeBets.slice(0, 5).map((bet) => {
-                    const m = markets.find((x) => x.id === bet.marketId);
-                    const prob = m ? getProbability(m.yesPoints, m.noPoints) : { yes: 0.5, no: 0.5 };
-                    const odds = bet.side === "yes" ? prob.yes : prob.no;
-                    const payout = potentialPayout(bet.amount, bet.oddsAtBet);
-                    return (
-                      <li key={bet.id} className="rounded-lg border border-white/5 p-2 text-xs">
-                        <p className="truncate text-zinc-300">{m?.question ?? "Market"}</p>
-                        <p className="mt-1">
-                          <span className={bet.side === "yes" ? "text-[#00C896]" : "text-[#EF4444]"}>{bet.side.toUpperCase()}</span> · {bet.amount} XP · {Math.round(odds * 100)}%
-                        </p>
-                        <p className="text-zinc-500">Potential: +{payout - bet.amount} XP</p>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-            <div className="rounded-xl border border-white/10 bg-[#0F1520] p-4">
-              <h3 className="mb-3 text-sm font-semibold text-zinc-100">Top Predictors</h3>
-              <div className="mb-2 flex gap-1">
-                <button type="button" onClick={() => setLeaderboardTab("week")} className={`rounded px-2 py-1 text-xs ${leaderboardTab === "week" ? "bg-white/15" : "bg-white/5"}`}>
-                  This Week
-                </button>
-                <button type="button" onClick={() => setLeaderboardTab("all")} className={`rounded px-2 py-1 text-xs ${leaderboardTab === "all" ? "bg-white/15" : "bg-white/5"}`}>
-                  All Time
-                </button>
-              </div>
-              <ul className="space-y-2">
-                {(leaderboardTab === "all" ? leaderboardAll : leaderboardWeek).map((u, i) => (
-                  <li key={u.userId} className={`flex items-center justify-between rounded px-2 py-1 text-xs ${u.userId === userId ? "bg-[var(--accent-color)]/20 text-[var(--accent-color)]" : "text-zinc-400"}`}>
-                    <span>#{i + 1} {u.userName}</span>
-                    <span>{u.winRate.toFixed(0)}% · +{u.xpEarned} XP</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-[#0F1520] p-4">
-              <h3 className="mb-3 text-sm font-semibold text-zinc-100">Recently Resolved</h3>
-              {recentlyResolved.length === 0 ? (
-                <p className="text-xs text-zinc-500">No resolved markets yet.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {recentlyResolved.map((m) => (
-                    <li key={m.id} className="truncate text-xs text-zinc-500">
-                      {m.outcome === "yes" ? "YES" : "NO"} · {m.question.slice(0, 40)}…
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </aside>
-        </div>
+        )}
       </div>
 
-      {betModal && (
-        <BetModal
-          market={betModal.market}
-          side={betModal.side}
-          onClose={() => setBetModal(null)}
-          onConfirm={handleBetConfirm}
-        />
+      {/* Mispricing Scanner */}
+      <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-zinc-100">Market Inefficiency Finder</p>
+            <p className="mt-1 text-xs text-zinc-500">Scans active markets and flags those where current probability seems off based on available information.</p>
+          </div>
+          <button
+            onClick={runScan}
+            disabled={scanning}
+            className="flex-shrink-0 rounded-xl border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-4 py-2 text-xs font-semibold text-[var(--accent-color)] transition-colors disabled:opacity-40 hover:bg-[var(--accent-color)]/20"
+          >
+            {scanning ? "Scanning…" : "Scan Markets"}
+          </button>
+        </div>
+
+        {scanError && <p className="mt-3 text-xs text-red-400">{scanError}</p>}
+
+        {mispricings.length > 0 && (
+          <div className="mt-4 space-y-3">
+            {mispricings.map((m, i) => (
+              <div key={i} className={`rounded-xl border p-3 ${m.direction === "underpriced" ? "border-emerald-500/20 bg-emerald-500/5" : "border-red-500/20 bg-red-500/5"}`}>
+                <div className="mb-1 flex items-start justify-between gap-2">
+                  <p className="text-xs font-medium text-zinc-200">{m.question}</p>
+                  <div className="flex flex-shrink-0 flex-col items-end gap-1">
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${m.direction === "underpriced" ? "bg-emerald-500/15 text-emerald-400" : "bg-red-500/15 text-red-400"}`}>
+                      {m.direction === "underpriced" ? "Underpriced" : "Overpriced"}
+                    </span>
+                    <span className="text-[10px] text-zinc-500">
+                      Market: {m.currentProbability}% → Fair: {m.fairValue}%
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs text-zinc-400">{m.reasoning}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Tracked Panel ───────────────────────────────────────────────────────────
+
+function TrackedPanel({ markets, tracked, onUntrack }: { markets: PredictMarket[]; tracked: string[]; onUntrack: (id: string) => void }) {
+  const trackedMarkets = markets.filter((m) => tracked.includes(m.id));
+  if (!trackedMarkets.length) return null;
+
+  return (
+    <div className="mt-6 rounded-2xl border border-white/10 bg-[#050713] p-4">
+      <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">My Tracked Markets ({trackedMarkets.length})</p>
+      <div className="space-y-2">
+        {trackedMarkets.map((m) => {
+          const days = daysLeft(m.endDate);
+          return (
+            <div key={m.id} className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-2">
+              <SourceBadge source={m.source} />
+              <p className="flex-1 truncate text-xs text-zinc-300">{m.question}</p>
+              <span className={`text-sm font-bold tabular-nums ${probColor(m.probability)}`}>{m.probability}%</span>
+              {days != null && <span className="text-[10px] text-zinc-600">{days}d</span>}
+              <button onClick={() => onUntrack(m.id)} className="text-zinc-700 hover:text-zinc-400 text-sm">×</button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Recently Resolved ────────────────────────────────────────────────────────
+
+function ResolvedFeed({ resolved }: { resolved: (PredictMarket & { resolution?: string })[] }) {
+  if (!resolved.length) return null;
+  return (
+    <div className="mt-6">
+      <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Recently Resolved</p>
+      <div className="space-y-2">
+        {resolved.map((m) => {
+          const resolvedYes = m.resolution === "YES";
+          return (
+            <div key={m.id} className={`flex items-center gap-3 rounded-xl border p-2.5 ${resolvedYes ? "border-emerald-500/15 bg-emerald-500/5" : "border-red-500/15 bg-red-500/5"}`}>
+              <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${resolvedYes ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"}`}>
+                {m.resolution ?? "?"}
+              </span>
+              <p className="flex-1 truncate text-xs text-zinc-300">{m.question}</p>
+              <span className="text-[10px] text-zinc-600">final {m.probability}%</span>
+              <SourceBadge source={m.source} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main View ────────────────────────────────────────────────────────────────
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "all", label: "All Markets" },
+  { id: "political", label: "Political" },
+  { id: "crypto", label: "Crypto" },
+  { id: "economics", label: "Economics" },
+  { id: "sports", label: "Sports" },
+  { id: "arbitrage", label: "Arbitrage" },
+  { id: "ai", label: "AI Analysis" },
+];
+
+const MARKET_TABS: TabId[] = ["all", "political", "crypto", "economics", "sports"];
+
+export default function PredictView() {
+  const [tab, setTab] = useState<TabId>("all");
+  const [data, setData] = useState<MarketsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [aiMarket, setAiMarket] = useState<PredictMarket | null>(null);
+  const { tracked, toggle: toggleTracked } = useTracked();
+
+  useEffect(() => {
+    fetch("/api/predict/markets")
+      .then((r) => r.json())
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleAnalyze = useCallback((m: PredictMarket) => {
+    setAiMarket(m);
+    setTab("ai");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  const filteredMarkets = useMemo(() => {
+    if (!data) return [];
+    if (tab === "all") return data.markets;
+    return data.markets.filter((m) => m.category === tab);
+  }, [data, tab]);
+
+  return (
+    <div>
+      <StatsBar data={data} />
+
+      {/* Tab bar */}
+      <div className="mb-4 flex flex-wrap gap-1 rounded-xl border border-white/5 bg-white/[0.02] p-1">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              tab === t.id
+                ? "bg-[var(--accent-color)]/15 text-[var(--accent-color)]"
+                : t.id === "arbitrage"
+                ? "border border-amber-500/20 text-amber-500/80 hover:text-amber-400"
+                : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "arbitrage" && <ArbitrageTab />}
+
+      {tab === "ai" && <AITab prefillMarket={aiMarket} />}
+
+      {MARKET_TABS.includes(tab) && (
+        loading ? (
+          <div className="h-96 animate-pulse rounded-2xl bg-white/5" />
+        ) : (
+          <MarketsGrid
+            markets={filteredMarkets}
+            tracked={tracked}
+            onTrack={toggleTracked}
+            onAnalyze={handleAnalyze}
+          />
+        )
       )}
-      {createOpen && (
-        <CreateMarketModal
-          onClose={() => setCreateOpen(false)}
-          onCreate={handleCreateMarket}
-          userId={userId}
-          userName={userName}
-        />
+
+      {data && (
+        <>
+          <TrackedPanel markets={data.markets} tracked={tracked} onUntrack={toggleTracked} />
+          <ResolvedFeed resolved={data.recentlyResolved} />
+        </>
       )}
     </div>
   );

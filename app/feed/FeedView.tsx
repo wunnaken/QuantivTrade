@@ -1296,6 +1296,46 @@ function MarketRelationsCard({delay}:{delay:number}) {
   );
 }
 
+// ── Portfolios Card ───────────────────────────────────────────────────────────
+
+function PortfoliosCard({delay}:{delay:number}) {
+  const [portfolios, setPortfolios] = useState<{id:string;name:string;color:string;dayChangePct:number|null;tickers:string[]}[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{
+    fetch("/api/portfolios/thematic").then(r=>r.json()).then((d:{portfolios?:typeof portfolios})=>{
+      const sorted = (d.portfolios??[])
+        .filter(p=>p.dayChangePct!=null)
+        .sort((a,b)=>Math.abs(b.dayChangePct??0)-Math.abs(a.dayChangePct??0))
+        .slice(0,5);
+      setPortfolios(sorted);
+    }).catch(()=>{}).finally(()=>setLoading(false));
+  },[]);
+  return (
+    <BentoCard href="/portfolios" title="Thematic Portfolios" icon={I.barChart} delay={delay} loading={loading} className="min-h-[220px]">
+      {portfolios.length===0?(
+        <p className="pt-1 text-xs text-zinc-600">Portfolio data loading…</p>
+      ):(
+        <ul className="mt-1 space-y-2">
+          {portfolios.map(p=>{
+            const up=(p.dayChangePct??0)>=0;
+            return (
+              <li key={p.id} className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{background:p.color}}/>
+                  <span className="text-xs text-zinc-300 truncate">{p.name}</span>
+                </div>
+                <span className={`text-xs font-semibold tabular-nums shrink-0 ${up?"text-emerald-400":"text-red-400"}`}>
+                  {p.dayChangePct!=null?`${up?"+":""}${p.dayChangePct.toFixed(2)}%`:"—"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </BentoCard>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function BentoDashboardView() {
@@ -1338,6 +1378,7 @@ export default function BentoDashboardView() {
         <motion.div className="flex min-w-0 flex-col gap-4" style={{ y: rightY }} initial={{x:10}} animate={{x:0}} transition={{duration:0.55,ease:"easeOut"}}>
           <MarketNewsCard        delay={0.05} />
           <WatchlistCard         delay={0.10} />
+          <PortfoliosCard        delay={0.13} />
           <TopMoversCard         delay={0.14} />
           <MarketRatesCard       delay={0.17} />
           <ScreenerPreviewCard   delay={0.20} />

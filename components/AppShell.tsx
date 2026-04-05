@@ -26,10 +26,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (isLanding) {
     return (
-      <div className="min-h-screen app-page font-[&quot;Times_New_Roman&quot;,serif]">
+      <>
         <LandingNavbar />
         {children}
-      </div>
+      </>
     );
   }
 
