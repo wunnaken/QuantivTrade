@@ -580,6 +580,7 @@ interface HeatmapNode {
   name: string;
   size: number;
   change: number;
+  [key: string]: unknown;
 }
 
 interface HeatmapContentProps {
