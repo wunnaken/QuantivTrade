@@ -179,8 +179,6 @@ export default function SignUpPage() {
               <GoogleIcon />
               {oauthLoading === "google" ? "Redirecting..." : "Continue with Google"}
             </button>
-            <button
-              type="button"
           </div>
 
           <p className="mt-3 text-[11px] text-zinc-400">
