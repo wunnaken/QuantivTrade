@@ -42,12 +42,6 @@ export function ProfileIcon() {
                 </span>
                 <span className={TEXT_CLASS}>View Profile</span>
               </Link>
-              <Link href="/growth#choose-profile" className={MENU_CLASS}>
-                <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
-                  <span className={DOT_CLASS} />
-                </span>
-                <span className={TEXT_CLASS}>My Risk Profile</span>
-              </Link>
               <Link href="/settings" className={MENU_CLASS}>
                 <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
                   <span className={DOT_CLASS} />

@@ -1,7 +1,5 @@
 /** Shared types used across app, API routes, and components. */
 
-export type RiskProfileKey = "passive" | "moderate" | "aggressive";
-
 export type User = {
   id: string;
   name: string;
@@ -11,11 +9,13 @@ export type User = {
   profilePicture?: string | null;
   bannerImage?: string | null;
   joinedAt?: string;
-  riskProfile?: RiskProfileKey;
   isVerified?: boolean;
   isFounder?: boolean;
   /** If false, trading stats (performance card) are hidden on profile. Default true. */
   showTradingStats?: boolean;
+  subscription_tier?: "free" | "verified" | "starter" | "pro" | "elite";
+  subscription_status?: string;
+  stripe_customer_id?: string;
 };
 
 export type NewsItem = {

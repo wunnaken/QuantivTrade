@@ -75,6 +75,29 @@ const CLASS_ORDER = [
   "forex", "bonds", "crypto", "volatility",
 ];
 
+const TICKER_NAMES: Record<string, string> = {
+  // US Indices
+  SPY: "S&P 500 ETF", QQQ: "Nasdaq 100 ETF", DIA: "Dow Jones ETF", IWM: "Russell 2000 ETF", VIX: "Volatility Index",
+  // Global Indices
+  EWJ: "Japan Equities", FXI: "China Large-Cap", EWG: "Germany Equities", EWU: "UK Equities",
+  EWA: "Australia Equities", EWZ: "Brazil Equities", INDA: "India Equities", EWY: "South Korea Equities",
+  // Precious Metals
+  GLD: "Gold ETF", SLV: "Silver ETF", PPLT: "Platinum ETF", PALL: "Palladium ETF",
+  // Commodities
+  USO: "US Oil ETF", BNO: "Brent Oil ETF", UNG: "Natural Gas ETF", CPER: "Copper ETF", WEAT: "Wheat ETF", CORN: "Corn ETF",
+  // Forex
+  UUP: "US Dollar Index", FXE: "Euro ETF", FXY: "Japanese Yen ETF", FXB: "British Pound ETF", CYB: "Chinese Yuan ETF",
+  // Bonds
+  TLT: "20+ Yr Treasury", IEF: "7-10 Yr Treasury", SHY: "1-3 Yr Treasury",
+  HYG: "High Yield Corp Bonds", EMB: "Emerging Market Bonds", BNDX: "Intl Bond ETF",
+  // Crypto
+  "BTC-USD": "Bitcoin", "ETH-USD": "Ethereum",
+  // Volatility
+  VIXY: "VIX Futures ETF",
+};
+
+function tickerName(t: string): string { return TICKER_NAMES[t] ?? t; }
+
 const TIMEFRAMES = [
   { label: "1M", days: 30 },
   { label: "3M", days: 90 },
@@ -106,24 +129,28 @@ const COMMODITY_FX_PAIRS = [
     fxTicker: "UUP",        fxName: "US Dollar",    dotColorB: "#06b6d4",
     relationship: "Oil–Dollar Inverse",
     description: "Oil is priced in USD globally. When the dollar strengthens, oil typically gets more expensive for other countries, dampening demand.",
+    expectedSign: -1, // inverse: stronger dollar → weaker oil demand
   },
   {
     commodityTicker: "GLD", commodityName: "Gold",   dotColorA: "#f59e0b",
     fxTicker: "FXE",        fxName: "Euro",          dotColorB: "#3b82f6",
     relationship: "Gold–Euro correlation",
     description: "Both gold and the euro tend to move against the US dollar, creating a strong positive relationship in dollar-denominated terms.",
+    expectedSign: 1, // positive: both move against the dollar together
   },
   {
     commodityTicker: "CPER", commodityName: "Copper",    dotColorA: "#ef4444",
     fxTicker: "FXI",         fxName: "China Large-Cap", dotColorB: "#a855f7",
     relationship: "China industrial demand",
     description: "China consumes ~50% of global copper. FXI (iShares China Large-Cap ETF) reflects Chinese economic activity which closely tracks copper demand.",
+    expectedSign: 1, // positive: Chinese growth lifts both copper demand and equities
   },
   {
     commodityTicker: "WEAT", commodityName: "Wheat",  dotColorA: "#eab308",
     fxTicker: "UUP",         fxName: "US Dollar",     dotColorB: "#06b6d4",
     relationship: "Agricultural export pricing",
     description: "Agricultural commodities are globally priced in USD. A stronger dollar typically makes US wheat exports less competitive, pressuring prices.",
+    expectedSign: -1, // inverse: stronger dollar → cheaper dollar-priced wheat globally
   },
 ];
 
@@ -182,21 +209,36 @@ function pctColor(v: number | null | undefined): string {
 }
 
 function detectRegime(perf: Record<string, Record<string, PerformanceEntry>>) {
-  const spy1m = perf?.us_indices?.SPY?.["1m"] ?? 0;
-  const tlt1m = perf?.bonds?.TLT?.["1m"] ?? 0;
-  const gld1m = perf?.precious_metals?.GLD?.["1m"] ?? 0;
-  const uso1m = perf?.commodities?.USO?.["1m"] ?? 0;
-  const uup1m = perf?.forex?.UUP?.["1m"] ?? 0;
+  const spy1m  = perf?.us_indices?.SPY?.["1m"]      ?? 0;
+  const tlt1m  = perf?.bonds?.TLT?.["1m"]           ?? 0;
+  const gld1m  = perf?.precious_metals?.GLD?.["1m"] ?? 0;
+  const uso1m  = perf?.commodities?.USO?.["1m"]     ?? 0;
+  const uup1m  = perf?.forex?.UUP?.["1m"]           ?? 0;
+  const hyg1m  = perf?.bonds?.HYG?.["1m"]           ?? 0;
+  const vix1m  = perf?.us_indices?.VIX?.["1m"]      ?? 0;
 
-  if (spy1m < -4 && tlt1m > 2 && gld1m > 2)
+  // Risk-Off: equities falling hard, safe-havens rallying
+  if (spy1m < -4 && tlt1m > 2 && gld1m > 1)
     return { name: "Risk-Off", dotColor: "#f87171", cls: "text-red-400 border-red-500/30 bg-red-500/10", bullAssets: ["TLT", "GLD", "SHY", "UUP", "FXY"], bearAssets: ["SPY", "QQQ", "HYG", "BTC-USD"] };
-  if (uso1m > 5 && tlt1m < -2 && Math.abs(spy1m) < 4)
+
+  // Stagflation: oil/commodities surging, bonds selling off, equities flat/weak
+  if (uso1m > 5 && tlt1m < -2 && spy1m < 2)
     return { name: "Stagflation", dotColor: "#fbbf24", cls: "text-yellow-400 border-yellow-500/30 bg-yellow-500/10", bullAssets: ["GLD", "SLV", "USO", "WEAT", "CORN"], bearAssets: ["TLT", "IEF", "QQQ"] };
+
+  // Deflation: sharp equity crash + dollar surge + Treasuries surging (liquidity crunch)
   if (spy1m < -6 && uup1m > 3 && tlt1m > 4)
     return { name: "Deflation", dotColor: "#a1a1aa", cls: "text-zinc-300 border-zinc-500/30 bg-zinc-500/10", bullAssets: ["TLT", "IEF", "SHY", "UUP"], bearAssets: ["SPY", "GLD", "USO", "BTC-USD"] };
-  if (spy1m > 3 && tlt1m < 0 && Math.abs(gld1m) < 3 && Math.abs(uup1m) < 2)
+
+  // Risk-On: equities strong, bonds selling off, credit healthy, VIX quiet
+  if (spy1m > 3 && tlt1m < 0 && hyg1m > 0 && vix1m < 5)
     return { name: "Risk-On", dotColor: "#4ade80", cls: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10", bullAssets: ["SPY", "QQQ", "IWM", "HYG", "BTC-USD", "EWZ"], bearAssets: ["TLT", "GLD", "VIX"] };
-  return { name: "Goldilocks", dotColor: "#60a5fa", cls: "text-blue-400 border-blue-500/30 bg-blue-500/10", bullAssets: ["SPY", "QQQ", "DIA", "IEF", "GLD"], bearAssets: ["VIX", "VIXY"] };
+
+  // Goldilocks: steady but moderate equity gains, low volatility, bonds and gold both stable
+  if (spy1m > 0 && spy1m <= 3 && Math.abs(tlt1m) < 2 && Math.abs(gld1m) < 2 && Math.abs(uup1m) < 1.5 && vix1m < 10)
+    return { name: "Goldilocks", dotColor: "#60a5fa", cls: "text-blue-400 border-blue-500/30 bg-blue-500/10", bullAssets: ["SPY", "QQQ", "DIA", "IEF", "GLD"], bearAssets: ["VIX", "VIXY"] };
+
+  // Mixed / Transitional: conditions don't fit a clean regime
+  return { name: "Mixed", dotColor: "#a78bfa", cls: "text-violet-400 border-violet-500/30 bg-violet-500/10", bullAssets: ["GLD", "IEF", "SPY"], bearAssets: ["VIXY"] };
 }
 
 function buildDualSeries(
@@ -245,6 +287,7 @@ const REGIME_EXPLANATIONS: Record<string, { short: string; detail: string }> = {
   "Deflation":   { short: "Liquidity crunch — dollar and Treasuries dominate.", detail: "Cash and short-duration bonds outperform. Avoid commodities, credit, and most equities. This rare regime typically demands central bank intervention to resolve." },
   "Risk-On":     { short: "Growth accelerating — equity risk rewarded.", detail: "Cyclicals, small-caps, high-yield credit, and emerging markets outperform. Bonds and volatility instruments underperform. Stay long the cycle." },
   "Goldilocks":  { short: "Just right — steady growth, contained inflation, patient central bank.", detail: "Named after the fairy tale: the economy is neither hot enough to force aggressive rate hikes nor cold enough to signal recession. Inflation sits in the 2–3% range, job growth is healthy, and the Fed stays on hold or cuts slowly. Corporate earnings expand steadily and credit conditions are loose. Historically this describes 1995–98 and 2013–17. Broad equity exposure works well — both growth and value participate. Quality bonds hold their value. Low-volatility assets underperform. Watch for inflation creeping above 3% (shifts toward Stagflation) or a sudden jobs deterioration (shifts toward Risk-Off) as the two most common exit signals." },
+  "Mixed":       { short: "No dominant regime — cross-currents creating mixed signals.", detail: "Current macro data doesn't cleanly fit a single regime. Equity gains are muted, safe havens are neither rallying nor selling off sharply, and volatility is neither spiking nor collapsing. This often occurs at regime transitions — when the market is deciding whether to price in growth acceleration, a slowdown, or a policy shift. In mixed regimes, diversification matters most. Avoid concentrated bets on a single macro theme. Watch SPY vs TLT direction over the next few weeks for the regime that eventually crystallises." },
 };
 
 const REGIME_ASSETS = [
@@ -329,20 +372,26 @@ function CorrelationModal({
         </button>
 
         {/* Asset pair header */}
-        <div className="mb-1 flex items-center gap-2 pr-8">
-          <span
-            className="rounded-lg px-2.5 py-1 text-sm font-bold"
-            style={{ background: (CLASS_COLORS[clsA] ?? "#6366f1") + "22", color: CLASS_COLORS[clsA] ?? "#6366f1" }}
-          >
-            {assetA}
-          </span>
+        <div className="mb-1 flex items-center gap-3 pr-8">
+          <div className="flex flex-col items-start">
+            <span
+              className="rounded-lg px-2.5 py-1 text-sm font-bold"
+              style={{ background: (CLASS_COLORS[clsA] ?? "#6366f1") + "22", color: CLASS_COLORS[clsA] ?? "#6366f1" }}
+            >
+              {assetA}
+            </span>
+            <span className="mt-0.5 pl-1 text-[10px] text-zinc-500">{tickerName(assetA)}</span>
+          </div>
           <span className="text-xs font-medium text-zinc-500">vs</span>
-          <span
-            className="rounded-lg px-2.5 py-1 text-sm font-bold"
-            style={{ background: (CLASS_COLORS[clsB] ?? "#6366f1") + "22", color: CLASS_COLORS[clsB] ?? "#6366f1" }}
-          >
-            {assetB}
-          </span>
+          <div className="flex flex-col items-start">
+            <span
+              className="rounded-lg px-2.5 py-1 text-sm font-bold"
+              style={{ background: (CLASS_COLORS[clsB] ?? "#6366f1") + "22", color: CLASS_COLORS[clsB] ?? "#6366f1" }}
+            >
+              {assetB}
+            </span>
+            <span className="mt-0.5 pl-1 text-[10px] text-zinc-500">{tickerName(assetB)}</span>
+          </div>
         </div>
 
         {/* Correlation value */}
@@ -392,35 +441,34 @@ function CorrelationModal({
           <>
             <div className="h-40">
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                <LineChart data={chartData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
                   <XAxis dataKey="date" tick={{ fontSize: 8, fill: "#52525b" }} tickLine={false}
                     axisLine={{ stroke: "rgba(255,255,255,0.08)" }} interval="preserveStartEnd"
                     tickFormatter={(d: string) => d.slice(5)} height={14} />
-                  <YAxis domain={["auto", "auto"]} tick={{ fontSize: 8, fill: "#52525b" }} tickLine={false}
-                    axisLine={false} width={30} tickCount={4} tickFormatter={(v: number) => v.toFixed(0)} />
-                  <RechartTooltip contentStyle={{ background: "#0f1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} />
-                  <Line type="monotone" dataKey={assetA} stroke="var(--accent-color)" dot={false} strokeWidth={2} />
-                  <Line type="monotone" dataKey={assetB} stroke="#60a5fa" dot={false} strokeWidth={2} />
+                  <YAxis yAxisId="a" orientation="left" domain={["auto", "auto"]} tick={{ fontSize: 8, fill: "#52525b" }}
+                    tickLine={false} axisLine={false} width={30} tickCount={4} tickFormatter={(v: number) => v.toFixed(0)} />
+                  <YAxis yAxisId="b" orientation="right" domain={["auto", "auto"]} tick={{ fontSize: 8, fill: "#52525b" }}
+                    tickLine={false} axisLine={false} width={30} tickCount={4} tickFormatter={(v: number) => v.toFixed(0)} />
+                  <RechartTooltip contentStyle={{ background: "#0f1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                    labelStyle={{ color: "#71717a" }} />
+                  <Line yAxisId="a" type="monotone" dataKey={assetA} stroke="var(--accent-color)" dot={false} strokeWidth={2} />
+                  <Line yAxisId="b" type="monotone" dataKey={assetB} stroke="#60a5fa" dot={false} strokeWidth={2} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
             <div className="mb-2 mt-1 flex justify-center gap-4 text-[10px] text-zinc-500">
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-1.5 w-4 rounded" style={{ background: "var(--accent-color)" }} />
-                {assetA}
+                {assetA} <span className="text-zinc-700">· {tickerName(assetA)}</span>
               </span>
               <span className="flex items-center gap-1.5">
                 <span className="inline-block h-1.5 w-4 rounded bg-blue-400" />
-                {assetB}
+                {assetB} <span className="text-zinc-700">· {tickerName(assetB)}</span>
               </span>
             </div>
             <div className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-[10px] leading-relaxed text-zinc-500">
-              <span className="font-medium text-zinc-300">Why not real prices?</span>{" "}
-              Both lines start at <span className="font-medium text-zinc-300">100</span> regardless of actual price.
-              A reading of <span className="font-medium text-zinc-300">91</span> means that asset is{" "}
-              <span className="font-medium text-red-400">down 9%</span> from the start of this window —
-              not that it trades at $91. This lets you compare assets at completely different price levels
-              (e.g. SPY at ~$550 vs BTC-USD at ~$85,000) on the same chart to see if they move <em>together</em>.
+              <span className="font-medium text-zinc-300">Independent axes.</span>{" "}
+              Each line starts at <span className="font-medium text-zinc-300">100</span> so movement is comparable regardless of price scale.
             </div>
           </>
         ) : (
@@ -442,13 +490,144 @@ function CorrelationModal({
   );
 }
 
+// ─── Expanded Correlation Modal ────────────────────────────────────────────────
+
+function ExpandedCorrelationCard({
+  pair, defaultTfIdx, onClose, cacheRef, fetchingRef, loadDays,
+}: {
+  pair: SurprisingPair;
+  defaultTfIdx: number;
+  onClose: () => void;
+  cacheRef: { current: Record<number, CorrelationData> };
+  fetchingRef: { current: Set<number> };
+  loadDays: (days: number) => Promise<void>;
+}) {
+  const [tfIdx, setTfIdx] = useState(defaultTfIdx);
+  const days = TIMEFRAMES_CHART[tfIdx]!.days;
+  const data = cacheRef.current[days];
+  const isLoading = !data && fetchingRef.current.has(days);
+
+  useEffect(() => { void loadDays(days); }, [days, loadDays]);
+
+  const corrVal = data?.matrix[pair.assetA]?.[pair.assetB] ?? pair.correlation;
+  const safeCorr = typeof corrVal === "number" && isFinite(corrVal) ? corrVal : 0;
+  const absCorr = Math.abs(safeCorr);
+  const clrA = CLASS_COLORS[pair.classA] ?? "#6366f1";
+  const clrB = CLASS_COLORS[pair.classB] ?? "#60a5fa";
+  const normalizedSeries = data?.normalizedSeries ?? {};
+  const chartData = buildDualSeries(normalizedSeries[pair.assetA], normalizedSeries[pair.assetB], pair.assetA, pair.assetB);
+  const pairNote = CLASS_PAIR_NOTES[[pair.classA, pair.classB].sort().join("|")];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
+      <div
+        className="relative w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[#050713] p-5 shadow-2xl"
+        style={{ maxHeight: "90vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute right-4 top-4 rounded-lg p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-300">
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        {/* Header — ticker + full name */}
+        <div className="mb-3 flex items-start gap-3 pr-8">
+          <div className="flex flex-col items-start">
+            <span className="rounded-lg px-2.5 py-1 text-sm font-bold" style={{ background: clrA + "22", color: clrA }}>{pair.assetA}</span>
+            <span className="mt-1 pl-1 text-xs text-zinc-400">{tickerName(pair.assetA)}</span>
+            <span className="pl-1 text-[10px] text-zinc-600">{CLASS_LABELS[pair.classA]}</span>
+          </div>
+          <div className="mt-1 flex flex-col items-center">
+            <span className="text-base font-black" style={{ color: safeCorr >= 0 ? "#60a5fa" : "#f87171" }}>{safeCorr >= 0 ? "↑↑" : "↑↓"}</span>
+            <span className={`text-xl font-black tabular-nums ${safeCorr >= 0 ? "text-blue-400" : "text-red-400"}`}>{formatCorr(safeCorr)}</span>
+            <span className={`mt-0.5 rounded border px-1.5 py-0.5 text-[9px] ${strengthBadgeClass(absCorr)}`}>{strengthLabel(absCorr)}</span>
+          </div>
+          <div className="flex flex-col items-start">
+            <span className="rounded-lg px-2.5 py-1 text-sm font-bold" style={{ background: clrB + "22", color: clrB }}>{pair.assetB}</span>
+            <span className="mt-1 pl-1 text-xs text-zinc-400">{tickerName(pair.assetB)}</span>
+            <span className="pl-1 text-[10px] text-zinc-600">{CLASS_LABELS[pair.classB]}</span>
+          </div>
+        </div>
+
+        {/* Timeframe selector */}
+        <div className="mb-3 flex gap-1">
+          {TIMEFRAMES_CHART.map((tf, i) => (
+            <button key={tf.label} onClick={() => setTfIdx(i)}
+              className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                tfIdx === i ? "bg-[var(--accent-color)] text-black" : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+              }`}>
+              {tf.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Chart */}
+        {isLoading ? (
+          <div className="flex h-56 animate-pulse items-center justify-center rounded-xl bg-white/5 text-xs text-zinc-600">Loading…</div>
+        ) : chartData.length > 1 ? (
+          <>
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#52525b" }} tickLine={false}
+                    axisLine={{ stroke: "rgba(255,255,255,0.08)" }} interval="preserveStartEnd"
+                    tickFormatter={(d: string) => d.slice(5)} height={16} />
+                  <YAxis yAxisId="a" orientation="left" domain={["auto", "auto"]}
+                    tick={{ fontSize: 9, fill: clrA + "cc" }} tickLine={false} axisLine={false}
+                    width={36} tickCount={4} tickFormatter={(v: number) => v.toFixed(0)} />
+                  <YAxis yAxisId="b" orientation="right" domain={["auto", "auto"]}
+                    tick={{ fontSize: 9, fill: clrB + "cc" }} tickLine={false} axisLine={false}
+                    width={36} tickCount={4} tickFormatter={(v: number) => v.toFixed(0)} />
+                  <RechartTooltip
+                    contentStyle={{ background: "#0f1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                    labelStyle={{ color: "#71717a" }}
+                  />
+                  <Line yAxisId="a" type="monotone" dataKey={pair.assetA} stroke={clrA} dot={false} strokeWidth={2} />
+                  <Line yAxisId="b" type="monotone" dataKey={pair.assetB} stroke={clrB} dot={false} strokeWidth={2} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-2 flex justify-center gap-6 text-xs text-zinc-500">
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-1.5 w-4 rounded" style={{ background: clrA }} />
+                {pair.assetA} · {tickerName(pair.assetA)} <span className="text-zinc-700">· left axis</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="inline-block h-1.5 w-4 rounded" style={{ background: clrB }} />
+                {pair.assetB} · {tickerName(pair.assetB)} <span className="text-zinc-700">· right axis</span>
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="flex h-40 items-center justify-center text-xs text-zinc-600">No chart data available for this period</div>
+        )}
+
+        {/* Explanation */}
+        {pairNote && (
+          <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2.5 text-[11px] leading-relaxed text-zinc-400">
+            <span className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Why this correlation exists</span>
+            {pairNote}
+          </div>
+        )}
+        <div className="mt-2 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-[10px] leading-relaxed text-zinc-500">
+          <span className="font-medium text-zinc-300">Independent axes.</span>{" "}
+          Each line starts at 100 so movement is comparable regardless of price scale. The {safeCorr >= 0 ? "similar direction" : "opposing direction"} of movement produces the {formatCorr(safeCorr)} coefficient.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Surprising Correlation Card ──────────────────────────────────────────────
 
 function SurprisingCard({
-  pair, normalizedSeries,
+  pair, normalizedSeries, onExpand,
 }: {
   pair: SurprisingPair;
   normalizedSeries: Record<string, Array<{ date: string; value: number }>>;
+  onExpand: () => void;
 }) {
   const corrVal = typeof pair.correlation === "number" && isFinite(pair.correlation) ? pair.correlation : 0;
   const absCorr = Math.abs(corrVal);
@@ -457,15 +636,24 @@ function SurprisingCard({
   const clrB = CLASS_COLORS[pair.classB] ?? "#60a5fa";
 
   return (
-    <div className="flex flex-col rounded-2xl border border-white/10 bg-[#050713] p-4">
+    <div
+      className="flex cursor-pointer flex-col rounded-2xl border border-white/10 bg-[#050713] p-4 transition-colors hover:border-white/20"
+      onClick={onExpand}
+    >
       {/* Header: two asset badges + correlation */}
-      <div className="mb-3 flex items-center gap-2">
-        <span className="rounded-lg px-2.5 py-1 text-xs font-bold" style={{ background: clrA + "22", color: clrA }}>{pair.assetA}</span>
-        <span className="text-xs font-black" style={{ color: corrVal >= 0 ? "#60a5fa" : "#f87171" }}>
+      <div className="mb-2 flex items-start gap-2">
+        <div className="flex flex-col">
+          <span className="rounded-lg px-2.5 py-1 text-xs font-bold" style={{ background: clrA + "22", color: clrA }}>{pair.assetA}</span>
+          <span className="mt-0.5 pl-1 text-[9px] text-zinc-600">{tickerName(pair.assetA)}</span>
+        </div>
+        <span className="mt-1 text-xs font-black" style={{ color: corrVal >= 0 ? "#60a5fa" : "#f87171" }}>
           {corrVal >= 0 ? "↑↑" : "↑↓"}
         </span>
-        <span className="rounded-lg px-2.5 py-1 text-xs font-bold" style={{ background: clrB + "22", color: clrB }}>{pair.assetB}</span>
-        <span className={`ml-auto text-sm font-bold tabular-nums ${corrVal >= 0 ? "text-blue-400" : "text-red-400"}`}>
+        <div className="flex flex-col">
+          <span className="rounded-lg px-2.5 py-1 text-xs font-bold" style={{ background: clrB + "22", color: clrB }}>{pair.assetB}</span>
+          <span className="mt-0.5 pl-1 text-[9px] text-zinc-600">{tickerName(pair.assetB)}</span>
+        </div>
+        <span className={`ml-auto mt-1 text-sm font-bold tabular-nums ${corrVal >= 0 ? "text-blue-400" : "text-red-400"}`}>
           {formatCorr(corrVal)}
         </span>
       </div>
@@ -488,7 +676,7 @@ function SurprisingCard({
         <span className="text-zinc-600">{CLASS_LABELS[pair.classB]}</span>
       </div>
 
-      {/* Mini dual chart */}
+      {/* Mini dual-axis chart — no tooltip, independent Y-axes */}
       {chartData.length > 1 ? (
         <div className="h-28">
           <ResponsiveContainer width="100%" height="100%">
@@ -502,26 +690,21 @@ function SurprisingCard({
                 tickFormatter={(d: string) => d.slice(5)}
                 height={14}
               />
-              <YAxis
-                domain={["auto", "auto"]}
-                tick={{ fontSize: 7, fill: "#52525b" }}
-                tickLine={false}
-                axisLine={false}
-                width={28}
-                tickCount={3}
-                tickFormatter={(v: number) => v.toFixed(0)}
-              />
-              <RechartTooltip
-                contentStyle={{ background: "#0f1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, fontSize: 10 }}
-              />
-              <Line type="monotone" dataKey={pair.assetA} stroke={clrA} dot={false} strokeWidth={1.5} />
-              <Line type="monotone" dataKey={pair.assetB} stroke={clrB} dot={false} strokeWidth={1.5} />
+              <YAxis yAxisId="a" orientation="left" domain={["auto", "auto"]}
+                tick={{ fontSize: 7, fill: "#52525b" }} tickLine={false} axisLine={false}
+                width={24} tickCount={3} tickFormatter={(v: number) => v.toFixed(0)} />
+              <YAxis yAxisId="b" orientation="right" domain={["auto", "auto"]}
+                tick={{ fontSize: 7, fill: "#52525b" }} tickLine={false} axisLine={false}
+                width={24} tickCount={3} tickFormatter={(v: number) => v.toFixed(0)} />
+              <Line yAxisId="a" type="monotone" dataKey={pair.assetA} stroke={clrA} dot={false} strokeWidth={1.5} />
+              <Line yAxisId="b" type="monotone" dataKey={pair.assetB} stroke={clrB} dot={false} strokeWidth={1.5} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       ) : (
         <div className="flex h-20 items-center justify-center text-[10px] text-zinc-700">No chart data</div>
       )}
+      <p className="mt-1.5 text-center text-[9px] text-zinc-700">click to expand</p>
     </div>
   );
 }
@@ -601,13 +784,17 @@ function CommodityFxCard({
     pair.commodityTicker, pair.fxTicker,
   );
 
-  // Detect divergence: lines moving apart = structural break in the relationship
-  const divergenceNote = corr !== null
-    ? corr < -0.3
-      ? "Lines diverging — relationship is breaking down or reversing. Watch for a mean-reversion opportunity."
-      : corr > 0.6
-      ? "Lines tracking closely — the structural link is holding. Moves in one typically precede moves in the other."
-      : "Relationship is neutral — neither confirming nor breaking the expected link."
+  // Detect divergence relative to the expected direction for this pair.
+  // corrAligned > 0 means the relationship is behaving as expected; < 0 means it has inverted.
+  const corrAligned = corr !== null ? corr * pair.expectedSign : null;
+  const divergenceNote = corrAligned !== null
+    ? corrAligned >= 0.55
+      ? "Relationship holding — the structural link is active. Moves in one are likely leading the other."
+      : corrAligned >= 0.25
+      ? "Relationship weakening — the link is present but losing conviction. Monitor for a breakdown."
+      : corrAligned >= -0.2
+      ? "Relationship neutral — neither confirming nor breaking the expected link. Likely driven by other forces."
+      : "Relationship inverted — assets are moving opposite to the structural expectation. Potential mean-reversion signal."
     : null;
 
   return (
@@ -622,17 +809,32 @@ function CommodityFxCard({
       <p className="mb-1 text-[10px] font-medium text-[var(--accent-color)]/70">{pair.relationship}</p>
       <p className="mb-3 text-[10px] leading-relaxed text-zinc-600">{pair.description}</p>
 
-      {corr !== null && (
-        <div className="mb-2 flex items-center gap-2">
-          <span className="text-[10px] text-zinc-600">Corr:</span>
-          <span className={`text-sm font-bold tabular-nums ${corr >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-            {formatCorr(corr)}
-          </span>
-          <span className={`text-[10px] ${strengthBadgeClass(Math.abs(corr))} rounded border px-1.5 py-0.5`}>
-            {strengthLabel(Math.abs(corr))}
-          </span>
-        </div>
-      )}
+      {corr !== null && corrAligned !== null && (() => {
+        // Label reflects how well the expected relationship is holding, not raw Pearson magnitude.
+        // corrAligned > 0 = behaving as expected; < 0 = inverted.
+        const expectedDir = pair.expectedSign > 0 ? "together" : "inverse";
+        const relLabel =
+          corrAligned >= 0.5  ? `Strong ${expectedDir}`
+          : corrAligned >= 0.25 ? `Moderate ${expectedDir}`
+          : corrAligned >= -0.15 ? "Neutral"
+          : `Inverted`;
+        const relBadge =
+          corrAligned >= 0.5  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+          : corrAligned >= 0.25 ? "bg-yellow-500/15 text-yellow-300 border-yellow-500/30"
+          : corrAligned >= -0.15 ? "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
+          : "bg-red-500/15 text-red-300 border-red-500/30";
+        return (
+          <div className="mb-2 flex items-center gap-2">
+            <span className="text-[10px] text-zinc-600">Corr:</span>
+            <span className={`text-sm font-bold tabular-nums ${corr >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+              {formatCorr(corr)}
+            </span>
+            <span className={`rounded border px-1.5 py-0.5 text-[10px] ${relBadge}`}>
+              {relLabel}
+            </span>
+          </div>
+        );
+      })()}
 
       {/* Dual Y-axis chart: each line gets its own scale so neither appears flat */}
       {chartData.length > 1 ? (
@@ -787,6 +989,8 @@ export default function MarketRelationsView() {
   const [hmTf, setHmTf] = useState(1);   // heatmap → 3M default
   const [spTf, setSpTf] = useState(1);   // surprising correlations
   const [cfTf, setCfTf] = useState(1);   // commodity-currency links
+  const [spFilter, setSpFilter] = useState<"all" | "together" | "opposite">("all");
+  const [expandedPair, setExpandedPair] = useState<SurprisingPair | null>(null);
 
   // Cache-based fetch: refs avoid stale closures; forceUpdate triggers re-render
   const cacheRef = useRef<Record<number, CorrelationData>>({});
@@ -967,26 +1171,72 @@ export default function MarketRelationsView() {
       </section>
 
       {/* ── Section 2: Surprising Correlations ───────────────────────────────── */}
+      {expandedPair && (
+        <ExpandedCorrelationCard
+          pair={expandedPair}
+          defaultTfIdx={spTf}
+          onClose={() => setExpandedPair(null)}
+          cacheRef={cacheRef}
+          fetchingRef={fetchingRef}
+          loadDays={loadDays}
+        />
+      )}
       <section>
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-medium uppercase tracking-wider text-[var(--accent-color)]/70">Signal Detection</p>
             <h2 className="mt-0.5 text-base font-semibold text-zinc-50">Surprising Correlations Detected</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">Assets from different classes moving unusually together — signals most traders miss.</p>
+            <p className="mt-0.5 text-xs text-zinc-500">Assets from different classes moving unusually together or opposite — signals most traders miss.</p>
           </div>
-          <TfButtons value={spTf} onChange={setSpTf} timeframes={TIMEFRAMES_CHART} />
-        </div>
-        {spLoading ? <SectionSkeleton height={200} /> : spData && (
-          spData.surprisingPairs.length === 0 ? (
-            <p className="text-xs text-zinc-600">No surprising cross-class correlations above 0.70 detected in this period.</p>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {spData.surprisingPairs.slice(0, 12).map((pair) => (
-                <SurprisingCard key={`${pair.assetA}-${pair.assetB}`} pair={pair} normalizedSeries={spData.normalizedSeries} />
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Direction filter */}
+            <div className="flex gap-1">
+              {([
+                { label: "All", val: "all" },
+                { label: "↑↑ Together", val: "together" },
+                { label: "↑↓ Opposite", val: "opposite" },
+              ] as const).map((f) => (
+                <button
+                  key={f.val}
+                  onClick={() => setSpFilter(f.val)}
+                  className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+                    spFilter === f.val
+                      ? "bg-[var(--accent-color)] text-black"
+                      : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                  }`}
+                >
+                  {f.label}
+                </button>
               ))}
             </div>
-          )
-        )}
+            <TfButtons value={spTf} onChange={(v) => { setSpTf(v); setExpandedPair(null); }} timeframes={TIMEFRAMES_CHART} />
+          </div>
+        </div>
+        {spLoading ? <SectionSkeleton height={200} /> : spData && (() => {
+          const filtered = spData.surprisingPairs.filter((p) =>
+            spFilter === "together" ? p.correlation >= 0
+            : spFilter === "opposite" ? p.correlation < 0
+            : true
+          );
+          return filtered.length === 0 ? (
+            <p className="text-xs text-zinc-600">
+              {spFilter === "all"
+                ? "No notable cross-class correlations detected in this period."
+                : `No ${spFilter === "together" ? "positively correlated" : "inversely correlated"} pairs detected in this period.`}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.slice(0, 12).map((pair) => (
+                <SurprisingCard
+                  key={`${pair.assetA}-${pair.assetB}`}
+                  pair={pair}
+                  normalizedSeries={spData.normalizedSeries}
+                  onExpand={() => setExpandedPair(pair)}
+                />
+              ))}
+            </div>
+          );
+        })()}
       </section>
 
       {/* ── Section 3: Safe Haven Monitor ────────────────────────────────────── */}

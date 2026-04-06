@@ -3,17 +3,18 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { setEarlyMember } from "../lib/engagement/invite";
-import type { RiskProfileKey, User } from "../types";
+import type { User } from "../types";
 
-export type { RiskProfileKey, User };
+export type { User };
 
 type AuthContextValue = {
   user: User | null;
+  authLoading: boolean;
   signUp: (params: { name: string; email: string; password: string }) => Promise<void>;
   signIn: (params: { email: string; password: string }) => Promise<void>;
   signOut: () => void;
   deleteAccount: () => void;
-  updateProfile: (updates: Partial<Pick<User, "name" | "username" | "bio" | "profilePicture" | "bannerImage" | "riskProfile">>) => void;
+  updateProfile: (updates: Partial<Pick<User, "name" | "username" | "bio" | "profilePicture" | "bannerImage">>) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -26,6 +27,9 @@ type ProfileRow = {
   created_at: string | null;
   is_verified: boolean | null;
   is_founder: boolean | null;
+  subscription_tier: string | null;
+  subscription_status: string | null;
+  stripe_customer_id: string | null;
 };
 
 function buildUser(authId: string, email: string, row: ProfileRow | null): User {
@@ -39,44 +43,51 @@ function buildUser(authId: string, email: string, row: ProfileRow | null): User 
     joinedAt: row?.created_at ?? new Date().toISOString(),
     isVerified: row?.is_verified ?? false,
     isFounder: row?.is_founder ?? false,
+    subscription_tier: (row?.subscription_tier as User["subscription_tier"]) ?? "free",
+    subscription_status: row?.subscription_status ?? "free",
+    stripe_customer_id: row?.stripe_customer_id ?? undefined,
   };
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const supabase = createClient();
 
   useEffect(() => {
-    // Hydrate from current session on mount
-    void supabase.auth.getUser().then(async ({ data: { user: authUser } }) => {
-      if (!authUser) return;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("name, username, bio, avatar_url, created_at, is_verified, is_founder")
-        .eq("user_id", authUser.id)
-        .single();
-      setUser(buildUser(authUser.id, authUser.email ?? "", profile as ProfileRow | null));
-    });
+    // Safety net: never leave authLoading stuck indefinitely
+    const fallback = setTimeout(() => setAuthLoading(false), 4000);
 
-    // Keep in sync with auth state changes
+    // onAuthStateChange fires INITIAL_SESSION immediately on mount
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!session?.user) { setUser(null); return; }
+      if (!session?.user) {
+        setUser(null);
+        setAuthLoading(false);
+        clearTimeout(fallback);
+        return;
+      }
       const authUser = session.user;
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("name, username, bio, avatar_url, created_at, is_verified, is_founder")
-        .eq("user_id", authUser.id)
-        .single();
-      setUser(buildUser(authUser.id, authUser.email ?? "", profile as ProfileRow | null));
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("name, username, bio, avatar_url, created_at, is_verified, is_founder, subscription_tier, subscription_status, stripe_customer_id")
+          .eq("user_id", authUser.id)
+          .single();
+        setUser(buildUser(authUser.id, authUser.email ?? "", profile as ProfileRow | null));
+      } finally {
+        setAuthLoading(false);
+        clearTimeout(fallback);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => { subscription.unsubscribe(); clearTimeout(fallback); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+      authLoading,
 
       async signUp({ name, email, password }) {
         const trimmedEmail = email.trim().toLowerCase();
@@ -91,19 +102,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const userId = data.user?.id;
         if (!userId) throw new Error("Sign up failed. Please try again.");
-
-        // Pick up any onboarding risk profile
-        let riskProfile: RiskProfileKey | undefined;
-        if (typeof window !== "undefined") {
-          const pendingRaw = window.localStorage.getItem("quantivtrade-onboarding-pending");
-          if (pendingRaw) {
-            try {
-              const pending = JSON.parse(pendingRaw) as { riskProfile?: RiskProfileKey };
-              riskProfile = pending.riskProfile;
-              window.localStorage.removeItem("quantivtrade-onboarding-pending");
-            } catch { /* ignore */ }
-          }
-        }
 
         await supabase.from("profiles").upsert(
           {
@@ -155,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user]
+    [user, authLoading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

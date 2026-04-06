@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0e1a;
+  --foreground: #e4e4e7;
 }
 
 @theme inline {
@@ -24,12 +24,12 @@
 @property --accent-color {
   syntax: "<color>";
   inherits: true;
-  initial-value: #00c896;
+  initial-value: #4f9cf9;
 }
 
 :root,
 html {
-  --accent-color: #00c896;
+  --accent-color: #4f9cf9;
   --accent-color-40: color-mix(in srgb, var(--accent-color) 25%, transparent);
   --accent-color-10: color-mix(in srgb, var(--accent-color) 6%, transparent);
   transition: --accent-color 0.2s ease;
@@ -665,26 +665,8 @@ html[data-theme="light"] .dark-bg-section .text-zinc-500 {
   to   { transform: translateY(0);   opacity: 1; }
 }
 
-/* Live price flash (WebSocket updates) */
-@keyframes flashGreen {
-  0% { background: transparent; }
-  30% { background: rgba(52, 211, 153, 0.25); }
-  100% { background: transparent; }
-}
-
-@keyframes flashRed {
-  0% { background: transparent; }
-  30% { background: rgba(239, 68, 68, 0.25); }
-  100% { background: transparent; }
-}
-
-.price-flash-up {
-  animation: flashGreen 0.5s ease-out;
-}
-
-.price-flash-down {
-  animation: flashRed 0.5s ease-out;
-}
+/* price-flash-up / price-flash-down are no longer used — flash is handled
+   via inline React style in PriceDisplay.tsx */
 
 @keyframes pulse-sentiment {
   0%,

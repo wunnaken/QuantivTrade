@@ -4,23 +4,13 @@ import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useAuth } from "../../components/AuthContext";
 import { useTheme } from "../../components/ThemeContext";
-import type { RiskProfileKey } from "../../components/AuthContext";
 import { getBrokerConnection, disconnectBroker, BROKER_TEAL } from "../../lib/broker-connection";
 import { ConnectBrokerModal } from "../../components/ConnectBrokerModal";
 import { BriefingPreferencesForm } from "../../components/BriefingPreferencesForm";
 import { fetchBriefingPreferences, type BriefingPreferences } from "../../lib/briefing-preferences";
 
-const RISK_PROFILES: Record<
-  RiskProfileKey,
-  { label: string; subtitle: string; equities: number; fixedIncome: number; alternatives: number }
-> = {
-  passive: { label: "Passive · Long Term", subtitle: "7–10+ year horizon", equities: 50, fixedIncome: 40, alternatives: 10 },
-  moderate: { label: "Balanced · Medium Term", subtitle: "3–7 year horizon", equities: 60, fixedIncome: 30, alternatives: 10 },
-  aggressive: { label: "Aggressive · Short Term", subtitle: "Days–2 year horizon", equities: 80, fixedIncome: 10, alternatives: 10 },
-};
-
 export default function SettingsPage() {
-  const { user, deleteAccount, updateProfile } = useAuth();
+  const { user, deleteAccount } = useAuth();
   const { theme, setTheme } = useTheme();
   const [brokerState, setBrokerState] = useState(getBrokerConnection());
   const [connectModalOpen, setConnectModalOpen] = useState(false);
@@ -54,13 +44,6 @@ export default function SettingsPage() {
       </div>
     );
   }
-
-  const riskKey: RiskProfileKey = user.riskProfile ?? "moderate";
-  const risk = RISK_PROFILES[riskKey];
-
-  const handleRiskChange = (next: RiskProfileKey) => {
-    updateProfile({ riskProfile: next });
-  };
 
   const handleDeleteAccount = () => {
     if (
@@ -187,77 +170,6 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Risk profile */}
-        <section
-          className="rounded-2xl border p-5 transition-colors duration-300"
-          style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-zinc-50">Your risk profile</h2>
-            <Link
-              href="/growth#choose-profile"
-              className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-300 transition-colors duration-200 hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)]"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              Learn more
-            </Link>
-          </div>
-          <p className="mt-2 text-[11px] text-zinc-500">
-            Set how aggressive or conservative you want your default guidance to be.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {(Object.keys(RISK_PROFILES) as RiskProfileKey[]).map((key) => {
-              const p = RISK_PROFILES[key];
-              const active = key === riskKey;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => handleRiskChange(key)}
-                  className={`min-w-[140px] flex-1 rounded-xl border px-3 py-2 text-left text-xs transition-colors ${
-                    active
-                      ? "border-[var(--accent-color)]/60 bg-[var(--accent-color)]/10 text-[var(--accent-color)]"
-                      : "border-white/10 bg-black/20 text-zinc-300 hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)]"
-                  }`}
-                >
-                  <div className="font-semibold">{p.label}</div>
-                  <div className="mt-0.5 text-[10px] text-zinc-500">{p.subtitle}</div>
-                </button>
-              );
-            })}
-          </div>
-          <div className="mt-4 space-y-1 text-[11px] text-zinc-500">
-            <div className="flex justify-between">
-              <span>Equities</span>
-              <span>{risk.equities}%</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-              <div className="h-full bg-[var(--accent-color)]" style={{ width: `${risk.equities}%` }} />
-            </div>
-            <div className="flex justify-between">
-              <span>Fixed Income</span>
-              <span>{risk.fixedIncome}%</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-              <div className="h-full bg-gradient-to-r from-cyan-400 to-cyan-500" style={{ width: `${risk.fixedIncome}%` }} />
-            </div>
-            <div className="flex justify-between">
-              <span>Alternatives</span>
-              <span>{risk.alternatives}%</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-              <div className="h-full bg-gradient-to-r from-fuchsia-400 to-fuchsia-500" style={{ width: `${risk.alternatives}%` }} />
-            </div>
-          </div>
-        </section>
 
         {/* Morning Briefing Preferences — premium users only */}
         {user.isVerified && (

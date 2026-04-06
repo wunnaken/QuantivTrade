@@ -304,7 +304,7 @@ function TradingViewChart({ tvSymbol }: { tvSymbol: string }) {
       src={src}
       className="w-full rounded-xl border border-white/10"
       style={{ height: 380, border: "none" }}
-      allowTransparency
+      allowTransparency={true}
     />
   );
 }

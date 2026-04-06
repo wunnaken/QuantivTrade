@@ -5,6 +5,8 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../components/AuthContext";
+import { getCachedBriefing, getBriefingDate, setBriefingSeen } from "../../lib/briefing";
+import { MorningBriefing } from "../../components/MorningBriefing";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area,
@@ -107,12 +109,16 @@ function BentoCard({ href, title, icon, children, loading=false, delay=0, classN
   children: React.ReactNode; loading?: boolean; delay?: number; className?: string;
 }) {
   const router = useRouter();
+  const [hovered, setHovered] = useState(false);
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.35, ease: "easeOut" }}
-      whileHover={{ scale: 1.012, boxShadow: "0 0 24px rgba(0,200,150,0.1)", transition: { duration: 0.15 } }}
+      whileHover={{ scale: 1.012, transition: { duration: 0.15 } }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onClick={() => router.push(href)}
+      style={{ boxShadow: hovered ? "0 0 16px color-mix(in srgb, var(--accent-color) 12%, transparent)" : "none", transition: "box-shadow 0.15s ease" }}
       className={`cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-[#050713] ${className}`}
     >
       <div className="flex items-center justify-between px-4 pt-3 pb-1.5">
@@ -225,17 +231,40 @@ function MarketOpenFlash() {
 function DashboardHeader() {
   const { user } = useAuth();
   const [now, setNow] = useState(new Date());
+  const [showBriefing, setShowBriefing] = useState(false);
+
   useEffect(() => { const id = setInterval(()=>setNow(new Date()), 30000); return ()=>clearInterval(id); }, []);
+
+  const handleBriefingClose = useCallback(() => {
+    setShowBriefing(false);
+    setBriefingSeen();
+  }, []);
+
   return (
-    <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} transition={{duration:0.3}}
-      className="mb-5 flex items-center justify-between">
-      <div>
-        <h1 className="text-xl font-semibold text-zinc-100">{getGreeting(user?.name || user?.username)}</h1>
-        <p className="mt-0.5 text-xs text-zinc-500">
-          {now.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})} · {now.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}
-        </p>
-      </div>
-    </motion.div>
+    <>
+      {showBriefing && (
+        <MorningBriefing
+          skipAnimation={getBriefingDate() === new Date().toISOString().slice(0, 10)}
+          cachedFetchedAt={getCachedBriefing()?.fetchedAt ?? null}
+          onClose={handleBriefingClose}
+        />
+      )}
+      <motion.div initial={{opacity:0,y:-10}} animate={{opacity:1,y:0}} transition={{duration:0.3}}
+        className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-zinc-100">{getGreeting(user?.name || user?.username)}</h1>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            {now.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})} · {now.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}
+          </p>
+        </div>
+        <button
+          onClick={() => setShowBriefing(true)}
+          className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-[#0F1520] px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)]"
+        >
+          Morning Briefing
+        </button>
+      </motion.div>
+    </>
   );
 }
 
@@ -391,7 +420,7 @@ function MessagesCard({delay}:{delay:number}) {
         if(tickers.length>0){
           const prices:Record<string,Q>={};
           await Promise.allSettled(tickers.map(async sym=>{
-            const r=await fetch(`/api/ticker-quote?symbol=${encodeURIComponent(sym)}`);
+            const r=await fetch(`/api/ticker-quote?ticker=${encodeURIComponent(sym)}`);
             if(r.ok) prices[sym]=await r.json();
           }));
           setTickerPrices(prices);
@@ -537,7 +566,7 @@ function TopMoversCard({delay}:{delay:number}) {
   const fetchAll = useCallback(async()=>{
     const out:Record<string,Q>={};
     await Promise.allSettled([...GAINERS_LIST,...LOSERS_LIST].map(async sym=>{
-      try{const r=await fetch(`/api/ticker-quote?symbol=${encodeURIComponent(sym)}`);if(r.ok)out[sym]=await r.json();}catch{}
+      try{const r=await fetch(`/api/ticker-quote?ticker=${encodeURIComponent(sym)}`);if(r.ok)out[sym]=await r.json();}catch{}
     }));
     setQuotes(out);setLoading(false);
   },[]);
@@ -589,8 +618,8 @@ function LiveChartCard({delay}:{delay:number}) {
     setLoading(true);
     try{
       const [chartRes,quoteRes] = await Promise.allSettled([
-        fetch(`/api/ticker-chart?symbol=${encodeURIComponent(sym)}&range=1d`).then(r=>r.ok?r.json():null),
-        fetch(`/api/ticker-quote?symbol=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null),
+        fetch(`/api/ticker-chart?ticker=${encodeURIComponent(sym)}&range=1d`).then(r=>r.ok?r.json():null),
+        fetch(`/api/ticker-quote?ticker=${encodeURIComponent(sym)}`).then(r=>r.ok?r.json():null),
       ]);
       if(chartRes.status==="fulfilled"&&chartRes.value){
         const raw=chartRes.value?.candles??chartRes.value?.data??chartRes.value;
@@ -633,7 +662,7 @@ function LiveChartCard({delay}:{delay:number}) {
           </>}
         </div>
         <form onSubmit={e=>{e.preventDefault();e.stopPropagation();setSymbol(input.toUpperCase().trim());loadChart(input.toUpperCase().trim());}} onClick={e=>e.stopPropagation()} className="flex items-center gap-2">
-          <input type="text" value={input} onChange={e=>setInput(e.target.value)} placeholder="Ticker..."
+          <input type="text" id="ticker-search" name="ticker" value={input} onChange={e=>setInput(e.target.value)} placeholder="Ticker..."
             className="h-6 w-20 rounded-lg border border-white/10 bg-white/5 px-2 text-[10px] text-zinc-300 outline-none focus:border-[var(--accent-color)]/50"/>
           <button type="submit" className="rounded-lg bg-[var(--accent-color)]/20 px-2 py-0.5 text-[10px] font-bold text-[var(--accent-color)] hover:bg-[var(--accent-color)]/30 transition">Go</button>
         </form>
@@ -833,7 +862,7 @@ function WatchlistCard({delay}:{delay:number}) {
       const tickers=wl.slice(0,6).map((w:any)=>w.ticker);
       const out:Record<string,Q>={};
       await Promise.allSettled(tickers.map(async(sym:string)=>{
-        const r=await fetch(`/api/ticker-quote?symbol=${encodeURIComponent(sym)}`);
+        const r=await fetch(`/api/ticker-quote?ticker=${encodeURIComponent(sym)}`);
         if(r.ok)out[sym]=await r.json();
       }));
       setItems(tickers.map((sym:string)=>({ticker:sym,price:out[sym]?.price,changePercent:out[sym]?.changePercent})));
@@ -1035,7 +1064,7 @@ function GlobeCard({delay}:{delay:number}) {
   const fetchAll=useCallback(async()=>{
     const out:Record<string,Q>={};
     await Promise.allSettled(GLOBE_MARKETS.map(async({symbol})=>{
-      try{const r=await fetch(`/api/ticker-quote?symbol=${encodeURIComponent(symbol)}`);if(r.ok)out[symbol]=await r.json();}catch{}
+      try{const r=await fetch(`/api/ticker-quote?ticker=${encodeURIComponent(symbol)}`);if(r.ok)out[symbol]=await r.json();}catch{}
     }));
     setQuotes(out);setLoading(false);
   },[]);
@@ -1166,7 +1195,7 @@ function ScreenerPreviewCard({delay}:{delay:number}) {
     const TICKERS=["NVDA","META","TSLA","AMZN","MSFT","AAPL","AMD","PLTR"];
     const out:Record<string,any>={};
     Promise.allSettled(TICKERS.map(async sym=>{
-      const r=await fetch(`/api/ticker-quote?symbol=${encodeURIComponent(sym)}`);
+      const r=await fetch(`/api/ticker-quote?ticker=${encodeURIComponent(sym)}`);
       if(r.ok)out[sym]=await r.json();
     })).then(()=>{
       const sorted=TICKERS.map(sym=>({symbol:sym,price:out[sym]?.price??null,dayChangePct:out[sym]?.changePercent??null,sector:null}))
@@ -1204,14 +1233,24 @@ const MR_CLASS_COLORS: Record<string, string> = {
   commodities:"#f97316", forex:"#06b6d4", bonds:"#3b82f6", crypto:"#a855f7", volatility:"#ef4444",
 };
 
-function detectMRRegime(perf: Record<string,Record<string,{["1m"]?:number|null}>>): {label:string;color:string;icon:string} {
+function detectMRRegime(
+  perf: Record<string,Record<string,{["1m"]?:number|null}>>,
+  macro?: { cpiYoy: number | null; gdpGrowth: number | null },
+): {label:string;color:string;icon:string} {
   const spy = perf?.us_indices?.SPY?.["1m"] ?? 0;
   const tlt = perf?.bonds?.TLT?.["1m"] ?? 0;
   const gld = perf?.precious_metals?.GLD?.["1m"] ?? 0;
   const uso = perf?.commodities?.USO?.["1m"] ?? 0;
   const uup = perf?.forex?.UUP?.["1m"] ?? 0;
+
+  // Stagflation requires official macro confirmation: high CPI + stagnant/negative GDP
+  const cpi  = macro?.cpiYoy  ?? null;
+  const gdp  = macro?.gdpGrowth ?? null;
+  const officialStagflation = cpi !== null && gdp !== null && cpi > 4 && gdp < 1;
+
   if (spy < -4 && tlt > 2 && gld > 2)  return { label:"Risk-Off",   color:"#f87171", icon:"🔴" };
-  if (uso > 5  && tlt < -2)             return { label:"Stagflation", color:"#fbbf24", icon:"🟡" };
+  if (officialStagflation)              return { label:"Stagflation", color:"#fbbf24", icon:"🟡" };
+  if (uso > 5  && tlt < -2)            return { label:"Inflationary Pressure", color:"#fb923c", icon:"🟠" };
   if (spy < -6 && uup > 3 && tlt > 4)  return { label:"Deflation",   color:"#a1a1aa", icon:"⚫" };
   if (spy > 3  && tlt < 0 && Math.abs(uup) < 2) return { label:"Risk-On", color:"#4ade80", icon:"🟢" };
   return { label:"Goldilocks", color:"#60a5fa", icon:"🔵" };
@@ -1226,14 +1265,17 @@ function MarketRelationsCard({delay}:{delay:number}) {
   useEffect(()=>{
     const ctrl = new AbortController();
     const t = setTimeout(()=>ctrl.abort(), 20_000);
-    fetch("/api/market-relations/correlations?days=90", { signal: ctrl.signal })
-      .then(r=>r.json())
-      .then(d=>{
+    Promise.allSettled([
+      fetch("/api/market-relations/correlations?days=90", { signal: ctrl.signal }).then(r=>r.json()),
+      fetch("/api/macro/indicators").then(r=>r.ok?r.json():null).catch(()=>null),
+    ]).then(([corrResult, macroResult])=>{
+        const d = corrResult.status === "fulfilled" ? corrResult.value : {};
+        const macro = macroResult.status === "fulfilled" ? macroResult.value : null;
         const sp: MRPair[] = d?.surprisingPairs ?? [];
         setPairs(sp.slice(0, 4));
         setTotal(sp.length);
         const perf = d?.performance ?? {};
-        setRegime(detectMRRegime(perf));
+        setRegime(detectMRRegime(perf, macro));
       })
       .catch(()=>{})
       .finally(()=>{ clearTimeout(t); setLoading(false); });
@@ -1336,6 +1378,261 @@ function PortfoliosCard({delay}:{delay:number}) {
   );
 }
 
+// ── Markets: Forex ────────────────────────────────────────────────────────────
+
+const FOREX_PAIRS = [
+  { sym: "EURUSD=X", label: "EUR/USD" },
+  { sym: "GBPUSD=X", label: "GBP/USD" },
+  { sym: "USDJPY=X", label: "USD/JPY" },
+  { sym: "USDCHF=X", label: "USD/CHF" },
+  { sym: "AUDUSD=X", label: "AUD/USD" },
+  { sym: "USDCAD=X", label: "USD/CAD" },
+];
+
+function ForexCard({delay}:{delay:number}) {
+  const [quotes,setQuotes] = useState<Record<string,Q>>({});
+  const [loading,setLoading] = useState(true);
+  const fetchAll = useCallback(async()=>{
+    const out:Record<string,Q>={};
+    await Promise.allSettled(FOREX_PAIRS.map(async({sym})=>{
+      try{const r=await fetch(`/api/ticker-quote?ticker=${encodeURIComponent(sym)}`);if(r.ok)out[sym]=await r.json();}catch{}
+    }));
+    setQuotes(out);setLoading(false);
+  },[]);
+  useEffect(()=>{fetchAll();const id=setInterval(fetchAll,60000);return()=>clearInterval(id);},[fetchAll]);
+  return (
+    <BentoCard href="/forex" title="Forex" icon={I.globe} delay={delay} loading={loading} className="min-h-[220px]">
+      <div className="grid grid-cols-2 gap-1.5 pt-1">
+        {FOREX_PAIRS.map(({sym,label})=>{
+          const q=quotes[sym];const up=(q?.changePercent??0)>=0;
+          return(
+            <div key={sym} className="flex items-center justify-between rounded-xl border border-white/[0.04] bg-white/[0.02] px-3 py-2 text-[11px]">
+              <span className="font-medium text-zinc-400">{label}</span>
+              {q?.price!=null
+                ?<div className="text-right">
+                    <p className="text-zinc-300 font-semibold">{q.price.toFixed(4)}</p>
+                    <p className={`text-[9px] font-bold ${up?"text-emerald-400":"text-red-400"}`}>{up?"+":""}{(q.changePercent??0).toFixed(2)}%</p>
+                  </div>
+                :<span className="text-zinc-700">—</span>}
+            </div>
+          );
+        })}
+      </div>
+    </BentoCard>
+  );
+}
+
+// ── Markets: Futures ──────────────────────────────────────────────────────────
+
+const FUTURES_TICKERS = [
+  { sym: "ES=F",  label: "S&P 500" },
+  { sym: "NQ=F",  label: "Nasdaq" },
+  { sym: "CL=F",  label: "WTI Crude" },
+  { sym: "GC=F",  label: "Gold" },
+  { sym: "SI=F",  label: "Silver" },
+  { sym: "ZB=F",  label: "30Y T-Bond" },
+];
+
+function FuturesCard({delay}:{delay:number}) {
+  const [quotes,setQuotes] = useState<Record<string,Q>>({});
+  const [loading,setLoading] = useState(true);
+  const fetchAll = useCallback(async()=>{
+    const out:Record<string,Q>={};
+    await Promise.allSettled(FUTURES_TICKERS.map(async({sym})=>{
+      try{const r=await fetch(`/api/ticker-quote?ticker=${encodeURIComponent(sym)}`);if(r.ok)out[sym]=await r.json();}catch{}
+    }));
+    setQuotes(out);setLoading(false);
+  },[]);
+  useEffect(()=>{fetchAll();const id=setInterval(fetchAll,60000);return()=>clearInterval(id);},[fetchAll]);
+  return (
+    <BentoCard href="/futures" title="Futures" icon={I.activity} delay={delay} loading={loading} className="min-h-[220px]">
+      <ul className="space-y-1 pt-1">
+        {FUTURES_TICKERS.map(({sym,label})=>{
+          const q=quotes[sym];const up=(q?.changePercent??0)>=0;
+          return(
+            <li key={sym} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5">
+              <span className="text-xs font-semibold text-zinc-300">{label}</span>
+              {q?.price!=null
+                ?<div className="text-right">
+                    <span className="text-xs text-zinc-400">{fmtPrice(q.price)}</span>
+                    <span className={`ml-2 text-[10px] font-bold ${up?"text-emerald-400":"text-red-400"}`}>{fmtPct(q.changePercent)}</span>
+                  </div>
+                :<span className="text-zinc-700 text-xs">—</span>}
+            </li>
+          );
+        })}
+      </ul>
+    </BentoCard>
+  );
+}
+
+// ── Markets: Crypto ───────────────────────────────────────────────────────────
+
+function CryptoCard({delay}:{delay:number}) {
+  const [coins, setCoins] = useState<{id:string;symbol:string;name:string;current_price:number;price_change_percentage_24h:number}[]>([]);
+  const [fng, setFng] = useState<{value:string;value_classification:string}|null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(()=>{
+    Promise.allSettled([
+      fetch("/api/crypto/markets").then(r=>r.json()).then(d=>{
+        const top=(d?.coins??[]).slice(0,5);
+        setCoins(top);
+      }),
+      fetch("/api/crypto/fear-greed").then(r=>r.json()).then(d=>{
+        const latest=d?.data?.[0];
+        if(latest) setFng({value:latest.value,value_classification:latest.value_classification});
+      }),
+    ]).finally(()=>setLoading(false));
+  },[]);
+  return (
+    <BentoCard href="/crypto" title="Crypto" icon={I.zap} delay={delay} loading={loading} className="min-h-[220px]">
+      {fng&&(
+        <div className="mb-2 flex items-center gap-2 pt-1">
+          <span className="text-[10px] text-zinc-600">Fear & Greed:</span>
+          <span className={`text-[10px] font-bold ${Number(fng.value)>=50?"text-emerald-400":"text-red-400"}`}>{fng.value} · {fng.value_classification}</span>
+        </div>
+      )}
+      {coins.length===0?<p className="pt-1 text-xs text-zinc-600">Loading…</p>:(
+        <ul className="space-y-1">
+          {coins.map(c=>{const up=(c.price_change_percentage_24h??0)>=0;return(
+            <li key={c.id} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5">
+              <span className="text-xs font-bold text-zinc-300">{c.symbol.toUpperCase()}</span>
+              <div className="text-right">
+                <span className="text-xs text-zinc-400">{c.current_price>=1000?`$${c.current_price.toLocaleString("en-US",{maximumFractionDigits:0})}`:`$${c.current_price.toFixed(2)}`}</span>
+                <span className={`ml-2 text-[10px] font-bold ${up?"text-emerald-400":"text-red-400"}`}>{up?"+":""}{(c.price_change_percentage_24h??0).toFixed(2)}%</span>
+              </div>
+            </li>
+          );})}
+        </ul>
+      )}
+    </BentoCard>
+  );
+}
+
+// ── Analytics: Growth ─────────────────────────────────────────────────────────
+
+
+
+// ── Analytics: Supply Chain ───────────────────────────────────────────────────
+
+const SUPPLY_TICKERS = [
+  {sym:"TSM",label:"Semiconductors · TSM"},{sym:"MAERSK-B.CO",label:"Shipping · Maersk"},
+  {sym:"UPS",label:"Logistics · UPS"},{sym:"FDX",label:"Logistics · FedEx"},
+  {sym:"LMT",label:"Defense · LMT"},
+];
+
+function SupplyChainCard({delay}:{delay:number}) {
+  const [quotes,setQuotes] = useState<Record<string,Q>>({});
+  const [loading,setLoading] = useState(true);
+  const fetchAll = useCallback(async()=>{
+    const out:Record<string,Q>={};
+    await Promise.allSettled(SUPPLY_TICKERS.map(async({sym})=>{
+      try{const r=await fetch(`/api/ticker-quote?ticker=${encodeURIComponent(sym)}`);if(r.ok)out[sym]=await r.json();}catch{}
+    }));
+    setQuotes(out);setLoading(false);
+  },[]);
+  useEffect(()=>{fetchAll();const id=setInterval(fetchAll,60000);return()=>clearInterval(id);},[fetchAll]);
+  return (
+    <BentoCard href="/supply-chain" title="Supply Chain" icon={I.database} delay={delay} loading={loading} className="min-h-[200px]">
+      <ul className="space-y-1 pt-1">
+        {SUPPLY_TICKERS.map(({sym,label})=>{
+          const q=quotes[sym];const up=(q?.changePercent??0)>=0;
+          return(
+            <li key={sym} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5">
+              <span className="text-[10px] text-zinc-400 truncate max-w-[130px]">{label}</span>
+              {q?.price!=null
+                ?<span className={`text-[10px] font-bold shrink-0 ${up?"text-emerald-400":"text-red-400"}`}>{fmtPct(q.changePercent)}</span>
+                :<span className="text-zinc-700 text-xs">—</span>}
+            </li>
+          );
+        })}
+      </ul>
+    </BentoCard>
+  );
+}
+
+// ── Personal: Workspace ───────────────────────────────────────────────────────
+
+function WorkspaceCard({delay}:{delay:number}) {
+  return (
+    <BentoCard href="/workspace" title="AI Workspace" icon={I.cpu} delay={delay} className="min-h-[160px]">
+      <div className="space-y-2 pt-1">
+        {[
+          {label:"Market Research",desc:"Ask AI about any stock, sector, or macro event"},
+          {label:"Strategy Builder",desc:"Describe a strategy, get a backtest outline"},
+          {label:"News Digest",desc:"Summarize today's top market headlines"},
+        ].map(({label,desc})=>(
+          <div key={label} className="flex items-start gap-2 rounded-xl border border-white/[0.04] bg-white/[0.02] px-3 py-2">
+            <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--accent-color)]/60"/>
+            <div>
+              <p className="text-[11px] font-semibold text-zinc-300">{label}</p>
+              <p className="text-[10px] text-zinc-600 leading-snug">{desc}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </BentoCard>
+  );
+}
+
+// ── Standalone: Archive ───────────────────────────────────────────────────────
+
+function ArchiveCard({delay}:{delay:number}) {
+  const [items,setItems] = useState<{id:string;title:string;created_at:string;type?:string}[]>([]);
+  const [loading,setLoading] = useState(true);
+  useEffect(()=>{
+    fetch("/api/archive/popular").then(r=>r.ok?r.json():null).then(d=>{
+      const raw=Array.isArray(d)?d:(d?.recentArticles??d?.topArticles??d?.items??[]);
+      setItems(raw.slice(0,5).map((a:Record<string,unknown>)=>({id:(a.slug??a.id) as string,title:a.title as string,created_at:a.created_at as string,type:a.category as string|undefined})));
+    }).catch(()=>{}).finally(()=>setLoading(false));
+  },[]);
+  return (
+    <BentoCard href="/archive" title="Archive" icon={I.bookOpen} delay={delay} loading={loading} className="min-h-[160px]">
+      {items.length===0?<p className="pt-1 text-xs text-zinc-600">No archived items yet</p>:(
+        <ul className="space-y-2 pt-1">
+          {items.map((item,i)=>(
+            <li key={item.id??i} className="border-b border-white/5 pb-2 last:border-0 last:pb-0">
+              <p className="line-clamp-1 text-xs font-medium text-zinc-300">{item.title??"Untitled"}</p>
+              <p className="text-[10px] text-zinc-600">{item.type??"note"} · {timeAgo(item.created_at??"")}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </BentoCard>
+  );
+}
+
+// ── Standalone: Marketplace ───────────────────────────────────────────────────
+
+function MarketplaceCard({delay}:{delay:number}) {
+  const [listings,setListings] = useState<{id:string;title:string;price:number;price_type:string;seller?:{username:string}|null}[]>([]);
+  const [loading,setLoading] = useState(true);
+  useEffect(()=>{
+    fetch("/api/marketplace/listings?sort=popular&limit=4").then(r=>r.ok?r.json():null).then(d=>{
+      setListings((d?.listings??[]).slice(0,4));
+    }).catch(()=>{}).finally(()=>setLoading(false));
+  },[]);
+  return (
+    <BentoCard href="/marketplace" title="Marketplace" icon={I.dollarSign} delay={delay} loading={loading} className="min-h-[180px]">
+      {listings.length===0?<p className="pt-1 text-xs text-zinc-600">No listings yet</p>:(
+        <ul className="space-y-2 pt-1">
+          {listings.map((l,i)=>(
+            <li key={l.id??i} className="flex items-center justify-between gap-2 border-b border-white/5 pb-2 last:border-0 last:pb-0">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-medium text-zinc-300">{l.title}</p>
+                <p className="text-[10px] text-zinc-600">@{l.seller?.username??"Seller"}</p>
+              </div>
+              <span className="shrink-0 text-[10px] font-bold text-[var(--accent-color)]">
+                {l.price_type==="free"||l.price===0?"Free":`$${l.price}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </BentoCard>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function BentoDashboardView() {
@@ -1357,13 +1654,19 @@ export default function BentoDashboardView() {
         <motion.div className="flex min-w-0 flex-col gap-4" style={{ y: leftY }} initial={{x:-10}} animate={{x:0}} transition={{duration:0.55,ease:"easeOut"}}>
           <BondYieldCurveCard delay={0.05} />
           <GlobeCard          delay={0.08} />
-          <CEOAlertsCard      delay={0.11} />
-          <MessagesCard       delay={0.14} />
-          <PriceAlertsCard    delay={0.18} />
+          <ForexCard          delay={0.10} />
+          <FuturesCard        delay={0.12} />
+          <CEOAlertsCard      delay={0.14} />
+          <MessagesCard       delay={0.17} />
+          <PriceAlertsCard    delay={0.20} />
           <JournalCard        delay={0.22} />
           <TradeRoomsCard     delay={0.25} />
           <CommunitiesCard    delay={0.27} />
           <DataHubCard        delay={0.29} />
+          <SupplyChainCard    delay={0.31} />
+          <WorkspaceCard      delay={0.33} />
+          <ArchiveCard        delay={0.35} />
+          <MarketplaceCard    delay={0.37} />
         </motion.div>
 
         {/* ── CENTER COLUMN ── */}
@@ -1372,6 +1675,7 @@ export default function BentoDashboardView() {
           <LiveChartCard     delay={0.08} />
           <InsiderTradesCard delay={0.14} />
           <FiscalWatchCard   delay={0.20} />
+          <CryptoCard        delay={0.28} />
         </div>
 
         {/* ── RIGHT COLUMN ── */}

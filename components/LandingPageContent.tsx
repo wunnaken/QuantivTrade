@@ -161,12 +161,6 @@ export function LandingPageContent({ hasInvite = false, hideTopBar = false }: { 
               <p className="mt-2 text-sm text-zinc-300">Current market news and global updates. Choose your topics and regions — we surface what matters to you.</p>
               <p className="mt-3 text-xs text-cyan-300/80 group-hover:text-[var(--accent-color)]">Select what you want to follow. More coming soon.</p>
             </Link>
-            <Link href="/growth#choose-profile" className="group rounded-2xl border border-white/5 bg-gradient-to-b from-white/5 to-white/[0.01] p-5 transition hover:border-[var(--accent-color)]/60 hover:shadow-[0_0_40px_var(--accent-color-40)] cursor-pointer">
-              <div className="mb-4 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-fuchsia-500/15 text-fuchsia-300"><span className="text-lg">📈</span></div>
-              <h3 className="text-sm font-semibold text-zinc-100">Growth Profiles</h3>
-              <p className="mt-2 text-sm text-zinc-300">Explore passive, moderate, and high-risk paths tailored to your time horizon.</p>
-              <p className="mt-3 text-xs text-fuchsia-300/80 group-hover:text-[var(--accent-color)]">Click to view profile breakdowns and risk explanations.</p>
-            </Link>
           </div>
         </div>
       </section>

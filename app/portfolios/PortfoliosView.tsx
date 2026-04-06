@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -602,17 +602,16 @@ function ThematicTab({ portfolios, loading }: { portfolios: ThematicPortfolio[];
       {/* Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
         {filtered.map((portfolio) => (
-          <>
+          <React.Fragment key={portfolio.id}>
             <ThematicCard
-              key={portfolio.id}
               portfolio={portfolio}
               isExpanded={expanded === portfolio.id}
               onToggle={() => toggleExpand(portfolio.id)}
             />
             {expanded === portfolio.id && expandedPortfolio && (
-              <ThematicDetail key={`detail-${portfolio.id}`} portfolio={expandedPortfolio} />
+              <ThematicDetail portfolio={expandedPortfolio} />
             )}
-          </>
+          </React.Fragment>
         ))}
       </div>
 

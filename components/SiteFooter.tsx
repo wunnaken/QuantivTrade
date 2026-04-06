@@ -19,15 +19,16 @@ const PLATFORM_LINKS = [
   { label: "Dashboard", href: "/feed" },
   { label: "Communities", href: "/communities" },
   { label: "Trade Journal", href: "/journal" },
-  { label: "Growth Profiles", href: "/growth#choose-profile" },
+
   { label: "Morning Briefing", href: "/feed" },
   { label: "Market Map", href: "/map" },
 ];
 
 const PLANS_LINKS = [
-  { label: "Plans", href: "/plans" },
-  { label: "Starter · Free", href: "/plans" },
-  { label: "Pro · $19/mo", href: "/plans" },
+  { label: "Pricing", href: "/pricing" },
+  { label: "Starter · $19/mo", href: "/pricing" },
+  { label: "Pro · $29/mo", href: "/pricing" },
+  { label: "Elite · $89/mo", href: "/pricing" },
   { label: "Verified Trader · $9/mo", href: "/verify" },
 ];
 

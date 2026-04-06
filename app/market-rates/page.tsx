@@ -20,7 +20,7 @@ export default function MarketRatesPage() {
             Construction &amp; Real Estate
           </p>
           <h1 className="mt-1 text-xl font-semibold tracking-tight text-zinc-50 sm:text-2xl">
-            Market Rates &amp; Materials
+            Building Material Data
           </h1>
           <p className="mt-1 text-xs text-zinc-400">
             Live mortgage rates, building material prices, and construction sector performance.

@@ -156,7 +156,7 @@ function TickerDataPanel({
           <div className="h-5 w-12 animate-pulse rounded bg-white/10" />
         </div>
       ) : (
-        <div className="flex items-baseline gap-2">
+        <div className="flex items-center gap-2">
           <PriceDisplay
             price={price}
             change={change}
@@ -169,7 +169,7 @@ function TickerDataPanel({
           />
           {isLive && (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> Live
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 sonar-dot" /> Live
             </span>
           )}
         </div>
@@ -352,12 +352,9 @@ function AIAnalysisCard({ data }: { data: AnalyzeTickerResponse }) {
 
       <section className="mb-6">
         <h3 className="mb-2 text-sm font-semibold text-zinc-300">Suitable for</h3>
-        <Link
-          href="/growth#choose-profile"
-          className="inline-flex items-center gap-1 rounded-full border border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10 px-3 py-1.5 text-sm font-medium text-[var(--accent-color)] hover:bg-[var(--accent-color)]/20"
-        >
+        <span className="inline-flex items-center gap-1 rounded-full border border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10 px-3 py-1.5 text-sm font-medium text-[var(--accent-color)]">
           {data.suitableFor}
-        </Link>
+        </span>
       </section>
 
       <section className="mb-6">
@@ -425,6 +422,9 @@ export default function TickerPage() {
   const alertForTicker = getAlertForTicker(ticker);
   const live = useLivePrice(ticker);
   const { isConnected } = usePriceContext();
+  const is24x7 = /^(BTC|ETH|XRP|SOL|DOGE|ADA|AVAX|BNB|MATIC|LTC|EURUSD|GBPUSD|USDJPY|AUDUSD|USDCAD|USDCHF|NZDUSD)$/i.test(ticker)
+    || ticker.includes("-USD") || ticker.includes("USD=");
+  const showLive = isConnected || is24x7;
   const quote: QuoteData | null = live.price != null
     ? {
         price: live.price,
@@ -573,7 +573,7 @@ export default function TickerPage() {
               chartLoading={chartLoading}
               chartRange={chartRange}
               onChartRangeChange={setChartRange}
-              isLive={isConnected}
+              isLive={showLive}
               watchlistSaving={watchlistSaving}
             />
             {watchlistSyncIssue && (

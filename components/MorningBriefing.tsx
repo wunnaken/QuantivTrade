@@ -150,7 +150,7 @@ export function MorningBriefing({
   }, [skipAnimation]);
 
   useEffect(() => {
-    if (phase === "prefs") return;
+    if (phase === "prefs" || phase === "content") return;
     if (skipAnimation) {
       const cached = getCachedBriefing();
       if (cached?.data && typeof cached.data === "object" && "headline" in cached.data) return;

@@ -109,7 +109,7 @@ export function WelcomeAnimation({ onComplete }: { onComplete: () => void }) {
         {/* Step 4: Three bullets (3.2s, 3.6s, 4s) */}
         <ul className="mt-10 flex flex-col gap-3 text-left sm:gap-4">
           {[
-            { emoji: "📊", text: "Your risk profile is ready" },
+            { emoji: "📊", text: "Your dashboard is ready" },
             { emoji: "🌍", text: "Global markets at your fingertips" },
             { emoji: "👥", text: "Your community awaits" },
           ].map((item, i) => (

@@ -666,14 +666,24 @@ function CTASection() {
           className="mb-10" style={{ color: "rgba(255,255,255,0.32)", fontSize: "15px" }}>
           Join traders who see the market differently.
         </motion.p>
-        <motion.a href="/auth/sign-up"
-          whileHover={{ scale: 1.04, boxShadow: "0 0 36px rgba(79,156,249,0.5)" }}
-          whileTap={{ scale: 0.97 }}
-          initial={{ opacity: 0, y: 12 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ delay: 0.3, duration: 0.48 }}
-          className="inline-block cta-primary text-base font-bold px-10 py-4 rounded-xl">
-          Start Free Today →
-        </motion.a>
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+          <motion.a href="/auth/sign-up"
+            whileHover={{ scale: 1.04, boxShadow: "0 0 36px rgba(79,156,249,0.5)" }}
+            whileTap={{ scale: 0.97 }}
+            initial={{ opacity: 0, y: 12 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ delay: 0.3, duration: 0.48 }}
+            className="inline-block cta-primary text-base font-bold px-10 py-4 rounded-xl">
+            Start Free Today →
+          </motion.a>
+          <motion.a href="/onboarding"
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            initial={{ opacity: 0, y: 12 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ delay: 0.42, duration: 0.48 }}
+            className="inline-block cta-secondary text-base font-semibold px-10 py-4 rounded-xl">
+            Take the investor quiz
+          </motion.a>
+        </div>
       </div>
     </section>
   );

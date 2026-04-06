@@ -94,7 +94,7 @@ export default function SetupProfilePage() {
               placeholder="e.g. John Smith"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-[#00C896]/70"
+              className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-[var(--accent-color)]/70"
             />
           </div>
 
@@ -111,7 +111,7 @@ export default function SetupProfilePage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
                 maxLength={20}
-                className="w-full rounded-md border border-white/10 bg-black/40 py-2 pl-7 pr-3 text-xs text-zinc-100 outline-none focus:border-[#00C896]/70"
+                className="w-full rounded-md border border-white/10 bg-black/40 py-2 pl-7 pr-3 text-xs text-zinc-100 outline-none focus:border-[var(--accent-color)]/70"
               />
             </div>
             {usernameStatus === "checking" && (
@@ -132,7 +132,7 @@ export default function SetupProfilePage() {
             type="submit"
             disabled={loading || usernameStatus === "taken" || usernameStatus === "checking"}
             className="mt-2 w-full rounded-full px-4 py-2 text-xs font-semibold text-[#020308] shadow-lg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-            style={{ backgroundColor: "#00C896", boxShadow: "0 10px 15px -3px rgba(0,200,150,0.4)" }}
+            style={{ backgroundColor: "var(--accent-color)", boxShadow: "0 10px 15px -3px color-mix(in srgb, var(--accent-color) 40%, transparent)" }}
           >
             {loading ? "Saving…" : "Continue to QuantivTrade"}
           </button>

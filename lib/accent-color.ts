@@ -4,7 +4,7 @@
  */
 
 export const ACCENT_STORAGE_KEY = "quantivtrade-accent-color";
-export const DEFAULT_ACCENT = "#00C896";
+export const DEFAULT_ACCENT = "#4f9cf9";
 
 export type AccentOption = { id: string; name: string; hex: string };
 

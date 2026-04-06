@@ -80,7 +80,7 @@ const bisCbpolStatsUrl = (refArea: string) =>
 const bisCbpolJsonDataUrl = (refArea: string) =>
   `https://data.bis.org/api/data/WS_CBPOL/M.${refArea}?startPeriod=2024-01&format=jsondata`;
 
-type PolicyRateResult = { value: number; lastUpdated: string; source: string };
+type PolicyRateResult = { value: number; lastUpdated: string; source: string; threeMonthChange?: number | null };
 
 async function safePolicyRateFetch(
   label: string,
@@ -108,7 +108,7 @@ function endOfMonthIsoFromYm(ym: string): string {
   return last.toISOString().slice(0, 10);
 }
 
-function parseBisCbpolStatsXml(xml: string): { value: number; period: string } | null {
+function parseBisCbpolStatsXml(xml: string): { value: number; period: string; threeMonthsAgo: number | null } | null {
   const obs: Array<{ p: string; v: number }> = [];
   const re = /<Obs\b[^>]*TIME_PERIOD="([^"]+)"[^>]*OBS_VALUE="([^"]+)"/g;
   let m: RegExpExecArray | null;
@@ -119,7 +119,21 @@ function parseBisCbpolStatsXml(xml: string): { value: number; period: string } |
   if (obs.length === 0) return null;
   obs.sort((a, b) => a.p.localeCompare(b.p));
   const last = obs.at(-1)!;
-  return { value: last.v, period: last.p };
+  const lastIso = /^\d{4}-\d{2}$/.test(last.p) ? endOfMonthIsoFromYm(last.p) : last.p;
+  const lastMs = new Date(lastIso + "T23:59:59Z").getTime();
+  const targetMs = lastMs - 91 * 24 * 60 * 60 * 1000;
+  let closest: { p: string; v: number; t: number } | null = null;
+  for (const o of obs) {
+    if (o === last) continue;
+    const iso = /^\d{4}-\d{2}$/.test(o.p) ? endOfMonthIsoFromYm(o.p) : o.p;
+    const t = new Date(iso + "T23:59:59Z").getTime();
+    if (!Number.isFinite(t)) continue;
+    if (!closest || Math.abs(t - targetMs) < Math.abs(closest.t - targetMs)) {
+      closest = { ...o, t };
+    }
+  }
+  const threeMonthsAgo = closest != null ? closest.v : null;
+  return { value: last.v, period: last.p, threeMonthsAgo };
 }
 
 type SdmxJsonDataObs = {
@@ -146,6 +160,51 @@ function observationPeriodEndMs(period: string): number | null {
     return Number.isFinite(t) ? t : null;
   }
   return null;
+}
+
+/** Extract latest + 3-month-ago value from SDMX-JSON. Used for central bank rate change computation. */
+function parseSdmxJsonDataWithChange(jsonText: string): {
+  latest: { value: number; period: string } | null;
+  threeMonthChange: number | null;
+} {
+  const empty = { latest: null, threeMonthChange: null };
+  try {
+    const data = JSON.parse(jsonText) as SdmxJsonDataObs;
+    const seriesMap = data.dataSets?.[0]?.series ?? {};
+    const dimValues = data.structure?.dimensions?.observation?.[0]?.values ?? [];
+    const now = Date.now();
+    const allObs: Array<{ period: string; value: number; t: number }> = [];
+    for (const ser of Object.values(seriesMap)) {
+      const observations = ser?.observations ?? {};
+      for (const [idxStr, valArr] of Object.entries(observations)) {
+        const idx = Number.parseInt(idxStr, 10);
+        if (!Number.isFinite(idx) || idx < 0) continue;
+        const id = dimValues[idx]?.id;
+        const raw = Array.isArray(valArr) ? valArr[0] : null;
+        const value = toNumber(raw as string | number | null | undefined);
+        if (id == null || value == null || !Number.isFinite(value)) continue;
+        const t = observationPeriodEndMs(id);
+        if (t == null || t > now) continue;
+        allObs.push({ period: id, value, t });
+      }
+    }
+    if (allObs.length === 0) return empty;
+    allObs.sort((a, b) => a.t - b.t);
+    const latest = allObs.at(-1)!;
+    const threeMonthsAgoMs = latest.t - 91 * 24 * 60 * 60 * 1000;
+    let closest: (typeof allObs)[0] | null = null;
+    for (const obs of allObs) {
+      if (obs === latest) continue;
+      if (!closest || Math.abs(obs.t - threeMonthsAgoMs) < Math.abs(closest.t - threeMonthsAgoMs)) {
+        closest = obs;
+      }
+    }
+    const threeMonthChange =
+      closest != null ? Math.round((latest.value - closest.value) * 100) / 100 : null;
+    return { latest: { value: latest.value, period: latest.period }, threeMonthChange };
+  } catch {
+    return empty;
+  }
 }
 
 /** ECB / SDMX-JSON: latest observation whose period is not in the future (avoids ECB forward-dated rate rows). */
@@ -189,6 +248,7 @@ async function fetchBisPolicyRateFromStats(refArea: string): Promise<PolicyRateR
     value: parsed.value,
     lastUpdated,
     source: BIS_COUNTRY_SOURCE[refArea] ?? `BIS (${refArea})`,
+    threeMonthChange: parsed.threeMonthsAgo != null ? Math.round((parsed.value - parsed.threeMonthsAgo) * 100) / 100 : null,
   };
 }
 
@@ -202,14 +262,14 @@ async function fetchBisPolicyRate(countryCode: string): Promise<PolicyRateResult
     if (jRes.ok) {
       const jText = await jRes.text();
       if (!jText.includes('"detail"')) {
-        const parsed = parseSdmxJsonDataLastObs(jText);
-        if (parsed) {
-          const lastUpdated = /^\d{4}-\d{2}$/.test(parsed.period)
-            ? endOfMonthIsoFromYm(parsed.period)
-            : parsed.period.length >= 10
-              ? parsed.period.slice(0, 10)
-              : parsed.period;
-          return { value: parsed.value, lastUpdated, source: BIS_COUNTRY_SOURCE[countryCode] ?? `BIS (${countryCode})` };
+        const parsed = parseSdmxJsonDataWithChange(jText);
+        if (parsed.latest) {
+          const lastUpdated = /^\d{4}-\d{2}$/.test(parsed.latest.period)
+            ? endOfMonthIsoFromYm(parsed.latest.period)
+            : parsed.latest.period.length >= 10
+              ? parsed.latest.period.slice(0, 10)
+              : parsed.latest.period;
+          return { value: parsed.latest.value, lastUpdated, source: BIS_COUNTRY_SOURCE[countryCode] ?? `BIS (${countryCode})`, threeMonthChange: parsed.threeMonthChange };
         }
       }
     }
@@ -223,11 +283,11 @@ async function fetchBisPolicyRate(countryCode: string): Promise<PolicyRateResult
   }
 }
 
-async function fetchFedEffectiveRate(): Promise<{ value: number | null; date: string | null; source: string | null }> {
+async function fetchFedEffectiveRate(): Promise<{ value: number | null; date: string | null; source: string | null; threeMonthChange?: number | null }> {
   const bis = await fetchBisPolicyRate("US");
   if (bis != null && bis.value != null && Number.isFinite(bis.value)) {
     console.log("[bonds] fed rate (BIS WS_CBPOL US):", bis.value, "as of", bis.lastUpdated);
-    return { value: bis.value, date: bis.lastUpdated, source: "Bank for International Settlements" };
+    return { value: bis.value, date: bis.lastUpdated, source: "Bank for International Settlements", threeMonthChange: bis.threeMonthChange };
   }
   console.error("[bonds] fed rate unavailable — all sources failed");
   return { value: null, date: null, source: null };
@@ -241,6 +301,7 @@ async function fetchFedPolicyRate(): Promise<PolicyRateResult | null> {
     value: r.value,
     lastUpdated: r.date ?? new Date().toISOString().slice(0, 10),
     source: r.source,
+    threeMonthChange: r.threeMonthChange ?? null,
   };
 }
 
@@ -249,11 +310,11 @@ async function fetchEcbPolicyRate(): Promise<PolicyRateResult | null> {
     const res = await fetch(ECB_MAIN_REFINANCING_URL, policyFetchInit());
     if (res.ok) {
       const text = await res.text();
-      const parsed = parseSdmxJsonDataLastObs(text);
-      if (parsed) {
+      const parsed = parseSdmxJsonDataWithChange(text);
+      if (parsed.latest) {
         const lastUpdated =
-          parsed.period.length >= 10 ? parsed.period.slice(0, 10) : endOfMonthIsoFromYm(parsed.period);
-        return { value: parsed.value, lastUpdated, source: "ECB Statistical Data Warehouse" };
+          parsed.latest.period.length >= 10 ? parsed.latest.period.slice(0, 10) : endOfMonthIsoFromYm(parsed.latest.period);
+        return { value: parsed.latest.value, lastUpdated, source: "ECB Statistical Data Warehouse", threeMonthChange: parsed.threeMonthChange };
       }
     }
   } catch {
@@ -316,7 +377,20 @@ function parseBoePlotResponse(text: string): PolicyRateResult | null {
         const x = last.x;
         if (y != null && x) {
           const lastUpdated = /^\d{4}-\d{2}-\d{2}/.test(x) ? x.slice(0, 10) : x;
-          return { value: y, lastUpdated, source: "Bank of England" };
+          const lastMs = new Date(x).getTime();
+          const targetMs = lastMs - 91 * 24 * 60 * 60 * 1000;
+          let closestPt: (typeof pts)[0] | null = null;
+          for (const pt of pts) {
+            if (pt === last || !pt.x) continue;
+            const t = new Date(pt.x).getTime();
+            if (!Number.isFinite(t)) continue;
+            if (!closestPt || Math.abs(t - targetMs) < Math.abs(new Date(closestPt.x ?? "").getTime() - targetMs)) {
+              closestPt = pt;
+            }
+          }
+          const prevY = closestPt ? (typeof closestPt.y === "number" ? closestPt.y : toNumber(closestPt.y as unknown as string)) : null;
+          const threeMonthChange = prevY != null ? Math.round((y - prevY) * 100) / 100 : null;
+          return { value: y, lastUpdated, source: "Bank of England", threeMonthChange };
         }
       }
     } catch {
@@ -374,7 +448,7 @@ function centralBankCard(label: string, res: PolicyRateResult | null): CentralBa
   if (res == null) {
     return { label, value: null, source: "—", lastUpdated: null, note: RATE_UNAVAILABLE_NOTE };
   }
-  return { label, value: res.value, source: res.source, lastUpdated: res.lastUpdated };
+  return { label, value: res.value, source: res.source, lastUpdated: res.lastUpdated, threeMonthChange: res.threeMonthChange ?? null };
 }
 
 function logPolicyRate(name: string, res: PolicyRateResult | null) {
@@ -411,10 +485,14 @@ const CURVE_SERIES: Array<{ label: string; seriesId: string }> = [
 
 /** International maturity cards: sparkline + levels from World Bank / ECB history (FRED spot series often blocked). */
 const INTL_SPARK_HISTORY_KEY: Record<string, string> = {
-  IRSTCB01GBM156N: "GBAM10Y",
+  GBAM2Y: "GBAM2Y",
+  GBAM5Y: "GBAM5Y",
   GBAM10Y: "GBAM10Y",
-  IRSTCB01DEM156N: "DEAM10Y",
+  GBAM30Y: "GBAM30Y",
+  DEAM2Y: "DEAM2Y",
+  DEAM5Y: "DEAM5Y",
   DEAM10Y: "DEAM10Y",
+  DEAM30Y: "DEAM30Y",
   INTGSBEJPM193N: "INTGSBEJPM193N",
   INTDSRCNM193N: "INTDSRCNM193N",
   INTDSRBRM193N: "INTDSRBRM193N",
@@ -439,8 +517,10 @@ const COUNTRY_CONFIG: BondCountryConfig[] = [
     id: "uk",
     label: "UK Gilts",
     maturities: [
-      { label: "2Y", seriesId: "IRSTCB01GBM156N" },
+      { label: "2Y", seriesId: "GBAM2Y" },
+      { label: "5Y", seriesId: "GBAM5Y" },
       { label: "10Y", seriesId: "GBAM10Y" },
+      { label: "30Y", seriesId: "GBAM30Y" },
     ],
     tvSymbol: "TVC:GB10Y",
   },
@@ -448,8 +528,10 @@ const COUNTRY_CONFIG: BondCountryConfig[] = [
     id: "de",
     label: "German Bunds",
     maturities: [
-      { label: "2Y", seriesId: "IRSTCB01DEM156N" },
+      { label: "2Y", seriesId: "DEAM2Y" },
+      { label: "5Y", seriesId: "DEAM5Y" },
       { label: "10Y", seriesId: "DEAM10Y" },
+      { label: "30Y", seriesId: "DEAM30Y" },
     ],
     tvSymbol: "TVC:DE10Y",
   },
@@ -490,6 +572,7 @@ type CentralBankRate = {
   source: string;
   lastUpdated: string | null;
   note?: string;
+  threeMonthChange?: number | null;
 };
 
 function toNumber(v: string | number | null | undefined): number | null {

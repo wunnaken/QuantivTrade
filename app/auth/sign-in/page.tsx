@@ -69,7 +69,7 @@ function SignInForm() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-[#00C896]/70"
+              className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-[var(--accent-color)]/70"
             />
           </div>
           <div className="space-y-1 text-xs">
@@ -83,12 +83,12 @@ function SignInForm() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 pr-10 text-xs text-zinc-100 outline-none focus:border-[#00C896]/70"
+                className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 pr-10 text-xs text-zinc-100 outline-none focus:border-[var(--accent-color)]/70"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((p) => !p)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-[#00C896]/50"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-[var(--accent-color)]/50"
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 title={showPassword ? "Hide password" : "Show password"}
               >
@@ -116,7 +116,7 @@ function SignInForm() {
             type="submit"
             disabled={loading}
             className="mt-2 w-full rounded-full px-4 py-2 text-xs font-semibold text-[#020308] shadow-lg transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-70"
-          style={{ backgroundColor: "#00C896", boxShadow: "0 10px 15px -3px rgba(0,200,150,0.4)" }}
+          style={{ backgroundColor: "var(--accent-color)", boxShadow: "0 10px 15px -3px color-mix(in srgb, var(--accent-color) 40%, transparent)" }}
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>
@@ -148,7 +148,7 @@ function SignInForm() {
             <Link
               href="/auth/sign-up"
               className="font-semibold transition hover:opacity-90"
-              style={{ color: "#00C896" }}
+              style={{ color: "var(--accent-color)" }}
             >
               Create an account
             </Link>

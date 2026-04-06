@@ -53,7 +53,7 @@ type BondsApiResponse = {
     tenTwoSpread: SpreadItem;
   };
   sentiment: { score: number; label: string };
-  centralBankRates: Record<string, { label: string; value: number | null; source: string; lastUpdated: string | null; note?: string }>;
+  centralBankRates: Record<string, { label: string; value: number | null; source: string; lastUpdated: string | null; note?: string; threeMonthChange?: number | null }>;
   historicalYields: Record<string, Array<{ date: string; value: number }>>;
   news: BondNews[];
   lastUpdated: string;
@@ -643,18 +643,30 @@ export default function BondView() {
           <div className="rounded-2xl border border-white/10 bg-[#050713] p-3">
             <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Central Bank Rates</p>
             <div className="space-y-2">
-              {Object.values(data.centralBankRates).map((r) => (
-                <div key={r.label} className="flex items-center justify-between rounded-lg border border-white/10 bg-[#050713] px-2.5 py-2">
-                  <div>
-                    <p className="text-xs font-semibold text-zinc-200">{r.label}</p>
-                    <p className="text-[11px] text-zinc-400">{r.source}</p>
-                    <p className="text-[10px] text-zinc-500">
-                      {r.lastUpdated ? `Updated ${new Date(r.lastUpdated).toLocaleDateString()}` : (r.note ?? "Data unavailable")}
-                    </p>
+              {Object.values(data.centralBankRates).map((r) => {
+                const chg = r.threeMonthChange;
+                const chgUp = chg != null && chg > 0;
+                const chgDown = chg != null && chg < 0;
+                return (
+                  <div key={r.label} className="flex items-center justify-between rounded-lg border border-white/10 bg-[#050713] px-2.5 py-2">
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-200">{r.label}</p>
+                      <p className="text-[11px] text-zinc-400">{r.source}</p>
+                      <p className="text-[10px] text-zinc-500">
+                        {r.lastUpdated ? `Updated ${new Date(r.lastUpdated).toLocaleDateString()}` : (r.note ?? "Data unavailable")}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-zinc-200">{fmtYield(r.value)}</p>
+                      {chg != null && (
+                        <p className={`text-[10px] font-medium ${chgUp ? "text-red-400" : chgDown ? "text-emerald-400" : "text-zinc-500"}`}>
+                          {chgUp ? "▲" : chgDown ? "▼" : ""}{chgUp ? "+" : ""}{chg.toFixed(2)}% <span className="text-zinc-600">3M</span>
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm font-semibold text-zinc-200">{fmtYield(r.value)}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </aside>

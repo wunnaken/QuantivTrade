@@ -49,7 +49,7 @@ const TickerItem = memo(function TickerItem({
   const changeLabel = isCrypto ? "24h change (CoinGecko); may differ from TradingView day change" : undefined;
   return (
     <Link
-      href="/news"
+      href={`/search/${encodeURIComponent(symbol)}`}
       className="flex shrink-0 items-center gap-2 whitespace-nowrap rounded px-3 py-1 text-xs transition hover:bg-white/5"
       title={changeLabel}
     >

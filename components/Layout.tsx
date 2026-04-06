@@ -20,7 +20,7 @@ import { usePriceContext } from "../lib/price-context";
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_BG = "#0A0E1A";
 
-const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict" }[] = [
+const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict" | "archive" | "marketplace" }[] = [
   { href: "/social-feed", label: "Social Feed" },
   { href: "/communities", label: "Communities" },
   { href: "/messages", label: "Messages" },
@@ -32,15 +32,17 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/futures", label: "Futures" },
   { href: "/crypto", label: "Crypto" },
   { href: "/market-relations", label: "Market Relations" },
-  { href: "/market-rates", label: "Market Rates" },
+  { href: "/market-rates", label: "Building Data" },
   { href: "/sentiment", label: "Sentiment Radar" },
   { href: "/insider-trades", label: "Insider Trades" },
   { href: "/fiscalwatch", label: "FiscalWatch" },
   { href: "/portfolios", label: "Portfolios" },
-  { href: "/growth", label: "Growth" },
   { href: "/ceos", label: "CEOs" },
   { href: "/calendar", label: "Calendar" },
   { href: "/screener", label: "Screener" },
+  { href: "/supply-chain", label: "Supply Chain" },
+  { href: "/archive", label: "Archive", icon: "archive" },
+  { href: "/marketplace", label: "Marketplace", icon: "marketplace" },
   { href: "/datahub", label: "DataHub" },
   { href: "/backtest", label: "Backtest" },
   { href: "/journal", label: "Journal" },
@@ -52,7 +54,7 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
 const SECTIONS: { id: string; label: string; hrefs: string[] }[] = [
   { id: "community", label: "Community", hrefs: ["/social-feed", "/communities", "/messages", "/trade-rooms"] },
   { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/forex", "/futures", "/crypto", "/market-relations", "/market-rates", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
-  { id: "analytics", label: "Analytics", hrefs: ["/growth", "/ceos", "/calendar", "/screener", "/datahub", "/backtest"] },
+  { id: "analytics", label: "Analytics", hrefs: ["/ceos", "/calendar", "/screener", "/supply-chain", "/datahub", "/backtest"] },
   { id: "personal", label: "Personal", hrefs: ["/journal", "/predict", "/watchlist", "/workspace"] },
 ];
 
@@ -88,7 +90,7 @@ function SidebarLogo({ narrow }: { narrow: boolean }) {
   );
 }
 
-function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict"; isActive: boolean }) {
+function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict" | "archive" | "marketplace"; isActive: boolean }) {
   const cls = "h-5 w-5";
   const stroke = "currentColor";
   if (icon === "home") return (
@@ -131,6 +133,16 @@ function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedbac
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
     </svg>
   );
+  if (icon === "archive") return (
+    <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+    </svg>
+  );
+  if (icon === "marketplace") return (
+    <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  );
   return (
     <span className={`h-1.5 w-1.5 rounded-full transition-transform transition-opacity duration-200 ${isActive ? "scale-125 bg-[var(--accent-color)] opacity-100" : "bg-zinc-500 opacity-40 group-hover:opacity-100 group-hover:scale-125"}`} />
   );
@@ -148,7 +160,7 @@ function NavItem({
 }: {
   href: string;
   label: string;
-  icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict";
+  icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict" | "archive" | "marketplace";
   isActive: boolean;
   collapsed: boolean;
   onClick?: () => void;
@@ -394,13 +406,29 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3" aria-label="Main navigation">
-          {/* Standalone Home item — not in any category */}
-          <div className="mb-2">
+          {/* Standalone items — not in any category */}
+          <div className="mb-2 flex flex-col gap-0.5">
             <NavItem
               href="/feed"
               label="Dashboard"
               icon="home"
               isActive={isActive("/feed")}
+              collapsed={collapsed}
+              onClick={() => setSidebarOpen(false)}
+            />
+            <NavItem
+              href="/archive"
+              label="Archive"
+              icon="archive"
+              isActive={isActive("/archive")}
+              collapsed={collapsed}
+              onClick={() => setSidebarOpen(false)}
+            />
+            <NavItem
+              href="/marketplace"
+              label="Marketplace"
+              icon="marketplace"
+              isActive={isActive("/marketplace")}
               collapsed={collapsed}
               onClick={() => setSidebarOpen(false)}
             />
@@ -523,6 +551,38 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="border-t border-white/10 p-3 space-y-0.5">
+          {/* Plan badge */}
+          {(() => {
+            const tier = (user as any)?.subscription_tier ?? "free";
+            const tierLabel: Record<string, string> = { free: "Free", verified: "Verified", starter: "Starter", pro: "Pro", elite: "Elite" };
+            const tierColor: Record<string, string> = { free: "text-zinc-500", verified: "text-blue-400", starter: "text-emerald-400", pro: "text-[var(--accent-color)]", elite: "text-amber-400" };
+            const tierBg: Record<string, string> = { free: "bg-zinc-700/20", verified: "bg-blue-500/10", starter: "bg-emerald-500/10", pro: "bg-[var(--accent-color)]/10", elite: "bg-amber-500/10" };
+            if (!user) return null;
+            return (
+              <div className={`mb-1 flex items-center justify-between rounded-lg px-3 py-2 ${tierBg[tier] ?? "bg-zinc-700/20"} ${collapsed ? "justify-center" : ""}`}>
+                {!collapsed && (
+                  <>
+                    <div className="min-w-0">
+                      <p className="text-[9px] uppercase tracking-wider text-zinc-600">Current Plan</p>
+                      <p className={`text-[11px] font-bold ${tierColor[tier] ?? "text-zinc-400"}`}>{tierLabel[tier] ?? "Free"}</p>
+                    </div>
+                    {tier !== "elite" && (
+                      <Link href="/pricing" onClick={() => setSidebarOpen(false)}
+                        className="shrink-0 rounded-lg bg-[var(--accent-color)]/10 px-2 py-1 text-[10px] font-semibold text-[var(--accent-color)] hover:bg-[var(--accent-color)]/20 transition">
+                        Upgrade
+                      </Link>
+                    )}
+                  </>
+                )}
+                {collapsed && (
+                  <Link href="/pricing" title={`Plan: ${tierLabel[tier] ?? "Free"}`}
+                    className={`text-[10px] font-black ${tierColor[tier] ?? "text-zinc-400"}`}>
+                    {(tierLabel[tier] ?? "F")[0]}
+                  </Link>
+                )}
+              </div>
+            );
+          })()}
           {BOTTOM_NAV.map((item) => (
             <NavItem
               key={item.href}
@@ -798,17 +858,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 opacity-40 transition-transform transition-opacity duration-200 group-hover:opacity-100 group-hover:scale-125" />
                       </span>
                       <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">View Profile</span>
-                    </Link>
-                    <Link
-                      href="/growth#choose-profile"
-                      onClick={() => setProfileOpen(false)}
-                      className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
-                      role="menuitem"
-                    >
-                      <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
-                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 opacity-40 transition-transform transition-opacity duration-200 group-hover:opacity-100 group-hover:scale-125" />
-                      </span>
-                      <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">My Risk Profile</span>
                     </Link>
                     <div className="my-2 h-px bg-white/10" />
                     <div className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5">

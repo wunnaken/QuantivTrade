@@ -34,18 +34,28 @@ export function PriceDisplay({
   changeClassName = "",
   showChange = true,
 }: PriceDisplayProps) {
-  const [flash, setFlash] = useState<"up" | "down" | null>(null);
+  const [flashColor, setFlashColor] = useState<string | null>(null);
+  const [fading, setFading] = useState(false);
   const prevPriceRef = useRef<number | null>(null);
+  const t1Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const t2Ref = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (price == null) return;
     const prev = prevPriceRef.current;
     prevPriceRef.current = price;
     if (prev != null && prev !== price) {
-      setFlash(price > prev ? "up" : "down");
-      const t = setTimeout(() => setFlash(null), 500);
-      return () => clearTimeout(t);
+      if (t1Ref.current) clearTimeout(t1Ref.current);
+      if (t2Ref.current) clearTimeout(t2Ref.current);
+      setFading(false);
+      setFlashColor(price > prev ? "#34d399" : "#f87171");
+      t1Ref.current = setTimeout(() => setFading(true), 80);
+      t2Ref.current = setTimeout(() => { setFlashColor(null); setFading(false); }, 700);
     }
+    return () => {
+      if (t1Ref.current) clearTimeout(t1Ref.current);
+      if (t2Ref.current) clearTimeout(t2Ref.current);
+    };
   }, [price]);
 
   if (price == null && changePercent == null) {
@@ -54,27 +64,27 @@ export function PriceDisplay({
 
   const isPositive = changePercent != null && changePercent >= 0;
   const isZero = changePercent != null && changePercent === 0;
-  const flashClass = flash === "up" ? "price-flash-up" : flash === "down" ? "price-flash-down" : "";
 
   return (
-    <span className={`inline-flex items-center gap-1 rounded transition-colors ${flashClass} ${className}`}>
+    <span className={`inline-flex items-center gap-1 ${className}`}>
       {price != null && (
-        <span className={priceClassName}>
+        <span
+          className={priceClassName}
+          style={flashColor ? { color: flashColor, transition: fading ? "color 0.55s ease-out" : "none" } : undefined}
+        >
           ${format === "compact" ? formatPriceValue(price, symbol) : price >= 1 ? price.toFixed(2) : price.toFixed(4)}
         </span>
       )}
       {showChange && changePercent != null && (
-        <>
-          <span
-            className={
-              changeClassName ||
-              (isZero ? "text-zinc-500" : isPositive ? "text-emerald-400" : "text-red-400")
-            }
-          >
-            {isPositive ? "+" : ""}
-            {changePercent.toFixed(2)}%
-          </span>
-        </>
+        <span
+          className={
+            changeClassName ||
+            (isZero ? "text-zinc-500" : isPositive ? "text-emerald-400" : "text-red-400")
+          }
+        >
+          {isPositive ? "+" : ""}
+          {changePercent.toFixed(2)}%
+        </span>
       )}
     </span>
   );

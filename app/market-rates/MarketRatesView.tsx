@@ -131,9 +131,10 @@ const TOOLTIP_STYLE = {
   color: "#e4e4e7",
 };
 
-type Tab = "rates" | "materials" | "stocks";
+type Tab = "rates" | "materials" | "stocks" | "gas";
 type PpiRange = "1Y" | "3Y" | "5Y";
 type StockRange = "1W" | "1M" | "3M" | "YTD" | "1Y";
+type GasRange = "3M" | "6M" | "1Y" | "4Y";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -362,6 +363,259 @@ function StockPerformanceChart() {
   );
 }
 
+// ─── Gas Prices Tab ───────────────────────────────────────────────────────────
+
+interface GasGrade {
+  id: string; label: string; color: string;
+  current: number | null; asOf: string | null;
+  wowChange: number | null; yoyChange: number | null; yoyPct: number | null;
+  hi52: number | null; lo52: number | null;
+  history: { date: string; value: number }[];
+}
+
+interface GasData {
+  grades: GasGrade[];
+  allGradesHistory: { date: string; regular: number | null; midgrade: number | null; premium: number | null; diesel: number | null; crude: number | null }[];
+  latestCrudePerGal: number | null;
+  pumpSpread: number | null;
+  source: string;
+  updateSchedule: string;
+}
+
+function filterGasHistory<T extends { date: string }>(history: T[], range: GasRange): T[] {
+  const months = range === "3M" ? 3 : range === "6M" ? 6 : range === "1Y" ? 12 : 48;
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - months);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  return history.filter((h) => h.date >= cutoffStr);
+}
+
+function GasPricesTab() {
+  const [data, setData] = useState<GasData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [range, setRange] = useState<GasRange>("4Y");
+
+  useEffect(() => {
+    fetch("/api/market-rates/gas", { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((d: GasData) => setData(d))
+      .catch((e) => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="flex min-h-[300px] items-center justify-center text-sm text-zinc-500">Loading gas prices…</div>;
+  if (error || !data) return <div className="flex min-h-[200px] items-center justify-center text-sm text-zinc-500">{error ?? "No data"}</div>;
+
+  const regular  = data.grades.find((g) => g.id === "GASREGCOVW");
+  const midgrade = data.grades.find((g) => g.id === "GASMIDCOVW");
+  const premium  = data.grades.find((g) => g.id === "GASPRMCOVW");
+  const diesel   = data.grades.find((g) => g.id === "GASDESW");
+
+  const premSpread = premium?.current != null && regular?.current != null
+    ? Math.round((premium.current - regular.current) * 1000) / 1000 : null;
+  const dslSpread = diesel?.current != null && regular?.current != null
+    ? Math.round((diesel.current - regular.current) * 1000) / 1000 : null;
+
+  const filteredHistory = filterGasHistory(data.allGradesHistory, range);
+
+  function GradeCard({ g }: { g: GasGrade | undefined }) {
+    if (!g) return null;
+    const rangeWidth = g.hi52 != null && g.lo52 != null && g.hi52 !== g.lo52 && g.current != null
+      ? Math.round(((g.current - g.lo52) / (g.hi52 - g.lo52)) * 100) : null;
+    return (
+      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+        <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">{g.label} Gasoline</p>
+        <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight" style={{ color: g.color }}>
+          {g.current !== null ? `$${g.current.toFixed(3)}` : "—"}
+          <span className="ml-1 text-sm font-normal text-zinc-400">/ gal</span>
+        </p>
+        <div className="mt-2 flex gap-3 text-xs">
+          {g.wowChange !== null && (
+            <span>
+              <span className="text-zinc-500">WoW </span>
+              <span className={g.wowChange >= 0 ? "text-red-400" : "text-emerald-400"}>
+                {g.wowChange >= 0 ? "+" : ""}{g.wowChange.toFixed(3)}
+              </span>
+            </span>
+          )}
+          {g.yoyPct !== null && (
+            <span>
+              <span className="text-zinc-500">YoY </span>
+              <span className={g.yoyPct >= 0 ? "text-red-400" : "text-emerald-400"}>
+                {g.yoyPct >= 0 ? "+" : ""}{g.yoyPct.toFixed(1)}%
+              </span>
+            </span>
+          )}
+        </div>
+        {rangeWidth !== null && g.lo52 != null && g.hi52 != null && (
+          <div className="mt-2.5">
+            <div className="mb-1 flex justify-between text-[9px] text-zinc-600">
+              <span>52W Lo ${g.lo52.toFixed(2)}</span>
+              <span>52W Hi ${g.hi52.toFixed(2)}</span>
+            </div>
+            <div className="relative h-1.5 w-full rounded-full bg-white/10">
+              <div className="h-full rounded-full" style={{ width: `${rangeWidth}%`, background: g.color, opacity: 0.7 }} />
+              <div className="absolute top-1/2 h-2.5 w-1 -translate-y-1/2 rounded-sm" style={{ left: `${rangeWidth}%`, background: g.color }} />
+            </div>
+          </div>
+        )}
+        {g.asOf && <p className="mt-1.5 text-[10px] text-zinc-600">Week of {g.asOf}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* All 4 grade cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <GradeCard g={regular} />
+        <GradeCard g={midgrade} />
+        <GradeCard g={premium} />
+        <GradeCard g={diesel} />
+      </div>
+
+      {/* Context + spread banner */}
+      {regular && regular.current !== null && (
+        <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+            <div>
+              <span className="text-xs text-zinc-500">National avg regular </span>
+              <span className="font-bold text-zinc-50">${regular.current.toFixed(3)}</span>
+              {regular.yoyPct !== null && (
+                <span className={`ml-2 text-xs font-medium ${regular.yoyPct >= 0 ? "text-red-400" : "text-emerald-400"}`}>
+                  {regular.yoyPct >= 0 ? "▲" : "▼"} {Math.abs(regular.yoyPct).toFixed(1)}% YoY
+                </span>
+              )}
+            </div>
+            {data.latestCrudePerGal !== null && (
+              <div>
+                <span className="text-xs text-zinc-500">WTI crude equiv. </span>
+                <span className="font-bold text-zinc-50">${data.latestCrudePerGal.toFixed(3)}</span>
+                <span className="ml-1 text-xs text-zinc-600">/gal</span>
+              </div>
+            )}
+            {data.pumpSpread !== null && (
+              <div>
+                <span className="text-xs text-zinc-500">Pump markup over crude </span>
+                <span className="font-bold text-amber-400">${data.pumpSpread.toFixed(3)}</span>
+                <span className="ml-1 text-xs text-zinc-600">/gal</span>
+              </div>
+            )}
+            {premSpread !== null && (
+              <div>
+                <span className="text-xs text-zinc-500">Premium over regular </span>
+                <span className="font-bold text-zinc-50">+${premSpread.toFixed(3)}</span>
+              </div>
+            )}
+            {dslSpread !== null && (
+              <div>
+                <span className="text-xs text-zinc-500">Diesel over regular </span>
+                <span className="font-bold text-zinc-50">+${dslSpread.toFixed(3)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* All grades + crude trend chart with timeframe toggle */}
+      {data.allGradesHistory.length > 1 && (
+        <div className="rounded-2xl border border-white/10 bg-[#050713] px-4 pb-4 pt-4">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
+                All Grades + Crude — Price Trend
+              </p>
+              <p className="mt-0.5 text-[10px] text-zinc-600">
+                Weekly US avg retail price ($/gal) · Crude = WTI ÷ 42 per-gal equiv · {data.source}
+              </p>
+            </div>
+            <TimeframeToggle
+              options={["3M", "6M", "1Y", "4Y"] as GasRange[]}
+              value={range}
+              onChange={setRange}
+            />
+          </div>
+          <ResponsiveContainer width="100%" height={280}>
+            <LineChart data={filteredHistory} style={CHART_STYLE}>
+              <CartesianGrid stroke="#334155" strokeOpacity={0.2} />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#71717a" }}
+                tickFormatter={fmtShortDate} interval="preserveStartEnd" />
+              <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10, fill: "#71717a" }}
+                tickFormatter={(v) => `$${(v as number).toFixed(2)}`} width={46} />
+              <Tooltip contentStyle={TOOLTIP_STYLE}
+                labelFormatter={(v) => `Week of ${v}`}
+                formatter={(v: unknown, name: unknown) => [
+                  `$${(v as number).toFixed(3)}${name === "crude" ? "/gal equiv." : "/gal"}`,
+                  ({ regular: "Regular", midgrade: "Midgrade", premium: "Premium", diesel: "Diesel", crude: "WTI Crude (÷42)" } as Record<string, string>)[name as string] ?? String(name),
+                ]} />
+              <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                formatter={(v) => (({ regular: "Regular", midgrade: "Midgrade", premium: "Premium", diesel: "Diesel", crude: "WTI Crude (÷42)" } as Record<string, string>)[v] ?? v)} />
+              <Line type="monotone" dataKey="crude"    stroke="#71717a" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls name="crude" />
+              <Line type="monotone" dataKey="regular"  stroke="#4f9cf9" strokeWidth={2}   dot={false} connectNulls name="regular" />
+              <Line type="monotone" dataKey="midgrade" stroke="#a78bfa" strokeWidth={1.5} dot={false} connectNulls name="midgrade" />
+              <Line type="monotone" dataKey="premium"  stroke="#f59e0b" strokeWidth={1.5} dot={false} connectNulls name="premium" />
+              <Line type="monotone" dataKey="diesel"   stroke="#f97316" strokeWidth={2}   dot={false} connectNulls name="diesel" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* What drives pump prices */}
+      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400">What Drives Pump Prices</p>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="rounded-lg bg-white/[0.07] px-4 py-3">
+            <p className="mb-1.5 text-sm font-semibold text-zinc-200">Crude Oil <span className="font-normal text-zinc-500">(~55%)</span></p>
+            <p className="text-xs leading-relaxed text-zinc-400">The largest component. WTI and Brent benchmarks set the global floor. A $10/barrel move in crude shifts pump prices by roughly <span className="font-medium text-zinc-200">$0.24/gal</span>.</p>
+          </div>
+          <div className="rounded-lg bg-white/[0.07] px-4 py-3">
+            <p className="mb-1.5 text-sm font-semibold text-zinc-200">Refining <span className="font-normal text-zinc-500">(~15%)</span></p>
+            <p className="text-xs leading-relaxed text-zinc-400">Cost to convert crude into finished gasoline. Refinery outages, seasonal blend switches (summer blend starts March), and low utilization rates all push this higher.</p>
+          </div>
+          <div className="rounded-lg bg-white/[0.07] px-4 py-3">
+            <p className="mb-1.5 text-sm font-semibold text-zinc-200">Distribution <span className="font-normal text-zinc-500">(~15%)</span></p>
+            <p className="text-xs leading-relaxed text-zinc-400">Pipeline, terminal storage, and retailer margin. Varies by region — landlocked states and islands pay more. The diesel premium over regular mostly lives here.</p>
+          </div>
+          <div className="rounded-lg bg-white/[0.07] px-4 py-3">
+            <p className="mb-1.5 text-sm font-semibold text-zinc-200">Taxes <span className="font-normal text-zinc-500">(~15%)</span></p>
+            <p className="text-xs leading-relaxed text-zinc-400">Federal excise tax of <span className="font-medium text-zinc-200">$0.184/gal</span> plus state taxes averaging ~$0.31/gal. California ($0.68/gal) and Illinois are consistently the most expensive.</p>
+          </div>
+        </div>
+        <p className="mt-3 text-[10px] text-zinc-600">{data.updateSchedule}</p>
+      </div>
+
+      {/* How Gas Prices Connect to the Other Tabs */}
+      <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-4">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400">How Gas Prices Connect to the Other Tabs</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-lg bg-white/[0.07] px-4 py-3">
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">Mortgage &amp; Rates</span>
+              <span className="text-[10px] text-zinc-500">Indirect / Delayed</span>
+            </div>
+            <p className="text-xs leading-relaxed text-zinc-400">Gas prices don&apos;t move mortgage rates directly. But sustained energy inflation is a major input to CPI, which pressures the Fed to hold or raise the funds rate — and that rate anchors the 10-year Treasury yield that mortgages track. Prolonged high gas prices historically precede Fed tightening cycles by 2–4 quarters.</p>
+          </div>
+          <div className="rounded-lg bg-white/[0.07] px-4 py-3">
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-amber-400">Building Materials</span>
+              <span className="text-[10px] text-zinc-500">Moderate / Direct</span>
+            </div>
+            <p className="text-xs leading-relaxed text-zinc-400">Diesel fuel is a key cost for heavy trucking that moves lumber, steel, and aggregate. Petrochemical feedstocks from crude also flow into construction adhesives and plastics. A $0.50/gal diesel spike typically adds 2–5% to finished material delivery costs over the following quarter — visible in PPI data with a 1–2 month lag.</p>
+          </div>
+          <div className="rounded-lg bg-white/[0.07] px-4 py-3">
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="rounded-md bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-blue-400">Construction Stocks</span>
+              <span className="text-[10px] text-zinc-500">Lagged / Negative</span>
+            </div>
+            <p className="text-xs leading-relaxed text-zinc-400">Higher fuel costs compress homebuilder and materials company margins — equipment fleets, delivery, and site operations all run on diesel. High gas prices also reduce consumer disposable income, which can slow housing demand. The effect typically surfaces in earnings guidance 1–2 quarters after a prolonged spike rather than immediately in the stock price.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function MarketRatesView() {
@@ -451,6 +705,7 @@ export default function MarketRatesView() {
   const TABS: { id: Tab; label: string }[] = [
     { id: "rates", label: "Mortgage & Rates" },
     { id: "materials", label: "Building Materials" },
+    { id: "gas", label: "Gas Prices" },
     { id: "stocks", label: "Construction Stocks" },
   ];
 
@@ -981,6 +1236,9 @@ export default function MarketRatesView() {
           <StockPerformanceChart />
         </div>
       )}
+
+      {/* ── TAB: GAS PRICES ───────────────────────────────────────────────── */}
+      {tab === "gas" && <GasPricesTab />}
     </div>
   );
 }

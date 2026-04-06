@@ -179,7 +179,8 @@ export async function GET(req: Request) {
     }
   }
 
-  // Find surprising cross-class pairs (abs(corr) > 0.70)
+  // Find notable cross-class pairs (abs(corr) >= 0.55) — captures both strong
+  // positive and inverse relationships that most traders wouldn't expect across classes.
   const surprisingPairs: Array<{
     assetA: string; assetB: string; classA: string; classB: string;
     correlation: number; surprise_score: number;
@@ -195,7 +196,7 @@ export async function GET(req: Request) {
       const corr = matrix[ta]?.[tb];
       if (corr === null || corr === undefined || !isFinite(corr)) continue;
       const absC = Math.abs(corr);
-      if (absC < 0.70) continue;
+      if (absC < 0.55) continue;
       const w = classPairWeight(clsA, clsB);
       surprisingPairs.push({
         assetA: ta, assetB: tb, classA: clsA, classB: clsB,
