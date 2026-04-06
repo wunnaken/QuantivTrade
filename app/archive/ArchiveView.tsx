@@ -644,7 +644,7 @@ export default function ArchiveView() {
     ? PREBUILT_TERMS.filter((t) => t.category === activeCategory)
     : (popularData?.topArticles ?? []);
 
-  const trendingTerms = (popularData?.topArticles ?? []).slice(0, 8);
+  const trendingTerms = (popularData?.topArticles ?? []).slice(0, 5);
 
   return (
     <div>
@@ -770,7 +770,7 @@ export default function ArchiveView() {
             <div className="mb-8">
               <h2 className="mb-4 text-sm font-semibold text-zinc-400 uppercase tracking-wide">Most Popular</h2>
               <div className="flex gap-3 overflow-x-auto pb-2">
-                {(popularData!.topArticles ?? []).slice(0, 6).map((a) => (
+                {(popularData!.topArticles ?? []).slice(0, 5).map((a) => (
                   <button
                     key={a.slug}
                     onClick={() => loadArticle(a.slug, a.title)}

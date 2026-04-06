@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import { motion, useInView } from "framer-motion";
 import "./landing.css";
+import { SiteFooter } from "../components/SiteFooter";
 
 const ParticleField = dynamic(() => import("../components/landing/ParticleField"), {
   ssr: false,
@@ -699,25 +700,26 @@ export default function Home() {
     return () => clearTimeout(t);
   }, []);
 
-  if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center" style={{ background: "#000000" }}>
-        <motion.div animate={{ opacity: [0.15, 0.5, 0.15] }} transition={{ duration: 2, repeat: Infinity }}
-          className="font-black tracking-tight text-white" style={{ fontSize: "24px", letterSpacing: "-0.02em" }}>
-          Quantiv
-        </motion.div>
-      </div>
-    );
-  }
-
   return (
     <div className="landing-page">
-      <HeroSection />
-      <FeaturesSection />
-      <GlobeSection />
-      <SocialProofSection />
-      <PricingSection />
-      <CTASection />
+      {!ready ? (
+        <div className="flex min-h-screen items-center justify-center" style={{ background: "#000000" }}>
+          <motion.div animate={{ opacity: [0.15, 0.5, 0.15] }} transition={{ duration: 2, repeat: Infinity }}
+            className="font-black tracking-tight text-white" style={{ fontSize: "24px", letterSpacing: "-0.02em" }}>
+            Quantiv
+          </motion.div>
+        </div>
+      ) : (
+        <>
+          <HeroSection />
+          <FeaturesSection />
+          <GlobeSection />
+          <SocialProofSection />
+          <PricingSection />
+          <CTASection />
+        </>
+      )}
+      <SiteFooter />
     </div>
   );
 }

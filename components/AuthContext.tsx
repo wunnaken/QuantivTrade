@@ -7,12 +7,18 @@ import type { User } from "../types";
 
 export type { User };
 
+export type SignInResult =
+  | { mfaRequired: true; factorId: string }
+  | { mfaRequired: false };
+
 type AuthContextValue = {
   user: User | null;
   authLoading: boolean;
   signUp: (params: { name: string; email: string; password: string }) => Promise<void>;
-  signIn: (params: { email: string; password: string }) => Promise<void>;
-  signOut: () => void;
+  signIn: (params: { email: string; password: string }) => Promise<SignInResult>;
+  signInWithGoogle: () => Promise<void>;
+  signInWithApple: () => Promise<void>;
+  signOut: () => Promise<void>;
   deleteAccount: () => void;
   updateProfile: (updates: Partial<Pick<User, "name" | "username" | "bio" | "profilePicture" | "bannerImage">>) => void;
 };
@@ -115,16 +121,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setEarlyMember();
       },
 
-      async signIn({ email, password }) {
+      async signIn({ email, password }): Promise<SignInResult> {
         const { error } = await supabase.auth.signInWithPassword({
           email: email.trim().toLowerCase(),
           password,
         });
         if (error) throw new Error(error.message);
+
+        // Check whether the account has an active TOTP factor requiring aal2
+        const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+        if (aal && aal.nextLevel === "aal2" && aal.nextLevel !== aal.currentLevel) {
+          const { data: factors } = await supabase.auth.mfa.listFactors();
+          const totp = factors?.totp?.find((f) => f.status === "verified");
+          if (totp) return { mfaRequired: true, factorId: totp.id };
+        }
+        return { mfaRequired: false };
+      },
+
+      async signInWithGoogle() {
+        const redirectTo =
+          typeof window !== "undefined"
+            ? `${window.location.origin}/auth/callback`
+            : undefined;
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo },
+        });
+        if (error) throw new Error(error.message);
+      },
+
+      async signInWithApple() {
+        const redirectTo =
+          typeof window !== "undefined"
+            ? `${window.location.origin}/auth/callback`
+            : undefined;
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "apple",
+          options: { redirectTo },
+        });
+        if (error) throw new Error(error.message);
       },
 
       async signOut() {
-        await supabase.auth.signOut();
+        try { await supabase.auth.signOut(); } catch { /* ignore network errors */ }
         setUser(null);
       },
 

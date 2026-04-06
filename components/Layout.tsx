@@ -883,9 +883,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <div className="my-2 h-px bg-white/10" />
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         setProfileOpen(false);
-                        signOut();
+                        await signOut();
                         router.push("/");
                       }}
                       className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-red-400"
