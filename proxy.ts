@@ -38,13 +38,11 @@ function isProtectedPath(pathname: string): boolean {
 }
 
 export async function proxy(request: NextRequest) {
-  // Block public access when MAINTENANCE_MODE=true, but allow localhost through
-  if (process.env.MAINTENANCE_MODE === "true") {
-    const host = request.headers.get("host") ?? "";
-    const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
-    if (!isLocal && !request.nextUrl.pathname.startsWith("/maintenance")) {
-      return NextResponse.redirect(new URL("/maintenance", request.url));
-    }
+  // Block public access — remove this block when ready to launch
+  const host = request.headers.get("host") ?? "";
+  const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  if (!isLocal && !request.nextUrl.pathname.startsWith("/maintenance")) {
+    return NextResponse.redirect(new URL("/maintenance", request.url));
   }
 
   let response = NextResponse.next({ request });
