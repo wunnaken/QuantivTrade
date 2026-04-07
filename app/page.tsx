@@ -696,6 +696,14 @@ export default function Home() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // If Supabase redirected an OAuth code to this page instead of /auth/callback,
+    // forward it so the session can be completed.
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    if (code) {
+      window.location.replace(`/auth/callback?code=${encodeURIComponent(code)}`);
+      return;
+    }
     const t = setTimeout(() => setReady(true), 120);
     return () => clearTimeout(t);
   }, []);
