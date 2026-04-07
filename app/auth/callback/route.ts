@@ -12,6 +12,10 @@ export async function GET(request: NextRequest) {
   }
 
   const cookieStore = await cookies();
+
+  // Collect cookies Supabase wants to set so we can attach them to the redirect response
+  const cookiesToForward: { name: string; value: string; options: Record<string, unknown> }[] = [];
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -20,35 +24,40 @@ export async function GET(request: NextRequest) {
         getAll() {
           return cookieStore.getAll();
         },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setAll(cookiesToSet: { name: string; value: string; options?: any }[]) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          );
+        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+          cookiesToSet.forEach(({ name, value, options = {} }) => {
+            // Queue for the response
+            cookiesToForward.push({ name, value, options: options as Record<string, unknown> });
+            // Also write to the Next.js cookie store (for subsequent server calls in this request)
+            try { cookieStore.set(name, value, options as Record<string, unknown>); } catch { /* ignore */ }
+          });
         },
       },
     }
   );
 
   const { error } = await supabase.auth.exchangeCodeForSession(code);
+
   if (error) {
     return NextResponse.redirect(`${origin}/auth/sign-in?error=oauth`);
   }
 
   const { data: { user } } = await supabase.auth.getUser();
+
   if (!user) {
     return NextResponse.redirect(`${origin}/auth/sign-in?error=oauth`);
   }
 
-  // Check if profile exists; new OAuth users won't have one yet
+  // Check/create profile for new OAuth users
   const { data: profile } = await supabase
     .from("profiles")
     .select("username")
     .eq("user_id", user.id)
     .single();
 
+  let destination = `${origin}${next}`;
+
   if (!profile) {
-    // First OAuth sign-in — create a minimal profile then send to setup
     const rawName =
       (user.user_metadata?.full_name as string | undefined) ||
       (user.user_metadata?.name as string | undefined) ||
@@ -57,12 +66,16 @@ export async function GET(request: NextRequest) {
       { user_id: user.id, email: user.email ?? "", name: rawName },
       { onConflict: "user_id" }
     );
-    return NextResponse.redirect(`${origin}/auth/setup-profile`);
+    destination = `${origin}/auth/setup-profile`;
+  } else if (!profile.username) {
+    destination = `${origin}/auth/setup-profile`;
   }
 
-  if (!profile.username) {
-    return NextResponse.redirect(`${origin}/auth/setup-profile`);
-  }
+  // Build the redirect and explicitly attach session cookies
+  const response = NextResponse.redirect(destination);
+  cookiesToForward.forEach(({ name, value, options }) => {
+    response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
+  });
 
-  return NextResponse.redirect(`${origin}${next}`);
+  return response;
 }
