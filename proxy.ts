@@ -37,7 +37,7 @@ function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
-export async function proxy(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   // Block public access when MAINTENANCE_MODE=true, but allow localhost through
   if (process.env.MAINTENANCE_MODE === "true") {
     const host = request.headers.get("host") ?? "";
