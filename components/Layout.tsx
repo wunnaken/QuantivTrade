@@ -11,6 +11,7 @@ import type { User } from "./AuthContext";
 import { getSidebarPrefs, saveSidebarPrefs, type SidebarPrefs } from "../lib/sidebar-preferences";
 import { hasBeenWelcomed } from "../lib/briefing";
 import { SiteFooter } from "./SiteFooter";
+import { SiteHelpBot } from "./SiteHelpBot";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { useLoginStreakTick } from "./StreakProvider";
 import { getPredictNotifications, markPredictNotificationsRead } from "../lib/predict";
@@ -886,7 +887,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       onClick={async () => {
                         setProfileOpen(false);
                         await signOut();
-                        router.push("/");
+                        window.location.href = "/";
                       }}
                       className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-red-400"
                       role="menuitem"
@@ -916,6 +917,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       <main className={pathname === "/ceos" || pathname === "/messages" ? "h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden" : "min-h-[calc(100vh-3.5rem)]"}>{children}</main>
       {pathname !== "/ceos" && pathname !== "/messages" && pathname !== "/feed" && <SiteFooter />}
+      <SiteHelpBot />
     </div>
   );
 }

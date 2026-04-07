@@ -57,12 +57,13 @@ export default function SettingsPage() {
     );
   }
 
-  const handleDeleteAccount = () => {
+  const handleDeleteAccount = async () => {
     if (
       typeof window !== "undefined" &&
       window.confirm("Are you sure you want to permanently delete your account and all associated data?")
     ) {
-      deleteAccount();
+      await deleteAccount();
+      window.location.href = "/";
     }
   };
 
@@ -232,6 +233,20 @@ export default function SettingsPage() {
           <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>
             Protect your account with two-factor authentication.
           </p>
+
+          {/* Recommendation banner — shown only when 2FA is off */}
+          {mfaEnabled === false && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-400/30 bg-amber-400/8 px-3 py-2.5">
+              <svg className="mt-px h-3.5 w-3.5 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+              <p className="text-[11px] leading-relaxed text-amber-300">
+                <span className="font-semibold">QuantivTrade recommends enabling 2FA.</span>{" "}
+                Two-factor authentication adds a second layer of protection to your account and trades.
+              </p>
+            </div>
+          )}
+
           <div className="mt-4 flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               {mfaEnabled === null ? (
@@ -243,8 +258,8 @@ export default function SettingsPage() {
                 </>
               ) : (
                 <>
-                  <span className="flex h-2 w-2 rounded-full bg-zinc-600" />
-                  <span className="text-xs text-zinc-400">2FA disabled</span>
+                  <span className="flex h-2 w-2 rounded-full bg-amber-400" />
+                  <span className="text-xs text-zinc-400">2FA not enabled</span>
                 </>
               )}
             </div>

@@ -57,7 +57,7 @@ export function ProfileIcon() {
               <div className="my-2 h-px bg-white/10" />
               <button
                 type="button"
-                onClick={async () => { await signOut(); router.push("/"); }}
+                onClick={async () => { await signOut(); window.location.href = "/"; }}
                 className={`${MENU_CLASS} hover:text-red-400`}
               >
                 <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">

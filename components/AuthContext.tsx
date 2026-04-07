@@ -19,7 +19,7 @@ type AuthContextValue = {
   signInWithGoogle: () => Promise<void>;
   signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
-  deleteAccount: () => void;
+  deleteAccount: () => Promise<void>;
   updateProfile: (updates: Partial<Pick<User, "name" | "username" | "bio" | "profilePicture" | "bannerImage">>) => void;
 };
 
@@ -145,7 +145,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             : undefined;
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "google",
-          options: { redirectTo },
+          options: {
+            redirectTo,
+            queryParams: { prompt: "select_account" },
+          },
         });
         if (error) throw new Error(error.message);
       },

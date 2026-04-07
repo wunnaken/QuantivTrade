@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../../components/AuthContext";
 import { QuantivTradeLogo } from "../../../components/XchangeLogo";
@@ -26,10 +26,8 @@ function AppleIcon() {
 }
 
 function SignInForm() {
-  const { signIn, signInWithGoogle, signInWithApple } = useAuth();
-  const router = useRouter();
+  const { signInWithGoogle, signInWithApple } = useAuth();
   const searchParams = useSearchParams();
-  const redirectTo = "/feed";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,31 +46,22 @@ function SignInForm() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Sign in timed out. Please check your connection and try again.")), 12000)
-    );
     try {
-      const result = await Promise.race([signIn({ email, password }), timeout]);
-      if (result.mfaRequired) {
-        router.push(`/auth/verify-2fa?factorId=${result.factorId}`);
+      const res = await fetch("/api/auth/sign-in", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+      });
+      const json = await res.json() as { error?: string; mfaRequired?: boolean; factorId?: string; hasUsername?: boolean };
+      if (!res.ok) throw new Error(json.error ?? "Unable to sign in.");
+      if (json.mfaRequired && json.factorId) {
+        window.location.href = `/auth/verify-2fa?factorId=${json.factorId}`;
         return;
       }
-      const controller = new AbortController();
-      const profileTimeout = setTimeout(() => controller.abort(), 8000);
-      let profile: { username?: string } | null = null;
-      try {
-        const profileRes = await fetch("/api/profile/me", { signal: controller.signal });
-        profile = profileRes.ok ? await profileRes.json() as { username?: string } : null;
-      } catch {
-        // treat as no username
-      } finally {
-        clearTimeout(profileTimeout);
-      }
-      router.push(profile?.username ? redirectTo : "/auth/setup-profile");
+      window.location.href = json.hasUsername ? "/feed" : "/auth/setup-profile";
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError("Unable to sign in. Please try again.");
-    } finally {
       setLoading(false);
     }
   }
@@ -124,6 +113,7 @@ function SignInForm() {
               id="email"
               type="email"
               required
+              autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-100 outline-none focus:border-[var(--accent-color)]/70"
@@ -138,6 +128,7 @@ function SignInForm() {
                 id="password"
                 type={showPassword ? "text" : "password"}
                 required
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-md border border-white/10 bg-black/40 px-3 py-2 pr-10 text-xs text-zinc-100 outline-none focus:border-[var(--accent-color)]/70"

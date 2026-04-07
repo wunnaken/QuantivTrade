@@ -687,7 +687,7 @@ export default function ProfileView() {
             type="button"
             onClick={async () => {
               await signOut();
-              router.push("/");
+              window.location.href = "/";
             }}
             className="rounded-full border border-white/15 px-4 py-1.5 text-xs font-medium text-zinc-200 transition-colors duration-200 hover:border-white/30 hover:bg-white/5 hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
           >

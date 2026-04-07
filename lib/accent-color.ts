@@ -9,7 +9,7 @@ export const DEFAULT_ACCENT = "#4f9cf9";
 export type AccentOption = { id: string; name: string; hex: string };
 
 export const ACCENT_OPTIONS: AccentOption[] = [
-  { id: "green", name: "QuantivTrade Green", hex: "#00C896" },
+  { id: "default", name: "QuantivTrade Blue", hex: "#4f9cf9" },
   { id: "blue", name: "Ocean Blue", hex: "#3B82F6" },
   { id: "purple", name: "Royal Purple", hex: "#8B5CF6" },
   { id: "pink", name: "Rose Pink", hex: "#EC4899" },

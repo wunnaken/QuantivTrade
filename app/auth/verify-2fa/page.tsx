@@ -2,7 +2,6 @@
 
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 import { QuantivTradeLogo } from "../../../components/XchangeLogo";
 
 function VerifyTwoFactorForm() {
@@ -34,23 +33,17 @@ function VerifyTwoFactorForm() {
     setError(null);
     setLoading(true);
     try {
-      const supabase = createClient();
-      const { error: mfaError } = await supabase.auth.mfa.challengeAndVerify({
-        factorId,
-        code,
+      const res = await fetch("/api/auth/verify-2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ factorId, code }),
       });
-      if (mfaError) throw new Error(mfaError.message);
-
-      // Profile check same as normal sign-in
-      const profileRes = await fetch("/api/profile/me");
-      const profile = profileRes.ok
-        ? (await profileRes.json() as { username?: string })
-        : null;
-      router.push(profile?.username ? "/feed" : "/auth/setup-profile");
+      const json = await res.json() as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Verification failed.");
+      window.location.href = "/feed";
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError("Verification failed. Please try again.");
-    } finally {
       setLoading(false);
     }
   }

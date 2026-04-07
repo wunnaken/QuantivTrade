@@ -1,20 +1,20 @@
-import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { NextRequest, NextResponse } from "next/server";
+import type { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/feed";
 
   if (!code) {
-    return NextResponse.redirect(`${origin}/auth/sign-in?error=oauth`);
+    return NextResponse.redirect(new URL("/auth/sign-in?error=oauth", request.url));
   }
 
   const cookieStore = await cookies();
 
-  // Collect cookies Supabase wants to set so we can attach them to the redirect response
-  const cookiesToForward: { name: string; value: string; options: Record<string, unknown> }[] = [];
+  // Collect cookies Supabase wants to set so we can copy them to the redirect response
+  const pendingCookies: Array<{ name: string; value: string; options?: Partial<ResponseCookie> }> = [];
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,38 +24,38 @@ export async function GET(request: NextRequest) {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
-          cookiesToSet.forEach(({ name, value, options = {} }) => {
-            // Queue for the response
-            cookiesToForward.push({ name, value, options: options as Record<string, unknown> });
-            // Also write to the Next.js cookie store (for subsequent server calls in this request)
-            try { cookieStore.set(name, value, options as Record<string, unknown>); } catch { /* ignore */ }
-          });
+        setAll(cookiesToSet: Array<{ name: string; value: string; options?: Partial<ResponseCookie> }>) {
+          pendingCookies.push(...cookiesToSet);
         },
       },
     }
   );
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-  if (error) {
-    return NextResponse.redirect(`${origin}/auth/sign-in?error=oauth`);
+  let exchangeData: Awaited<ReturnType<typeof supabase.auth.exchangeCodeForSession>> | null = null;
+  try {
+    exchangeData = await supabase.auth.exchangeCodeForSession(code);
+  } catch (e) {
+    console.error("[callback] exchange threw:", e);
+    return NextResponse.redirect(new URL("/auth/sign-in?error=oauth", request.url));
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data, error } = exchangeData;
 
-  if (!user) {
-    return NextResponse.redirect(`${origin}/auth/sign-in?error=oauth`);
+  if (error || !data.session) {
+    console.error("[callback] exchange error:", error?.message);
+    return NextResponse.redirect(new URL("/auth/sign-in?error=oauth", request.url));
   }
 
-  // Check/create profile for new OAuth users
+  const user = data.session.user;
+
+  // Check whether this user already has a completed profile
   const { data: profile } = await supabase
     .from("profiles")
     .select("username")
     .eq("user_id", user.id)
     .single();
 
-  let destination = `${origin}${next}`;
+  let redirectPath: string;
 
   if (!profile) {
     const rawName =
@@ -66,16 +66,19 @@ export async function GET(request: NextRequest) {
       { user_id: user.id, email: user.email ?? "", name: rawName },
       { onConflict: "user_id" }
     );
-    destination = `${origin}/auth/setup-profile`;
+    redirectPath = "/auth/setup-profile";
   } else if (!profile.username) {
-    destination = `${origin}/auth/setup-profile`;
+    redirectPath = "/auth/setup-profile";
+  } else {
+    redirectPath = "/feed";
   }
 
-  // Build the redirect and explicitly attach session cookies
-  const response = NextResponse.redirect(destination);
-  cookiesToForward.forEach(({ name, value, options }) => {
-    response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2]);
-  });
+  const response = NextResponse.redirect(new URL(redirectPath, request.url));
+
+  // Attach session cookies to the redirect so the browser persists the session
+  for (const { name, value, options } of pendingCookies) {
+    response.cookies.set(name, value, options ?? {});
+  }
 
   return response;
 }
