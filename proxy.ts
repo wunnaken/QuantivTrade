@@ -42,7 +42,11 @@ export async function proxy(request: NextRequest) {
   // Block public access — remove this block when ready to launch
   const host = request.headers.get("host") ?? "";
   const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
-  if (!isLocal && !request.nextUrl.pathname.startsWith("/maintenance")) {
+  if (
+    !isLocal &&
+    !request.nextUrl.pathname.startsWith("/maintenance") &&
+    request.nextUrl.pathname !== "/api/stripe/webhook"
+  ) {
     return NextResponse.redirect(new URL("/maintenance", request.url));
   }
 

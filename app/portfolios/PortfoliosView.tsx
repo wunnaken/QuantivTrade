@@ -863,9 +863,8 @@ function FamousTab({ investors, loading }: { investors: FamousInvestor[]; loadin
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
       {investors.map((investor) => (
-        <>
+        <React.Fragment key={investor.id}>
           <InvestorCard
-            key={investor.id}
             investor={investor}
             isExpanded={expanded === investor.id}
             onToggle={() => toggle(investor.id)}
@@ -873,7 +872,7 @@ function FamousTab({ investors, loading }: { investors: FamousInvestor[]; loadin
           {expanded === investor.id && (
             <InvestorDetail key={`detail-${investor.id}`} investor={investor} />
           )}
-        </>
+        </React.Fragment>
       ))}
     </div>
   );

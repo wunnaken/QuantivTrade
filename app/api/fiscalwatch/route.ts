@@ -132,6 +132,12 @@ export async function GET() {
   const contracts =
     contractsResult.status === "fulfilled" ? contractsResult.value : [];
 
+  if (debtResult.status === "rejected") {
+    console.error("[fiscalwatch] debt fetch error:", debtResult.reason);
+  }
+  if (startYearResult.status === "rejected") {
+    console.error("[fiscalwatch] start-of-year debt error:", startYearResult.reason);
+  }
   if (contractsResult.status === "rejected") {
     console.error("[fiscalwatch] contracts error:", contractsResult.reason);
   }

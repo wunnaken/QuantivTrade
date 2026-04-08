@@ -19,6 +19,9 @@ export default function SettingsPage() {
   const [briefingPrefsSaved, setBriefingPrefsSaved] = useState(false);
   const [mfaEnabled, setMfaEnabled] = useState<boolean | null>(null);
   const [oauthLinkError, setOauthLinkError] = useState<string | null>(null);
+  const [stripeConnecting, setStripeConnecting] = useState(false);
+  const [stripeConnected, setStripeConnected] = useState(false);
+  const [stripeOnboarded, setStripeOnboarded] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -40,6 +43,17 @@ export default function SettingsPage() {
       const hasVerified = (data?.totp ?? []).some((f) => f.status === "verified");
       setMfaEnabled(hasVerified);
     });
+    // Load stripe_onboarded status
+    supabase.from("profiles").select("stripe_onboarded").eq("user_id", user.id).single()
+      .then(({ data }) => { if (data?.stripe_onboarded) setStripeOnboarded(true); });
+    // Check if returning from Stripe Connect onboarding
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("connected") === "true") {
+        setStripeConnected(true);
+        window.history.replaceState({}, "", "/settings");
+      }
+    }
   }, [user]);
 
   if (!user) {
@@ -164,7 +178,44 @@ export default function SettingsPage() {
               </button>
             )}
           </div>
-          <p className="mt-3 text-[11px] text-zinc-500">Link a sign-in provider to use with this account:</p>
+          {/* Stripe Connect — seller payouts */}
+          <div className="mt-4 border-t border-white/5 pt-4">
+            <p className="text-xs font-medium text-zinc-300">Sell on Marketplace</p>
+            <p className="mt-0.5 text-[11px] text-zinc-500">Connect a Stripe account to receive payouts when buyers purchase your listings.</p>
+            <div className="mt-3 flex items-center gap-3">
+              {stripeOnboarded ? (
+                <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400">
+                  <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                  Stripe Connected
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={stripeConnecting}
+                  onClick={async () => {
+                    setStripeConnecting(true);
+                    try {
+                      const res = await fetch("/api/stripe/connect", { method: "POST" });
+                      const data = await res.json();
+                      if (data.url) window.location.href = data.url;
+                    } catch { /* ignore */ } finally { setStripeConnecting(false); }
+                  }}
+                  className="rounded-lg px-4 py-2 text-sm font-medium transition hover:opacity-90 disabled:opacity-50"
+                  style={{ backgroundColor: "var(--accent-color)", color: "#fff" }}
+                >
+                  {stripeConnecting ? "Redirecting…" : "Connect Stripe"}
+                </button>
+              )}
+              {stripeConnected && !stripeOnboarded && (
+                <span className="text-[11px] text-amber-400">Onboarding submitted — pending Stripe verification</span>
+              )}
+              {stripeConnected && stripeOnboarded && (
+                <span className="text-[11px] text-emerald-400">Successfully connected!</span>
+              )}
+            </div>
+          </div>
+
+          <p className="mt-4 text-[11px] text-zinc-500">Link a sign-in provider to use with this account:</p>
           {oauthLinkError && (
             <p className="mt-1 text-[11px] text-amber-300">{oauthLinkError}</p>
           )}

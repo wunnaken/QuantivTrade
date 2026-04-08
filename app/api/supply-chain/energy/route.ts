@@ -24,33 +24,53 @@ export async function GET() {
   }
 
   try {
+    const fredKey = process.env.FRED_API_KEY?.trim();
+
     const [crudoRes, natGasRes, refineryRes] = await Promise.allSettled([
+      // U.S. total crude oil ending stocks (WCESTUS1 equivalent)
       fetchEIA(
-        "/v2/petroleum/stoc/wstk/data/?frequency=weekly&data[0]=value&sort[0][column]=period&sort[0][direction]=desc&length=52",
+        "/v2/petroleum/stoc/wstk/data/?frequency=weekly&data[0]=value&facets[duoarea][]=NUS&facets[product][]=EPC0&sort[0][column]=period&sort[0][direction]=desc&length=52",
         key
       ),
+      // U.S. total natural gas in underground storage (no region facet — deduplicate below)
       fetchEIA(
         "/v2/natural-gas/stor/wkly/data/?frequency=weekly&data[0]=value&sort[0][column]=period&sort[0][direction]=desc&length=52",
         key
       ),
-      fetchEIA(
-        "/v2/petroleum/pnp/wiup/data/?frequency=weekly&data[0]=value&sort[0][column]=period&sort[0][direction]=desc&length=12",
-        key
-      ),
+      // WCRFPUS2 — Weekly U.S. Percent Utilization of Refinery Operable Capacity (FRED)
+      fredKey
+        ? fetch(
+            `https://api.stlouisfed.org/fred/series/observations?series_id=WCRFPUS2&api_key=${fredKey}&file_type=json&sort_order=desc&limit=520`,
+            { next: { revalidate: 3600 } }
+          ).then((r) => { if (!r.ok) throw new Error(`FRED WCRFPUS2 failed: ${r.status}`); return r.json(); })
+        : Promise.reject(new Error("No FRED key")),
     ]);
 
-    const parseObservations = (result: PromiseSettledResult<unknown>) => {
+    // EIA parser — period field, descending order, deduplicate keeping national-total row
+    const parseEIA = (result: PromiseSettledResult<unknown>) => {
       if (result.status === "rejected") return null;
       const data = result.value as { response?: { data?: Array<{ period: string; value: string | number }> } };
-      return (data?.response?.data ?? [])
+      const seen = new Set<string>();
+      const deduped = (data?.response?.data ?? [])
         .filter((d) => d.value !== null && d.value !== "")
-        .map((d) => ({ date: d.period, value: typeof d.value === "string" ? parseFloat(d.value) : d.value }))
+        .filter((d) => { if (seen.has(d.period)) return false; seen.add(d.period); return true; })
+        .map((d) => ({ date: d.period, value: typeof d.value === "string" ? parseFloat(d.value) : d.value }));
+      return deduped.reverse();
+    };
+
+    // FRED parser — observations array, already have date field
+    const parseFRED = (result: PromiseSettledResult<unknown>) => {
+      if (result.status === "rejected") return null;
+      const data = result.value as { observations?: Array<{ date: string; value: string }> };
+      return (data.observations ?? [])
+        .filter((o) => o.value !== ".")
+        .map((o) => ({ date: o.date, value: parseFloat(o.value) }))
         .reverse();
     };
 
-    const crudeOil = parseObservations(crudoRes);
-    const natGas = parseObservations(natGasRes);
-    const refinery = parseObservations(refineryRes);
+    const crudeOil = parseEIA(crudoRes);
+    const natGas = parseEIA(natGasRes);
+    const refinery = parseFRED(refineryRes);
 
     const last = <T extends { value: number }>(arr: T[] | null) => arr?.[arr.length - 1] ?? null;
     const avg5yr = (arr: { value: number }[] | null) => {

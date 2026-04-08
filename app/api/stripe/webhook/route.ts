@@ -155,6 +155,17 @@ export async function POST(req: Request) {
         }
         break;
       }
+
+      // ── Stripe Connect: seller onboarding complete ─────────────────────────
+      case "account.updated": {
+        const account = event.data.object as Stripe.Account;
+        if (account.details_submitted) {
+          await supabase.from("profiles").update({
+            stripe_onboarded: true,
+          }).eq("stripe_account_id", account.id);
+        }
+        break;
+      }
     }
   } catch (err) {
     console.error(`[stripe/webhook] error handling ${event.type}:`, err);

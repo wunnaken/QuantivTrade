@@ -29,7 +29,7 @@ const STOCK_UNIVERSE = [
   // Semis & Tech hardware
   "AMD","INTC","QCOM","TXN","MU","AMAT","LRCX","KLAC","MRVL","ON","MCHP","ADI","NXPI","STX","WDC",
   // Software
-  "MSFT","CRM","ADBE","NOW","INTU","WDAY","TEAM","PANW","CRWD","ZS","SNOW","DDOG","NET","MDB","HubSpot",
+  "MSFT","CRM","ADBE","NOW","INTU","WDAY","TEAM","PANW","CRWD","ZS","SNOW","DDOG","NET","MDB","HUBS",
   // Biotech / pharma
   "MRNA","BIIB","REGN","VRTX","ILMN","ISRG","EW","ZBH","BSX","BDX","BAX","ZTS","IDXX",
   // Consumer Discretionary

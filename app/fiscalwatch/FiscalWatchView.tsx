@@ -229,6 +229,7 @@ function RevSpendTooltip({ active, payload, label }: { active?: boolean; payload
 type ApiData = {
   currentDebt: number;
   debtDate: string;
+  startOfYearDebt: number;
 };
 
 type ContractsData = { contracts: FiscalContract[] };
@@ -237,26 +238,58 @@ type ContractsData = { contracts: FiscalContract[] };
 // Page
 // ---------------------------------------------------------------------------
 
+const ANCHOR_KEY = "fw_anchor_v3";
+
+function loadStoredAnchor(): { debt: number; at: number } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(ANCHOR_KEY);
+    return raw ? (JSON.parse(raw) as { debt: number; at: number }) : null;
+  } catch { return null; }
+}
+
+function saveStoredAnchor(anchor: { debt: number; at: number }) {
+  try { sessionStorage.setItem(ANCHOR_KEY, JSON.stringify(anchor)); } catch {}
+}
+
 export default function FiscalWatchView() {
   const [apiData, setApiData] = useState<ApiData | null>(null);
-  const [liveDebt, setLiveDebt] = useState<number | null>(null);
+  // Eagerly initialize from sessionStorage so there's no visible reset on refresh
+  const [liveDebt, setLiveDebt] = useState<number | null>(() => {
+    const stored = loadStoredAnchor();
+    if (!stored) return null;
+    return stored.debt + ((Date.now() - stored.at) / 1000) * DEBT_PER_SECOND;
+  });
   const [contractsByDate, setContractsByDate] = useState<FiscalContract[] | null>(null);
   const [contractsByAmount, setContractsByAmount] = useState<FiscalContract[] | null>(null);
   const [dateLoading, setDateLoading] = useState(true);
   const [amountLoading, setAmountLoading] = useState(false);
   const [contractSort, setContractSort] = useState<"recent" | "amount">("recent");
-  const seededRef = useRef(false);
+  // Anchor: { debt, at } — live value is always debt + (now - at) / 1000 * DEBT_PER_SECOND
+  const anchorRef = useRef<{ debt: number; at: number } | null>(null);
 
   // Fetch debt data
   useEffect(() => {
+    // Restore anchor ref from storage (useState already set liveDebt, this keeps anchorRef in sync)
+    const stored = loadStoredAnchor();
+    if (stored) anchorRef.current = stored;
+
     fetch("/api/fiscalwatch")
       .then((r) => r.json())
       .then((d: ApiData) => {
         setApiData(d);
-        if (!seededRef.current) {
-          seededRef.current = true;
-          const elapsed = (Date.now() - new Date(d.debtDate).getTime()) / 1000;
-          setLiveDebt(d.currentDebt + elapsed * DEBT_PER_SECOND);
+        const now = Date.now();
+        const elapsed = (now - new Date(d.debtDate).getTime()) / 1000;
+        const seeded = d.currentDebt + elapsed * DEBT_PER_SECOND;
+        if (anchorRef.current === null) {
+          anchorRef.current = { debt: seeded, at: now };
+          saveStoredAnchor(anchorRef.current);
+        } else {
+          const current = anchorRef.current.debt + ((now - anchorRef.current.at) / 1000) * DEBT_PER_SECOND;
+          if (seeded > current) {
+            anchorRef.current = { debt: seeded, at: now };
+            saveStoredAnchor(anchorRef.current);
+          }
         }
       })
       .catch(() => {});
@@ -290,19 +323,22 @@ export default function FiscalWatchView() {
 
   const contractsLoading = contractSort === "amount" ? amountLoading : dateLoading;
 
-  // Tick every 100ms
+  // Tick every 100ms — compute directly from anchor so throttled tabs stay accurate
   useEffect(() => {
-    if (liveDebt === null) return;
     const id = setInterval(() => {
-      setLiveDebt((p) => (p !== null ? p + DEBT_PER_SECOND / 10 : p));
+      if (anchorRef.current !== null) {
+        const now = Date.now();
+        setLiveDebt(anchorRef.current.debt + ((now - anchorRef.current.at) / 1000) * DEBT_PER_SECOND);
+      }
     }, 100);
     return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveDebt === null]);
+  }, []);
 
+  const startOfYearDebt = apiData?.startOfYearDebt ?? null;
   const debtPerCitizen = liveDebt !== null ? Math.floor(liveDebt / US_POPULATION) : null;
   const liveDebtToGDP = liveDebt !== null ? ((liveDebt / US_GDP) * 100).toFixed(3) : null;
-  const interestPerSecond = Math.round((ANNUAL_INTEREST * 1e9) / 31_557_600);
+  const addedThisYear = liveDebt !== null && startOfYearDebt !== null ? liveDebt - startOfYearDebt : null;
+  const addedPerCitizenThisYear = addedThisYear !== null ? Math.floor(addedThisYear / US_POPULATION) : null;
   const contracts = contractSort === "amount"
     ? (contractsByAmount ?? [])
     : (contractsByDate ?? []);
@@ -342,8 +378,8 @@ export default function FiscalWatchView() {
             {[
               { label: "Debt per Citizen", value: debtPerCitizen !== null ? `$${debtPerCitizen.toLocaleString()}` : "…", sub: "per American", color: "text-red-400" },
               { label: "Debt / GDP", value: liveDebtToGDP !== null ? `${liveDebtToGDP}%` : `${DEBT_TO_GDP}%`, sub: "vs nominal GDP", color: "text-orange-400" },
-              { label: "Annual Interest", value: formatT(ANNUAL_INTEREST), sub: `$${interestPerSecond.toLocaleString()}/sec`, color: "text-yellow-400" },
-              { label: "Annual Deficit", value: formatT(ANNUAL_DEFICIT), sub: "FY2025 actual", color: "text-amber-400" },
+              { label: "Added This Year", value: addedThisYear !== null ? `$${(addedThisYear / 1e9).toFixed(1)}B` : "…", sub: `${new Date().getFullYear()} YTD`, color: "text-yellow-400" },
+              { label: "Added / Citizen", value: addedPerCitizenThisYear !== null ? `$${addedPerCitizenThisYear.toLocaleString()}` : "…", sub: "per American this year", color: "text-amber-400" },
             ].map((s) => (
               <div key={s.label} className="border-b border-r border-white/5 px-4 py-4 last:border-r-0 sm:border-b-0">
                 <p className="text-[11px] uppercase tracking-widest text-zinc-600">{s.label}</p>

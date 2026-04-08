@@ -156,8 +156,12 @@ function EnergyTab() {
   const gas = data!.natGas;
   const ref = data!.refinery;
 
-  const crudeChange = crude.latest && crude.history.length > 1
-    ? crude.latest.value - crude.history[crude.history.length - 2]?.value
+  const crudeHistory = crude.history ?? [];
+  const gasHistory = gas.history ?? [];
+  const refHistory = ref.history ?? [];
+
+  const crudeChange = crude.latest && crudeHistory.length > 1
+    ? crude.latest.value - crudeHistory[crudeHistory.length - 2]?.value
     : null;
 
   return (
@@ -178,7 +182,7 @@ function EnergyTab() {
           <MetricCard label="vs 5-Yr Avg" value={crude.latest && crude.fiveYearAvg ? (crude.latest.value > crude.fiveYearAvg ? "Above" : "Below") : "—"} sub={crude.latest && crude.fiveYearAvg ? fmt(Math.abs(crude.latest.value - crude.fiveYearAvg)) + " thousand bbl " + (crude.latest.value > crude.fiveYearAvg ? "over" : "under") : undefined} />
         </div>
         <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={crude.history.slice(-52)} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <AreaChart data={crudeHistory.slice(-52)} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
             <defs>
               <linearGradient id="crudeGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={CHART_THEME.accent} stopOpacity={0.3} />
@@ -186,11 +190,11 @@ function EnergyTab() {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
-            <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(2, 7)} />
+            <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} interval={7} />
             <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={60} tickFormatter={(v) => (v / 1000).toFixed(0) + "M"} />
             <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => [fmt(v as number) + " thousand bbl", "Inventory"]} />
             {crude.fiveYearAvg && <ReferenceLine y={crude.fiveYearAvg} stroke={CHART_THEME.amber} strokeDasharray="4 2" label={{ value: "5yr avg", fill: CHART_THEME.amber, fontSize: 10 }} />}
-            <Area type="monotone" dataKey="value" stroke={CHART_THEME.accent} fill="url(#crudeGrad)" strokeWidth={1.5} dot={false} />
+            <Area type="monotone" dataKey="value" stroke={CHART_THEME.accent} fill="url(#crudeGrad)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
           </AreaChart>
         </ResponsiveContainer>
         <SourceLabel label={crude.reportLabel} schedule={crude.updateSchedule} type="delayed" />
@@ -211,7 +215,7 @@ function EnergyTab() {
           <MetricCard label="vs 5-Yr Avg" value={gas.latest && gas.fiveYearAvg ? (gas.latest.value > gas.fiveYearAvg ? "Above Avg" : "Below Avg") : "—"} sub={gas.latest && gas.fiveYearAvg ? fmt(Math.abs(gas.latest.value - gas.fiveYearAvg)) + " bcf " + (gas.latest.value > gas.fiveYearAvg ? "surplus → bearish" : "deficit → bullish") : undefined} />
         </div>
         <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={gas.history.slice(-52)} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+          <AreaChart data={gasHistory.slice(-52)} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
             <defs>
               <linearGradient id="gasGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor={CHART_THEME.green} stopOpacity={0.25} />
@@ -219,11 +223,11 @@ function EnergyTab() {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
-            <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(2, 7)} />
+            <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} interval={7} />
             <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={50} />
             <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => [fmt(v as number) + " bcf", "Storage"]} />
             {gas.fiveYearAvg && <ReferenceLine y={gas.fiveYearAvg} stroke={CHART_THEME.amber} strokeDasharray="4 2" />}
-            <Area type="monotone" dataKey="value" stroke={CHART_THEME.green} fill="url(#gasGrad)" strokeWidth={1.5} dot={false} />
+            <Area type="monotone" dataKey="value" stroke={CHART_THEME.green} fill="url(#gasGrad)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
           </AreaChart>
         </ResponsiveContainer>
         <SourceLabel label={gas.reportLabel} schedule={gas.updateSchedule} type="delayed" />
@@ -238,15 +242,21 @@ function EnergyTab() {
           </div>
           {ref.latest && <span className="text-2xl font-bold" style={{ color: ref.latest.value > 90 ? CHART_THEME.green : ref.latest.value > 80 ? CHART_THEME.amber : CHART_THEME.red }}>{fmt(ref.latest.value, 1)}%</span>}
         </div>
-        <ResponsiveContainer width="100%" height={180}>
-          <LineChart data={ref.history.slice(-12)} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart data={refHistory} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+            <defs>
+              <linearGradient id="refGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={CHART_THEME.amber} stopOpacity={0.3} />
+                <stop offset="95%" stopColor={CHART_THEME.amber} stopOpacity={0} />
+              </linearGradient>
+            </defs>
             <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
-            <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} />
-            <YAxis domain={[70, 100]} tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={40} tickFormatter={(v) => v + "%"} />
+            <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 4)} interval={51} />
+            <YAxis domain={[(min: number) => Math.floor(min - 1), (max: number) => Math.ceil(max + 1)]} tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={44} tickFormatter={(v) => v.toFixed(0) + "%"} />
             <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => [fmt(v as number, 1) + "%", "Utilization"]} />
-            <ReferenceLine y={90} stroke={CHART_THEME.green} strokeDasharray="3 2" label={{ value: "90%", fill: CHART_THEME.text, fontSize: 10 }} />
-            <Line type="monotone" dataKey="value" stroke={CHART_THEME.amber} strokeWidth={2} dot={{ fill: CHART_THEME.amber, r: 3 }} />
-          </LineChart>
+            <ReferenceLine y={90} stroke={CHART_THEME.green} strokeDasharray="4 2" label={{ value: "90%", fill: CHART_THEME.green, fontSize: 10, position: "insideTopRight" }} />
+            <Area type="monotone" dataKey="value" stroke={CHART_THEME.amber} fill="url(#refGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+          </AreaChart>
         </ResponsiveContainer>
         <SourceLabel label={ref.reportLabel} schedule={ref.updateSchedule} type="delayed" />
       </section>
@@ -284,7 +294,7 @@ function AgricultureTab() {
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
                 <XAxis dataKey="commodity" tick={{ fill: CHART_THEME.text, fontSize: 10 }} angle={-30} textAnchor="end" />
                 <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={40} tickFormatter={(v) => v + "%"} />
-                <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => [fmt(v as number, 1) + "% excellent", "Rating"]} />
+                <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} cursor={{ fill: "rgba(255,255,255,0.04)" }} formatter={(v: unknown) => [fmt(v as number, 1) + "% excellent", "Rating"]} />
                 <Bar dataKey="pctExcellent" fill={CHART_THEME.green} radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -434,9 +444,9 @@ function ManufacturingTab() {
               <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={55} tickFormatter={(v) => "$" + (v / 1000).toFixed(0) + "B"} />
               <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => ["$" + fmt(v as number) + "M"]} />
               <Legend wrapperStyle={{ fontSize: 11, color: "#a1a1aa" }} />
-              <Line type="monotone" dataKey="orders" stroke={CHART_THEME.accent} strokeWidth={2} dot={false} name="New Orders" />
-              <Line type="monotone" dataKey="shipments" stroke={CHART_THEME.green} strokeWidth={2} dot={false} name="Shipments" />
-              <Line type="monotone" dataKey="unfilled" stroke={CHART_THEME.amber} strokeWidth={1.5} dot={false} strokeDasharray="3 2" name="Unfilled Orders" />
+              <Line type="monotone" dataKey="orders" stroke={CHART_THEME.accent} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name="New Orders" />
+              <Line type="monotone" dataKey="shipments" stroke={CHART_THEME.green} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name="Shipments" />
+              <Line type="monotone" dataKey="unfilled" stroke={CHART_THEME.amber} strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} strokeDasharray="3 2" name="Unfilled Orders" />
             </LineChart>
           </ResponsiveContainer>
           <SourceLabel label="US Census Bureau Manufacturers' Shipments, Inventories & Orders via FRED" schedule="Monthly — released ~4 weeks after month end" type="delayed" />
@@ -468,7 +478,7 @@ function ManufacturingTab() {
               <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} />
               <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={40} />
               <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} />
-              <Area type="monotone" dataKey="value" stroke={CHART_THEME.amber} fill="url(#isratioGrad)" strokeWidth={2} dot={false} />
+              <Area type="monotone" dataKey="value" stroke={CHART_THEME.amber} fill="url(#isratioGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
           <SourceLabel label="US Census Bureau via FRED" schedule="Monthly" type="delayed" />
@@ -489,7 +499,7 @@ function ManufacturingTab() {
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
               <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} />
               <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={55} tickFormatter={(v) => "$" + (v / 1000).toFixed(0) + "B"} />
-              <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => ["$" + fmt(v as number) + "M", "Durable Goods Orders"]} />
+              <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} cursor={{ fill: "rgba(255,255,255,0.04)" }} formatter={(v: unknown) => ["$" + fmt(v as number) + "M", "Durable Goods Orders"]} />
               <Bar dataKey="value" fill={CHART_THEME.purple} radius={[2, 2, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -584,10 +594,10 @@ function ShippingTab() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
-              <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(5)} />
+              <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} interval={9} />
               <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={50} tickFormatter={(v) => "$" + v.toFixed(0)} />
               <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => ["$" + fmt(v as number, 2), "BDRY"]} />
-              <Area type="monotone" dataKey="value" stroke={CHART_THEME.accent} fill="url(#bdryGrad)" strokeWidth={2} dot={false} />
+              <Area type="monotone" dataKey="value" stroke={CHART_THEME.accent} fill="url(#bdryGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
         )}
@@ -714,7 +724,7 @@ function SemiconductorsTab() {
               <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} />
               <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={45} />
               <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} />
-              <Area type="monotone" dataKey="value" stroke={CHART_THEME.purple} fill="url(#semiprodGrad)" strokeWidth={2} dot={false} />
+              <Area type="monotone" dataKey="value" stroke={CHART_THEME.purple} fill="url(#semiprodGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
         )}
@@ -742,7 +752,7 @@ function SemiconductorsTab() {
               <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} />
               <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={45} />
               <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} />
-              <Line type="monotone" dataKey="value" stroke={CHART_THEME.amber} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="value" stroke={CHART_THEME.amber} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -776,10 +786,10 @@ function SemiconductorsTab() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
-              <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(5)} />
+              <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} interval={9} />
               <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={55} tickFormatter={(v) => "$" + v.toFixed(0)} />
               <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => ["$" + fmt(v as number, 2), "SOXX"]} />
-              <Area type="monotone" dataKey="value" stroke={CHART_THEME.accent} fill="url(#soxGrad)" strokeWidth={2} dot={false} />
+              <Area type="monotone" dataKey="value" stroke={CHART_THEME.accent} fill="url(#soxGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
         )}
@@ -855,7 +865,7 @@ function ConsumerTab() {
               <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} />
               <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={60} tickFormatter={(v) => "$" + (v / 1000).toFixed(0) + "B"} />
               <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => ["$" + fmt(v as number) + "M"]} />
-              <Area type="monotone" dataKey="value" stroke={CHART_THEME.green} fill="url(#retailGrad)" strokeWidth={2} dot={false} />
+              <Area type="monotone" dataKey="value" stroke={CHART_THEME.green} fill="url(#retailGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
           <SourceLabel label={data!.fredLabels["MRTSIR44X722USS"]} type="delayed" />
@@ -878,8 +888,8 @@ function ConsumerTab() {
               <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={40} />
               <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 11, color: "#a1a1aa" }} />
-              <Line type="monotone" dataKey="umcs" stroke={CHART_THEME.accent} strokeWidth={2} dot={false} name="UMich Sentiment" />
-              <Line type="monotone" dataKey="confidence" stroke={CHART_THEME.amber} strokeWidth={2} dot={false} name="Conference Board CCI" />
+              <Line type="monotone" dataKey="umcs" stroke={CHART_THEME.accent} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name="UMich Sentiment" />
+              <Line type="monotone" dataKey="confidence" stroke={CHART_THEME.amber} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name="Conference Board CCI" />
             </LineChart>
           </ResponsiveContainer>
           <SourceLabel label="University of Michigan / OECD-Conference Board via FRED" schedule="Monthly" type="delayed" />
@@ -903,7 +913,7 @@ function ConsumerTab() {
               <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} />
               <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={40} />
               <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} />
-              <Area type="monotone" dataKey="value" stroke={CHART_THEME.amber} fill="url(#invSalesGrad)" strokeWidth={2} dot={false} />
+              <Area type="monotone" dataKey="value" stroke={CHART_THEME.amber} fill="url(#invSalesGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
           <SourceLabel label="US Census Bureau via FRED" schedule="Monthly" type="delayed" />

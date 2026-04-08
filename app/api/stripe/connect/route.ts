@@ -5,60 +5,16 @@ import { getCurrentProfileId } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
-// NOTE: Stripe Connect setup required:
-// 1. Go to Stripe Dashboard → Settings → Connect settings
-// 2. Enable "OAuth for Standard accounts" (or use Express/Custom)
-// 3. Copy your Connect "client_id" (starts with ca_) to STRIPE_CONNECT_CLIENT_ID
-// 4. Add redirect URI: https://xchange-xi.vercel.app/api/stripe/connect
+// Uses Stripe Account Links (hosted onboarding) — no Connect Client ID needed.
+// Only requires STRIPE_SECRET_KEY.
 //
-// RECOMMENDED ALTERNATIVE: Use Stripe Account Links (hosted onboarding) instead
-// of OAuth — it's simpler and the current Stripe-recommended approach.
-// See POST handler below for the Account Links approach.
+//   fetch('/api/stripe/connect', { method: 'POST' })
+//     .then(r => r.json()).then(d => window.location.href = d.url)
+//
+// Stripe redirects back to /settings?connected=true on completion.
+// Add "account.updated" to your webhook to auto-set stripe_onboarded=true.
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-
-// ── GET: Generate OAuth link (OAuth approach) OR handle OAuth callback ─────────
-
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const code = searchParams.get("code");
-  const userId = await getCurrentProfileId();
-  if (!userId) return NextResponse.redirect(`${BASE_URL}/settings`);
-
-  if (!code) {
-    // Generate OAuth link
-    const clientId = process.env.STRIPE_CONNECT_CLIENT_ID;
-    if (!clientId) {
-      return NextResponse.json({ error: "STRIPE_CONNECT_CLIENT_ID not set" }, { status: 500 });
-    }
-    const oauthUrl = `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=${clientId}&scope=read_write&state=${userId}&redirect_uri=${encodeURIComponent(BASE_URL + "/api/stripe/connect")}`;
-    return NextResponse.redirect(oauthUrl);
-  }
-
-  // Handle callback — exchange code for account id
-  try {
-    const response = await stripe.oauth.token({ grant_type: "authorization_code", code });
-    const stripeAccountId = response.stripe_user_id;
-    if (!stripeAccountId) throw new Error("No stripe_user_id in response");
-
-    const supabase = createServerClient();
-    await supabase.from("profiles").update({
-      stripe_account_id: stripeAccountId,
-      stripe_onboarded: true,
-    }).eq("user_id", userId);
-
-    return NextResponse.redirect(`${BASE_URL}/settings?connected=true`);
-  } catch (err) {
-    console.error("[stripe/connect] OAuth error:", err);
-    return NextResponse.redirect(`${BASE_URL}/settings?connect_error=true`);
-  }
-}
-
-// ── POST: Create Stripe Account Link (recommended hosted onboarding) ──────────
-//
-// Use this instead of OAuth if you want Stripe-hosted onboarding:
-//   fetch('/api/stripe/connect', { method: 'POST' })
-//   .then(r => r.json()).then(d => window.location.href = d.url)
 
 export async function POST() {
   const userId = await getCurrentProfileId();
