@@ -12,7 +12,7 @@ export type CandlestickPoint = {
   volume: number;
 };
 
-const CHART_BG = "#0F1520";
+const CHART_BG = "var(--app-card)";
 const GRID_COLOR = "rgba(255,255,255,0.06)";
 const TEXT_COLOR = "#71717a";
 const LINE_UP = "#22c55e";
@@ -81,8 +81,8 @@ export function CandlestickChart({
         secondsVisible: false,
       },
       crosshair: {
-        vertLine: { labelBackgroundColor: "#0F1520" },
-        horzLine: { labelBackgroundColor: "#0F1520" },
+        vertLine: { labelBackgroundColor: "var(--app-card)" },
+        horzLine: { labelBackgroundColor: "var(--app-card)" },
       },
     });
 

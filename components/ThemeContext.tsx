@@ -47,6 +47,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setThemeState(storedTheme);
       setAccentColorState(storedAccent);
       setMounted(true);
+      // Enable accent-color transitions now that hydration is complete
+      document.documentElement.classList.add("accent-ready");
     });
   }, []);
 

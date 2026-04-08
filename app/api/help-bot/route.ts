@@ -20,6 +20,7 @@ const SYSTEM = `You are the QuantivTrade Site Guide — a friendly assistant tha
 - /news — Curated financial news feed
 - /map — Interactive global economic map with country-level data, indicators, and outlooks
 - /bonds — Bond markets: yield curves, UK/DE/US maturities, central bank rates
+- /dividends — Dividend hub: ex-date calendar, Aristocrats & Kings tracker, income tools (DRIP calculator, yield-on-cost), ETF comparison, special dividends & cuts
 - /forex — Foreign exchange rates and currency pairs
 - /futures — Futures markets across asset classes
 - /crypto — Cryptocurrency prices and market data

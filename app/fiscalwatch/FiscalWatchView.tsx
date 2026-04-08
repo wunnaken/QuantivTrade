@@ -179,7 +179,7 @@ function getContractCategory(agency: string): { label: string; color: string; bg
 function DebtTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-xs shadow-xl">
+    <div className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-xs shadow-xl">
       <p className="font-semibold text-zinc-200">{label}</p>
       <p className="text-red-400">${payload[0].value.toFixed(2)}T</p>
     </div>
@@ -199,7 +199,7 @@ function BudgetTooltip({
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-xs shadow-xl">
+    <div className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-xs shadow-xl">
       <p className="font-semibold text-zinc-200">{label}</p>
       <p style={{ color: payload[0].fill ?? "#fff" }}>
         {formatB(payload[0].value)} · {((payload[0].value / total) * 100).toFixed(1)}%
@@ -211,7 +211,7 @@ function BudgetTooltip({
 function RevSpendTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; fill?: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-xs shadow-xl space-y-1">
+    <div className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-xs shadow-xl space-y-1">
       <p className="font-semibold text-zinc-200">{label}</p>
       {payload.map((p) => (
         <p key={p.name} style={{ color: p.fill ?? "#fff" }}>
@@ -321,7 +321,7 @@ export default function FiscalWatchView() {
         </div>
 
         {/* ── 1. Live Debt Counter ── */}
-        <div className="mb-6 overflow-hidden rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-950/30 via-[#0A0E1A] to-[#0A0E1A]">
+        <div className="mb-6 overflow-hidden rounded-2xl border border-red-500/20 bg-gradient-to-br from-red-950/30 via-[var(--app-bg)] to-[var(--app-bg)]">
           <div className="px-6 py-8 text-center sm:py-10">
             <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-red-400/80">
               US National Debt — Live
@@ -355,7 +355,7 @@ export default function FiscalWatchView() {
         </div>
 
         {/* ── 2. Live Government Contracts ── */}
-        <div className="mb-6 rounded-2xl border border-white/10 bg-[#0A0E1A] p-5">
+        <div className="mb-6 rounded-2xl border border-white/10 bg-[var(--app-bg)] p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -456,7 +456,7 @@ export default function FiscalWatchView() {
         </div>
 
         {/* ── 3. Debt History Chart ── */}
-        <div className="mb-6 rounded-2xl border border-white/10 bg-[#0A0E1A] p-5">
+        <div className="mb-6 rounded-2xl border border-white/10 bg-[var(--app-bg)] p-5">
           <div className="mb-4 flex items-start justify-between">
             <div>
               <h2 className="text-base font-semibold text-zinc-100">National Debt History</h2>
@@ -510,7 +510,7 @@ export default function FiscalWatchView() {
         <div className="mb-6 grid gap-6 lg:grid-cols-2">
 
           {/* Budget breakdown */}
-          <div className="rounded-2xl border border-white/10 bg-[#0A0E1A] p-5">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-bg)] p-5">
             <h2 className="text-base font-semibold text-zinc-100">Federal Budget FY2025</h2>
             <p className="mb-3 text-xs text-zinc-500">
               Total outlays: <span className="font-medium text-zinc-300">{formatB(TOTAL_SPENDING)}</span>
@@ -559,7 +559,7 @@ export default function FiscalWatchView() {
           </div>
 
           {/* Revenue breakdown */}
-          <div className="rounded-2xl border border-white/10 bg-[#0A0E1A] p-5">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-bg)] p-5">
             <h2 className="text-base font-semibold text-zinc-100">Tax Revenue FY2025</h2>
             <p className="mb-3 text-xs text-zinc-500">
               Total receipts: <span className="font-medium text-zinc-300">{formatB(TOTAL_REVENUE)}</span>
@@ -617,7 +617,7 @@ export default function FiscalWatchView() {
         </div>
 
         {/* ── 5. Revenue vs Spending Historical ── */}
-        <div className="mb-6 rounded-2xl border border-white/10 bg-[#0A0E1A] p-5">
+        <div className="mb-6 rounded-2xl border border-white/10 bg-[var(--app-bg)] p-5">
           <h2 className="mb-1 text-base font-semibold text-zinc-100">Revenue vs. Spending</h2>
           <p className="mb-4 text-xs text-zinc-500">
             Annual federal receipts vs. outlays in billions USD — 2000 to 2025 · US Treasury / OMB
@@ -669,7 +669,7 @@ export default function FiscalWatchView() {
         <div className="mb-6 grid gap-6 lg:grid-cols-2">
 
           {/* Debt/GDP by country */}
-          <div className="rounded-2xl border border-white/10 bg-[#0A0E1A] p-5">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-bg)] p-5">
             <h2 className="mb-1 text-base font-semibold text-zinc-100">Debt / GDP — Global Comparison</h2>
             <p className="mb-4 text-xs text-zinc-500">
               General government gross debt as % of GDP · IMF WEO April 2025
@@ -707,7 +707,7 @@ export default function FiscalWatchView() {
 
           {/* Risk ratios + credit ratings */}
           <div className="flex flex-col gap-4">
-            <div className="rounded-2xl border border-white/10 bg-[#0A0E1A] p-5">
+            <div className="rounded-2xl border border-white/10 bg-[var(--app-bg)] p-5">
               <h2 className="mb-4 text-base font-semibold text-zinc-100">Fiscal Risk Indicators</h2>
               <div className="space-y-3.5">
                 {[
@@ -761,7 +761,7 @@ export default function FiscalWatchView() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-[#0A0E1A] p-5">
+            <div className="rounded-2xl border border-white/10 bg-[var(--app-bg)] p-5">
               <h2 className="mb-3 text-base font-semibold text-zinc-100">Sovereign Credit Ratings</h2>
               <div className="grid grid-cols-3 gap-3">
                 {CREDIT_RATINGS.map((r) => (

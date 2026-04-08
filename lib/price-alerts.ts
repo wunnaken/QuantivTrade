@@ -98,11 +98,11 @@ const IN_APP_NOTIFICATIONS_KEY = "quantivtrade-in-app-notifications";
 
 export type InAppNotification = {
   id: string;
-  type: "price_alert";
-  ticker: string;
+  type: "price_alert" | "marketplace";
+  ticker?: string;
   message: string;
-  price: number;
-  targetPrice: number;
+  price?: number;
+  targetPrice?: number;
   link: string;
   time: string;
 };

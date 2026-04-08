@@ -237,7 +237,7 @@ function TopBar({ data }: { data: FuturesData | null }) {
   const map = new Map(all.map((c) => [c.symbol, c]));
 
   return (
-    <div className="flex flex-wrap gap-2 mb-4 rounded-2xl border border-white/10 bg-[#050713] px-4 py-3">
+    <div className="flex flex-wrap gap-2 mb-4 rounded-2xl border border-white/10 bg-[var(--app-card-alt)] px-4 py-3">
       {TOP_BAR_SYMBOLS.map((sym) => {
         const c = map.get(sym);
         const up = (c?.changePercent ?? 0) >= 0;
@@ -271,7 +271,7 @@ function MarketHours() {
   const utcDay = now.getUTCDay(); // 0=Sun, 6=Sat
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#050713] p-3 mb-4">
+    <div className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3 mb-4">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-2">Market Sessions</p>
       <div className="grid grid-cols-2 gap-1.5">
         {MARKET_HOURS.map((m) => {
@@ -323,7 +323,7 @@ function TermStructureChart({
   if (points.length < 2) return <p className="text-xs text-zinc-600 py-4 text-center">Term structure data unavailable</p>;
   const isContango = status === "contango";
   return (
-    <div className="rounded-xl border border-white/10 bg-[#050713] p-4">
+    <div className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-4">
       <div className="flex items-center justify-between mb-3">
         <p className="text-xs font-semibold text-zinc-300">{label} — Futures Curve</p>
         <span
@@ -344,7 +344,7 @@ function TermStructureChart({
             domain={["auto", "auto"]}
           />
           <Tooltip
-            contentStyle={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
+            contentStyle={{ background: "var(--app-bg)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
             formatter={(v) => [fmtSmart(v as number), "Price"]}
           />
           <Line
@@ -372,7 +372,7 @@ function COTCard({ market }: { market: COTMarket }) {
   const wChg = market.weeklyChange;
   if (cNet === null) {
     return (
-      <div className="rounded-xl border border-white/10 bg-[#050713] p-3">
+      <div className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3">
         <p className="text-xs font-semibold text-zinc-300 mb-1">{market.name}</p>
         <p className="text-[10px] text-zinc-600">COT data unavailable</p>
       </div>
@@ -385,7 +385,7 @@ function COTCard({ market }: { market: COTMarket }) {
   const nBull = (nNet ?? 0) > 0;
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#050713] p-3">
+    <div className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3">
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs font-semibold text-zinc-200">{market.name}</p>
         <div className="flex items-center gap-1.5">
@@ -564,7 +564,7 @@ function FuturesTable({
   );
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] overflow-hidden">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[700px]">
           <thead className="border-b border-white/[0.06]">
@@ -689,7 +689,7 @@ function FuturesCalendar() {
   };
 
   return (
-    <div className="mt-6 rounded-2xl border border-white/10 bg-[#050713] overflow-hidden">
+    <div className="mt-6 rounded-2xl border border-white/10 bg-[var(--app-card-alt)] overflow-hidden">
       <div className="px-5 py-3 border-b border-white/[0.06]">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Upcoming Futures Expirations</p>
       </div>

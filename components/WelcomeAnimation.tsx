@@ -3,7 +3,7 @@
 import { useEffect, useCallback } from "react";
 import { QuantivTradeLogoImage } from "./XchangeLogoImage";
 
-const BG = "#0A0E1A";
+const BG = "var(--app-bg)";
 const TOTAL_DURATION_MS = 6500;
 
 export function WelcomeAnimation({ onComplete }: { onComplete: () => void }) {
@@ -27,7 +27,7 @@ export function WelcomeAnimation({ onComplete }: { onComplete: () => void }) {
       <button
         type="button"
         onClick={handleComplete}
-        className="absolute right-4 top-4 z-10 text-sm text-zinc-500 transition-colors hover:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+        className="absolute right-4 top-4 z-10 text-sm text-zinc-500 transition-colors hover:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
       >
         Skip →
       </button>

@@ -495,7 +495,7 @@ function TableView({
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-sm">
         <thead>
-          <tr className="sticky top-0 z-10 bg-[#050713]">
+          <tr className="sticky top-0 z-10 bg-[var(--app-card-alt)]">
             <SortHeader label="Ticker" colKey="symbol" sortCol={sortCol} sortAsc={sortAsc} onSort={onSort} />
             <SortHeader label="Company" colKey="companyName" sortCol={sortCol} sortAsc={sortAsc} onSort={onSort} />
             <SortHeader label="Sector" colKey="sector" sortCol={sortCol} sortAsc={sortAsc} onSort={onSort} />
@@ -707,7 +707,7 @@ function HeatmapView({
           height={height}
           fill={color}
           fillOpacity={0.85}
-          stroke="#0a0e1a"
+          stroke="var(--app-bg)"
           strokeWidth={2}
           rx={4}
         />
@@ -780,7 +780,7 @@ function HeatmapView({
     const d = payload[0]?.payload;
     if (!d) return null;
     return (
-      <div className="rounded-lg border border-white/10 bg-[#050713] p-3 shadow-xl text-xs">
+      <div className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] p-3 shadow-xl text-xs">
         <p className="font-bold text-zinc-50">{d.symbol} — {d.company}</p>
         <p className="text-zinc-400 mt-1">{fmtPrice(d.price)}</p>
         <p className={d.pct >= 0 ? "text-green-400" : "text-red-400"}>{d.metricLabel}</p>
@@ -961,7 +961,7 @@ function DetailPanel({
           <button
             type="button"
             onClick={handleAddWatchlist}
-            className="w-full rounded-xl bg-[var(--accent-color)] py-2.5 text-sm font-semibold text-[#0a0e1a] hover:opacity-90 transition-opacity"
+            className="w-full rounded-xl bg-[var(--accent-color)] py-2.5 text-sm font-semibold text-[var(--app-bg)] hover:opacity-90 transition-opacity"
           >
             + Add to Watchlist
           </button>
@@ -1039,7 +1039,7 @@ function SaveScreenModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0f1520] p-6 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[var(--app-card)] p-6 shadow-2xl">
         <div className="mb-5 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-zinc-50">Save Screen</h2>
           <button
@@ -1122,7 +1122,7 @@ function SaveScreenModal({
               type="button"
               onClick={handleSave}
               disabled={!name.trim() || saving}
-              className="flex-1 rounded-xl bg-[var(--accent-color)] py-2.5 text-sm font-semibold text-[#0a0e1a] hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2"
+              className="flex-1 rounded-xl bg-[var(--accent-color)] py-2.5 text-sm font-semibold text-[var(--app-bg)] hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2"
             >
               {saving ? (
                 <>
@@ -1401,7 +1401,7 @@ export default function ScreenerView() {
     <div className="flex w-full min-h-0 flex-1 overflow-hidden rounded-xl border border-white/10" style={{ background: "var(--app-bg)" }}>
       {/* Sidebar */}
       <aside
-        className={`shrink-0 border-r border-white/10 bg-[#050713] transition-all duration-200 overflow-y-auto ${
+        className={`shrink-0 border-r border-white/10 bg-[var(--app-card-alt)] transition-all duration-200 overflow-y-auto ${
           sidebarOpen ? "w-[280px]" : "w-0 overflow-hidden"
         }`}
       >
@@ -1776,7 +1776,7 @@ export default function ScreenerView() {
       {/* Main Content */}
       <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
         {/* Header bar */}
-        <div className="flex items-center gap-3 border-b border-white/10 bg-[#050713] px-4 py-3">
+        <div className="flex items-center gap-3 border-b border-white/10 bg-[var(--app-card-alt)] px-4 py-3">
           {/* Sidebar toggle */}
           <button
             type="button"
@@ -1811,7 +1811,7 @@ export default function ScreenerView() {
                 onClick={() => setView(v)}
                 className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
                   view === v
-                    ? "bg-[var(--accent-color)] text-[#0a0e1a]"
+                    ? "bg-[var(--accent-color)] text-[var(--app-bg)]"
                     : "text-zinc-400 hover:text-zinc-200"
                 }`}
               >
@@ -1870,7 +1870,7 @@ export default function ScreenerView() {
               </button>
 
               {loadDropdownOpen && (
-                <div className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-xl border border-white/10 bg-[#050713] shadow-2xl">
+                <div className="absolute right-0 top-full z-30 mt-1 w-56 overflow-hidden rounded-xl border border-white/10 bg-[var(--app-card-alt)] shadow-2xl">
                   {savedScreens.length === 0 ? (
                     <p className="px-4 py-3 text-xs text-zinc-500">No saved screens yet</p>
                   ) : (
@@ -1896,7 +1896,7 @@ export default function ScreenerView() {
 
         {/* Active filter chips */}
         {activeChips.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 border-b border-white/5 bg-[#050713]/80 px-4 py-2">
+          <div className="flex flex-wrap gap-1.5 border-b border-white/5 bg-[var(--app-card-alt)]/80 px-4 py-2">
             {activeChips.map((chip) => (
               <FilterChip key={chip.key} label={chip.label} onRemove={chip.reset} />
             ))}
@@ -1933,7 +1933,7 @@ export default function ScreenerView() {
 
       {/* Detail panel */}
       <div
-        className={`fixed right-0 top-0 z-50 h-screen w-[380px] overflow-y-auto border-l border-white/10 bg-[#050713] shadow-2xl transition-transform duration-300 ${
+        className={`fixed right-0 top-0 z-50 h-screen w-[380px] overflow-y-auto border-l border-white/10 bg-[var(--app-card-alt)] shadow-2xl transition-transform duration-300 ${
           selected ? "translate-x-0" : "translate-x-full"
         }`}
       >

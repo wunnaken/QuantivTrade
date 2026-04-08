@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0e1a;
-  --foreground: #e4e4e7;
+  --background: #080d14;
+  --foreground: #e8e8ec;
 }
 
 @theme inline {
@@ -11,12 +11,17 @@
   --color-accent: var(--accent-color);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-serif: var(--font-lora), Georgia, serif;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-lora), Georgia, serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #080d14;
+    --foreground: #e8e8ec;
   }
 }
 
@@ -24,42 +29,48 @@
 @property --accent-color {
   syntax: "<color>";
   inherits: true;
-  initial-value: #4f9cf9;
+  initial-value: #e8846a;
 }
 
 :root,
 html {
-  --accent-color: #4f9cf9;
+  --accent-color: #e8846a;
   --accent-color-40: color-mix(in srgb, var(--accent-color) 25%, transparent);
   --accent-color-10: color-mix(in srgb, var(--accent-color) 6%, transparent);
-  transition: --accent-color 0.2s ease;
+}
+
+/* Only animate accent color changes after hydration (prevents flash on load) */
+html.accent-ready {
+  transition: --accent-color 0.25s ease;
 }
 
 /* Theme: default dark; light when data-theme="light" */
 :root,
 html {
-  --app-bg: #0a0e1a;
-  --app-card: #0f1520;
-  --app-card-alt: #050713;
-  --app-text: #e4e4e7;
-  --app-text-muted: #71717a;
-  --app-border: rgba(255, 255, 255, 0.1);
-  --app-navbar-bg: rgba(5, 7, 19, 0.9);
-  --app-navbar-border: rgba(255, 255, 255, 0.05);
-  --app-navbar-text: #e4e4e7;
-  --app-navbar-text-muted: #a1a1aa;
+  --app-bg: #080d14;
+  --app-card: #0d1420;
+  --app-card-alt: #060a10;
+  --app-card-hover: #111a28;
+  --app-text: #e8e8ec;
+  --app-text-muted: #7a8090;
+  --app-border: rgba(255, 255, 255, 0.07);
+  --app-navbar-bg: #080d14;
+  --app-navbar-border: rgba(255, 255, 255, 0.07);
+  --app-navbar-text: #e8e8ec;
+  --app-navbar-text-muted: #7a8090;
+  --app-sidebar-bg: #080d14;
 }
 
 html[data-theme="light"] {
   --app-bg: #f4f6fa;
   --app-card: #ffffff;
   --app-card-alt: #ffffff;
-  --app-text: #0a0e1a;
+  --app-text: #0d1420;
   --app-text-muted: #52525b;
   --app-border: rgba(0, 0, 0, 0.08);
   --app-navbar-bg: #ffffff;
   --app-navbar-border: rgba(0, 0, 0, 0.08);
-  --app-navbar-text: #0a0e1a;
+  --app-navbar-text: #0d1420;
   --app-navbar-text-muted: #71717a;
 }
 
@@ -68,11 +79,9 @@ html {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
   background-color: var(--app-bg);
   color: var(--app-text);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -174,33 +183,47 @@ body {
 .plans-tab-ping::before {
   content: "";
   position: absolute;
-  inset: -2px;
-  border-radius: 9999px;
-  border: 1px solid color-mix(in srgb, var(--accent-color) 40%, transparent);
+  inset: -3px;
+  border-radius: 0.5rem 0 0 0.5rem; /* matches rounded-l-lg */
+  border: 1px solid color-mix(in srgb, var(--accent-color) 50%, transparent);
   animation: plans-tab-ping 2.5s ease-in-out infinite;
   pointer-events: none;
+}
+
+.plans-tab-ping .plans-text {
+  animation: plans-text-wave 2.5s ease-in-out infinite;
 }
 
 @keyframes plans-tab-enter {
   from {
     opacity: 0;
-    transform: translateY(-6px);
+    translate: 8px 0;
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    translate: 0 0;
   }
 }
 
 @keyframes plans-tab-ping {
   0%,
   100% {
-    opacity: 0.5;
+    opacity: 0.6;
     transform: scale(1);
   }
   50% {
     opacity: 0;
-    transform: scale(1.08);
+    transform: scale(1.04);
+  }
+}
+
+@keyframes plans-text-wave {
+  0%,
+  100% {
+    color: rgb(212 212 216); /* zinc-300 */
+  }
+  50% {
+    color: var(--accent-color);
   }
 }
 
@@ -278,7 +301,7 @@ html[data-theme="light"] .dark-bg-section .text-zinc-500 {
 
 /* Search / AI analysis loading skeleton */
 .search-skeleton {
-  background: linear-gradient(90deg, #1a2030 25%, #2a3040 50%, #1a2030 75%);
+  background: linear-gradient(90deg, var(--app-card) 25%, var(--app-card-hover) 50%, var(--app-card) 75%);
   background-size: 200% 100%;
   animation: search-shimmer 1.2s ease-in-out infinite;
 }
@@ -402,11 +425,11 @@ html[data-theme="light"] .dark-bg-section .text-zinc-500 {
 
 /* Journal page: dark theme for selects and options */
 .journal-page select {
-  background-color: #0F1520;
+  background-color: var(--app-card);
   color: #e4e4e7;
 }
 .journal-page select option {
-  background-color: #0F1520;
+  background-color: var(--app-card);
   color: #e4e4e7;
 }
 
@@ -680,5 +703,27 @@ html[data-theme="light"] .dark-bg-section .text-zinc-500 {
 
 .sentiment-bubble-pulse {
   animation: pulse-sentiment 3s ease-in-out infinite;
+}
+
+/* ── Global select arrow (accent-colored chevron, consistent everywhere) ── */
+select:not(.no-custom-arrow) {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23e8846a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+  padding-right: 2rem !important;
+}
+
+/* ── Global number input — hide native spinners, show themed ±buttons via wrapper ── */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
 }
 

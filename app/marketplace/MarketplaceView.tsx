@@ -1,6 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
+import { CourseBuilder, SlideViewer, RichEditorV2, renderCourseMarkdown, deserializeCourse } from "./CourseBuilder";
+import { addInAppNotification } from "@/lib/price-alerts";
 import {
   AreaChart,
   Area,
@@ -70,6 +73,7 @@ interface SellerDashboardData {
     backtest_data?: string | null;
     content_data?: string | null;
     preview_image_url?: string | null;
+    preview_disabled?: boolean;
     created_at: string;
     rejection_reason?: string | null;
   }>;
@@ -89,9 +93,9 @@ interface CreateForm {
   price: number;
   price_type: PriceType;
   subscription_interval: "monthly" | "yearly";
-  backtest_data: string;
   content_data: string;
   preview_image_url: string;
+  preview_disabled: boolean;
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -334,7 +338,7 @@ function ListingCard({ listing, onClick, featured }: { listing: Listing; onClick
   return (
     <button
       onClick={onClick}
-      className={`group flex flex-col rounded-2xl border border-white/10 bg-[#050713] text-left transition hover:border-[var(--accent-color)]/30 hover:shadow-lg ${featured ? "p-4" : "p-3"}`}
+      className={`group flex flex-col rounded-2xl border border-white/10 bg-[var(--app-card-alt)] text-left transition hover:border-[var(--accent-color)]/30 hover:shadow-lg ${featured ? "p-4" : "p-3"}`}
     >
       {/* Preview area */}
       <div className={`relative w-full overflow-hidden rounded-xl ${featured ? "mb-4 h-48" : "mb-3 h-36"}`}>
@@ -422,15 +426,123 @@ function ListingCard({ listing, onClick, featured }: { listing: Listing; onClick
 
 // ─── Listing Detail Modal ─────────────────────────────────────────────────────
 
-function ListingDetailModal({ listing, onClose, onPurchase, currentUsername }: {
+function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, currentUserId }: {
   listing: Listing;
   onClose: () => void;
   onPurchase: (id: string) => Promise<void>;
   currentUsername: string;
+  currentUserId: string;
 }) {
   const [purchasing, setPurchasing] = useState(false);
   const [purchased, setPurchased] = useState(false);
   const [imgIdx, setImgIdx] = useState(0);
+  const [contentData, setContentData] = useState<string | null>(null);
+  const [previewDisabled, setPreviewDisabled] = useState(false);
+  const [contentFullscreen, setContentFullscreen] = useState(false);
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
+  const [updateDeferred, setUpdateDeferred] = useState(false);
+  const [contentUpdatedAt, setContentUpdatedAt] = useState<string | null>(null);
+  const [showChangesDiff, setShowChangesDiff] = useState(false);
+
+  type Review = { id: string; rating: number; comment: string; created_at: string; reviewer_id: string; reviewer: { username: string; avatar_url: string | null } | null };
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [starFilter, setStarFilter] = useState(0);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewHover, setReviewHover] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [sellerTotalSales, setSellerTotalSales] = useState<number | null>(null);
+  const [discDismissed, setDiscDismissed] = useState(() =>
+    typeof window !== "undefined" && !!localStorage.getItem("mp_disc_dismissed")
+  );
+
+  const isSeller = !!currentUserId && currentUserId === listing.seller_id;
+
+  const liveAvg = reviews.length > 0
+    ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) / 10
+    : listing.avg_rating;
+  const liveCount = reviews.length > 0 ? reviews.length : listing.review_count;
+
+  const filteredReviews = starFilter > 0 ? reviews.filter((r) => r.rating === starFilter) : reviews;
+
+  useEffect(() => {
+    fetch(`/api/marketplace/listings/${listing.id}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { content_data?: string; purchased?: boolean; purchased_at?: string; content_updated_at?: string; preview_disabled?: boolean; seller_total_sales?: number } | null) => {
+        if (!d) return;
+        if (d.content_data) setContentData(d.content_data);
+        if (d.purchased) setPurchased(true);
+        if (d.preview_disabled) setPreviewDisabled(true);
+        if (d.seller_total_sales !== undefined) setSellerTotalSales(d.seller_total_sales);
+        if (d.purchased && d.content_updated_at && d.purchased_at) {
+          setContentUpdatedAt(d.content_updated_at);
+          const updatedAt = new Date(d.content_updated_at).getTime();
+          const purchasedAt = new Date(d.purchased_at).getTime();
+          const ackAt = (() => { const v = localStorage.getItem(`mp_ack_${listing.id}`); return v ? new Date(v).getTime() : 0; })();
+          const deferredAt = (() => { const v = localStorage.getItem(`mp_defer_${listing.id}`); return v ? new Date(v).getTime() : 0; })();
+          if (updatedAt > purchasedAt && updatedAt > ackAt) {
+            if (updatedAt > deferredAt) {
+              // New update not yet seen at all — show banner
+              setShowUpdateBanner(true);
+            } else {
+              // Previously deferred but not accepted — show small indicator
+              setUpdateDeferred(true);
+            }
+          } else {
+            // No pending update — save baseline title snapshot if not yet stored
+            if (!localStorage.getItem(`mp_titles_${listing.id}`) && d.content_data) {
+              const slides = deserializeCourse(d.content_data);
+              localStorage.setItem(`mp_titles_${listing.id}`, JSON.stringify(slides.map((s) => ({ title: s.title, type: s.type }))));
+            }
+          }
+        }
+      })
+      .catch(() => {});
+    fetch(`/api/marketplace/listings/${listing.id}/reviews`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d: { reviews?: Review[] } | null) => {
+        if (!d?.reviews) return;
+        setReviews(d.reviews);
+        // Mark form as already submitted if user already has a review
+        if (currentUserId && d.reviews.some((r) => r.reviewer_id === currentUserId)) {
+          setReviewSubmitted(true);
+        }
+      })
+      .catch(() => {});
+  }, [listing.id]);
+
+  // Re-check if already reviewed whenever currentUserId resolves (handles async timing)
+  useEffect(() => {
+    if (!currentUserId || reviews.length === 0) return;
+    if (reviews.some((r) => r.reviewer_id === currentUserId)) {
+      setReviewSubmitted(true);
+    }
+  }, [currentUserId, reviews]);
+
+  async function handleReviewSubmit() {
+    if (!reviewRating) return;
+    setReviewSubmitting(true);
+    setReviewError("");
+    try {
+      const res = await fetch(`/api/marketplace/listings/${listing.id}/reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rating: reviewRating, comment: reviewComment }),
+      });
+      if (!res.ok) {
+        const e = await res.json() as { error: string };
+        setReviewError(e.error);
+        return;
+      }
+      const d = await res.json() as { review: Review };
+      setReviews((prev) => [{ ...d.review, reviewer: { username: currentUsername, avatar_url: null } }, ...prev]);
+      setReviewSubmitted(true);
+    } finally {
+      setReviewSubmitting(false);
+    }
+  }
 
   const images = listing.preview_images?.length ? listing.preview_images : [];
   const catColor = CAT_COLORS[listing.category] ?? "text-zinc-400 bg-zinc-400/10 border-zinc-400/20";
@@ -457,7 +569,7 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4 pt-8">
-      <div className="relative w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0A0E1A] shadow-2xl">
+      <div className="relative w-full max-w-4xl rounded-2xl border border-white/10 bg-[var(--app-bg)] shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-white/10 p-5">
           <div className="flex-1">
@@ -467,7 +579,7 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername }: {
             <h2 className="text-xl font-bold text-zinc-50">{listing.title}</h2>
             <div className="mt-2 flex items-center gap-3">
               <SellerAvatar seller={listing.seller} />
-              <StarRating rating={listing.avg_rating} count={listing.review_count} />
+              <StarRating rating={liveAvg} count={liveCount} />
               <span className="text-xs text-zinc-600">{listing.sales_count} sales</span>
             </div>
           </div>
@@ -534,7 +646,7 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername }: {
                       <XAxis dataKey="week" hide />
                       <YAxis hide domain={["auto", "auto"]} />
                       <Tooltip
-                        contentStyle={{ background: "#0A0E1A", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                        contentStyle={{ background: "var(--app-bg)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
                         formatter={(v: unknown) => [`$${(v as number).toFixed(0)}`, "Portfolio"]}
                       />
                       <Area type="monotone" dataKey="value" stroke="var(--accent-color)" fill="url(#eqGrad)" strokeWidth={1.5} dot={false} />
@@ -570,37 +682,395 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername }: {
               </div>
             )}
 
-            {/* Reviews placeholder */}
+            {/* Reviews */}
             <div>
-              <h3 className="mb-3 text-sm font-semibold text-zinc-300">Reviews</h3>
-              {listing.review_count === 0 ? (
-                <p className="text-sm text-zinc-600">No reviews yet. Be the first to leave feedback after purchasing.</p>
+              <div className="mb-3 flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-zinc-300">Reviews</h3>
+                {liveCount > 0 && (
+                  <span className="text-xs text-zinc-500">{liveCount} · {liveAvg.toFixed(1)} / 5</span>
+                )}
+              </div>
+
+              {/* Star breakdown filter */}
+              {reviews.length > 0 && (
+                <div className="mb-4 flex gap-1.5 flex-wrap">
+                  <button onClick={() => setStarFilter(0)}
+                    className={`rounded-lg border px-2.5 py-1 text-xs transition ${starFilter === 0 ? "border-[var(--accent-color)]/60 bg-[var(--accent-color)]/10 text-[var(--accent-color)]" : "border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-300"}`}>
+                    All
+                  </button>
+                  {[5,4,3,2,1].map((s) => {
+                    const cnt = reviews.filter((r) => r.rating === s).length;
+                    if (cnt === 0) return null;
+                    return (
+                      <button key={s} onClick={() => setStarFilter(starFilter === s ? 0 : s)}
+                        className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs transition ${starFilter === s ? "border-yellow-400/40 bg-yellow-400/10 text-yellow-300" : "border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-300"}`}>
+                        <span>{"★".repeat(s)}</span>
+                        <span className="text-zinc-600">({cnt})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Write a review — buyers only, not the seller */}
+              {purchased && !isSeller && !reviewSubmitted && (
+                <div className="mb-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="mb-2 text-xs font-medium text-zinc-400">Leave a review</p>
+                  <div className="mb-3 flex gap-1">
+                    {[1,2,3,4,5].map((s) => (
+                      <button key={s}
+                        onClick={() => setReviewRating(s)}
+                        onMouseEnter={() => setReviewHover(s)}
+                        onMouseLeave={() => setReviewHover(0)}
+                        className="text-xl transition"
+                      >
+                        <span className={(reviewHover || reviewRating) >= s ? "text-yellow-400" : "text-zinc-700"}>★</span>
+                      </button>
+                    ))}
+                    {reviewRating > 0 && (
+                      <span className="ml-1 self-center text-xs text-zinc-500">{["","Poor","Fair","Good","Great","Excellent"][reviewRating]}</span>
+                    )}
+                  </div>
+                  <textarea
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    placeholder="Share your experience (optional)…"
+                    rows={3}
+                    className="w-full resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-200 placeholder-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                  />
+                  {reviewError && <p className="mt-1 text-xs text-red-400">{reviewError}</p>}
+                  <button
+                    onClick={handleReviewSubmit}
+                    disabled={!reviewRating || reviewSubmitting}
+                    className="mt-2 rounded-lg bg-[var(--accent-color)] px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+                  >
+                    {reviewSubmitting ? "Submitting…" : "Submit Review"}
+                  </button>
+                </div>
+              )}
+              {purchased && !isSeller && reviewSubmitted && (
+                <p className="mb-4 text-xs text-emerald-400">Thanks for your review!</p>
+              )}
+
+              {/* Review list */}
+              {filteredReviews.length === 0 ? (
+                <p className="text-sm text-zinc-600">
+                  {reviews.length === 0
+                    ? `No reviews yet.${!purchased || isSeller ? "" : " Be the first!"}`
+                    : `No ${starFilter}-star reviews.`}
+                </p>
               ) : (
-                <p className="text-sm text-zinc-500">{listing.review_count} reviews · avg {listing.avg_rating.toFixed(1)} / 5</p>
+                <div className="space-y-3">
+                  {filteredReviews.map((r) => (
+                    <div key={r.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+                      <div className="mb-1.5 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          {r.reviewer?.avatar_url ? (
+                            <img src={r.reviewer.avatar_url} className="h-5 w-5 rounded-full object-cover" alt="" />
+                          ) : (
+                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-white/10 text-[9px] font-bold text-zinc-400">
+                              {r.reviewer?.username?.[0]?.toUpperCase() ?? "?"}
+                            </div>
+                          )}
+                          <span className="text-xs font-medium text-zinc-300">{r.reviewer?.username ?? "User"}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {[1,2,3,4,5].map((s) => (
+                            <span key={s} className={`text-sm ${s <= r.rating ? "text-yellow-400" : "text-zinc-700"}`}>★</span>
+                          ))}
+                          <span className="ml-1 text-[10px] text-zinc-600">
+                            {new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          </span>
+                        </div>
+                      </div>
+                      {r.comment && <p className="text-xs text-zinc-400 leading-relaxed">{r.comment}</p>}
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
 
-            {/* Purchased content */}
-            {purchased && listing.content_data && (
+            {/* Locked preview — scrollable blurred content with pinned CTA */}
+            {!purchased && contentData && !previewDisabled && (
               <div>
                 <div className="mb-2 flex items-center gap-2">
-                  <h3 className="text-sm font-semibold text-zinc-300">Content</h3>
-                  <span className="rounded bg-emerald-400/10 border border-emerald-400/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Unlocked</span>
+                  <h3 className="text-sm font-semibold text-zinc-300">Content Preview</h3>
+                  <span className="rounded bg-zinc-700/50 border border-white/10 px-2 py-0.5 text-[10px] font-medium text-zinc-400">Locked</span>
                 </div>
-                <div className="overflow-hidden rounded-xl border border-white/10 bg-[#050713]">
-                  <WatermarkedContent content={listing.content_data} username={currentUsername} />
+                <div
+                  className="relative overflow-hidden rounded-xl border border-white/10 bg-[var(--app-card-alt)]"
+                  onCopy={(e) => e.preventDefault()}
+                  onContextMenu={(e) => e.preventDefault()}
+                >
+                  {/* Scrollable blurred content */}
+                  <div className="max-h-[520px] overflow-y-auto">
+                    <div
+                      className="select-none"
+                      style={{ filter: "blur(9px)", userSelect: "none", pointerEvents: "none" }}
+                      aria-hidden
+                    >
+                      <SlideViewer content={contentData} username="" />
+                    </div>
+                    {/* Extra padding so the CTA gradient doesn't clip last content */}
+                    <div className="h-28" />
+                  </div>
+
+                  {/* Gradient fade + lock CTA pinned to bottom */}
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-36"
+                    style={{ background: "linear-gradient(to bottom, transparent, rgba(10,10,18,0.97))" }} />
+                  <div className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-2.5 pb-5">
+                    <div className="flex items-center gap-1.5">
+                      <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <p className="text-sm font-semibold text-zinc-200">Content Locked</p>
+                    </div>
+                    <button
+                      onClick={handlePurchase}
+                      disabled={purchasing}
+                      className="rounded-xl bg-[var(--accent-color)] px-5 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+                    >
+                      {purchasing ? "Processing…" : listing.price === 0 ? "Get Free Access" : `Unlock for ${listing.price_type === "subscription" ? `$${listing.price}/${listing.subscription_interval === "yearly" ? "yr" : "mo"}` : `$${listing.price}`}`}
+                    </button>
+                  </div>
                 </div>
-                <p className="mt-1.5 text-[10px] text-zinc-600">
-                  This content is licensed to <span className="text-zinc-500">{currentUsername}</span>. Redistribution is prohibited.
+              </div>
+            )}
+
+            {/* No-preview state — seller disabled it */}
+            {!purchased && contentData && previewDisabled && (
+              <div className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-6 text-center">
+                <svg className="mx-auto mb-3 h-8 w-8 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <p className="text-sm font-medium text-zinc-400">Preview disabled by seller</p>
+                <button onClick={handlePurchase} disabled={purchasing}
+                  className="mt-3 rounded-xl bg-[var(--accent-color)] px-5 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+                  {purchasing ? "Processing…" : listing.price === 0 ? "Get Free Access" : `Unlock for $${listing.price}`}
+                </button>
+              </div>
+            )}
+
+            {/* Update banner — appears above content when seller has updated */}
+            {purchased && !isSeller && showUpdateBanner && contentData && (
+              <div className="overflow-hidden rounded-xl border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/5">
+                {/* Header */}
+                <div className="flex items-center gap-2 border-b border-[var(--accent-color)]/15 px-4 py-3">
+                  <svg className="h-4 w-4 shrink-0 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-zinc-200">Content updated</p>
+                    <p className="text-[10px] text-zinc-500">
+                      {contentUpdatedAt ? new Date(contentUpdatedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "Recently"}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowChangesDiff((v) => !v)}
+                    className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-[10px] text-zinc-400 transition hover:border-white/20 hover:text-zinc-200"
+                  >
+                    See what changed
+                    <svg className={`h-3 w-3 transition-transform ${showChangesDiff ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                </div>
+                {/* Diff */}
+                {showChangesDiff && (() => {
+                  const oldTitlesRaw = typeof window !== "undefined" ? localStorage.getItem(`mp_titles_${listing.id}`) : null;
+                  const oldTitles = oldTitlesRaw ? (JSON.parse(oldTitlesRaw) as { title: string; type?: string }[]) : null;
+                  const newSlides = deserializeCourse(contentData);
+                  return (
+                    <div className="grid grid-cols-2 gap-3 border-b border-[var(--accent-color)]/15 px-4 py-3">
+                      <div>
+                        <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                          Your version{oldTitles ? ` · ${oldTitles.length} page${oldTitles.length !== 1 ? "s" : ""}` : ""}
+                        </p>
+                        {oldTitles ? (
+                          <div className="space-y-1">
+                            {oldTitles.map((s, i) => (
+                              <div key={i} className="flex items-center gap-1.5 text-xs text-zinc-500">
+                                <span className="text-zinc-700">{i + 1}.</span>
+                                <span className="truncate">{s.title}</span>
+                                {s.type === "whiteboard" && <span className="shrink-0 rounded bg-purple-400/10 px-1 py-0.5 text-[9px] text-purple-400">WB</span>}
+                                {s.type === "code" && <span className="shrink-0 rounded bg-cyan-400/10 px-1 py-0.5 text-[9px] text-cyan-400">Code</span>}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-zinc-600 italic">No previous snapshot</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-[var(--accent-color)]/70">
+                          Updated · {newSlides.length} page{newSlides.length !== 1 ? "s" : ""}
+                        </p>
+                        <div className="space-y-1">
+                          {newSlides.map((s, i) => (
+                            <div key={s.id} className="flex items-center gap-1.5 text-xs text-zinc-300">
+                              <span className="text-zinc-600">{i + 1}.</span>
+                              <span className="truncate">{s.title}</span>
+                              {s.type === "whiteboard" && <span className="shrink-0 rounded bg-purple-400/10 px-1 py-0.5 text-[9px] text-purple-400">WB</span>}
+                              {s.type === "code" && <span className="shrink-0 rounded bg-cyan-400/10 px-1 py-0.5 text-[9px] text-cyan-400">Code</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                {/* Actions */}
+                <div className="flex gap-2 px-4 py-3">
+                  <button
+                    onClick={() => {
+                      const slides = deserializeCourse(contentData);
+                      localStorage.setItem(`mp_titles_${listing.id}`, JSON.stringify(slides.map((s) => ({ title: s.title, type: s.type }))));
+                      localStorage.setItem(`mp_ack_${listing.id}`, contentUpdatedAt ?? new Date().toISOString());
+                      localStorage.removeItem(`mp_defer_${listing.id}`);
+                      setShowUpdateBanner(false);
+                      setShowChangesDiff(false);
+                      setUpdateDeferred(false);
+                    }}
+                    className="rounded-lg bg-[var(--accent-color)] px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                  >
+                    Accept update
+                  </button>
+                  <button
+                    onClick={() => {
+                      localStorage.setItem(`mp_defer_${listing.id}`, contentUpdatedAt ?? new Date().toISOString());
+                      setShowUpdateBanner(false);
+                      setShowChangesDiff(false);
+                      setUpdateDeferred(true);
+                    }}
+                    className="rounded-lg border border-white/10 px-4 py-1.5 text-xs font-semibold text-zinc-400 transition hover:border-white/20 hover:text-zinc-200"
+                  >
+                    Not Now
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Deferred update indicator — small persistent button when user chose "Not Now" */}
+            {purchased && !isSeller && !showUpdateBanner && updateDeferred && (
+              <button
+                onClick={() => setShowUpdateBanner(true)}
+                className="flex w-full items-center gap-2 rounded-xl border border-[var(--accent-color)]/20 bg-[var(--accent-color)]/5 px-3 py-2 text-left transition hover:border-[var(--accent-color)]/40"
+              >
+                <svg className="h-3.5 w-3.5 shrink-0 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span className="text-xs text-[var(--accent-color)]">Update available</span>
+                <span className="ml-auto text-[10px] text-zinc-500">View →</span>
+              </button>
+            )}
+
+            {/* Purchased content */}
+            {purchased && contentData && (
+              <div>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-zinc-300">Content</h3>
+                    <span className="rounded bg-emerald-400/10 border border-emerald-400/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Unlocked</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {/* Download */}
+                    <button
+                      onClick={() => {
+                        const slides = deserializeCourse(contentData);
+                        const text = slides.map((s, i) =>
+                          `--- Page ${i + 1}: ${s.title} ---\n\n${s.type === "whiteboard" ? "[Whiteboard slide]" : s.content}`
+                        ).join("\n\n");
+                        const blob = new Blob([text], { type: "text/plain" });
+                        const a = document.createElement("a");
+                        a.href = URL.createObjectURL(blob);
+                        a.download = `${listing.title.replace(/[^a-z0-9]/gi, "_")}.txt`;
+                        a.click();
+                        URL.revokeObjectURL(a.href);
+                      }}
+                      title="Download content"
+                      className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-[10px] text-zinc-400 transition hover:border-white/20 hover:text-zinc-200"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download
+                    </button>
+                    {/* Fullscreen */}
+                    <button
+                      onClick={() => setContentFullscreen(true)}
+                      title="View fullscreen"
+                      className="flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1 text-[10px] text-zinc-400 transition hover:border-white/20 hover:text-zinc-200"
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                      </svg>
+                      Fullscreen
+                    </button>
+                  </div>
+                </div>
+                <div className="overflow-hidden rounded-xl border border-white/10 bg-[var(--app-card-alt)]">
+                  <WatermarkedContent content={contentData ?? ""} username={currentUsername} noWatermark={purchased || isSeller} />
+                </div>
+                <p className="mt-1.5 text-[10px] text-zinc-500">
+                  Licensed to <span className="text-zinc-400">{currentUsername}</span> · Redistribution is prohibited ·{" "}
+                  <a href="/ai" target="_blank" className="text-[var(--accent-color)] hover:underline">
+                    Verify in Workspace AI →
+                  </a>
                 </p>
               </div>
+            )}
+
+            {/* Content fullscreen overlay — portalled to body to escape stacking context */}
+            {contentFullscreen && contentData && typeof document !== "undefined" && createPortal(
+              <div className="fixed inset-0 z-[9999] flex flex-col" style={{ background: "var(--app-bg)" }}>
+                <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-sm font-semibold text-zinc-200">{listing.title}</h2>
+                    <span className="rounded bg-emerald-400/10 border border-emerald-400/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">Unlocked</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const slides = deserializeCourse(contentData);
+                        const text = slides.map((s, i) =>
+                          `--- Page ${i + 1}: ${s.title} ---\n\n${s.type === "whiteboard" ? "[Whiteboard slide]" : s.content}`
+                        ).join("\n\n");
+                        const blob = new Blob([text], { type: "text/plain" });
+                        const a = document.createElement("a");
+                        a.href = URL.createObjectURL(blob);
+                        a.download = `${listing.title.replace(/[^a-z0-9]/gi, "_")}.txt`;
+                        a.click();
+                        URL.revokeObjectURL(a.href);
+                      }}
+                      className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-white/20 hover:text-zinc-200"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download
+                    </button>
+                    <button onClick={() => setContentFullscreen(false)}
+                      className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-400 transition hover:border-white/20 hover:text-zinc-200">
+                      Exit Fullscreen
+                    </button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <WatermarkedContent content={contentData} username={currentUsername} noWatermark fullscreen />
+                </div>
+                <div className="shrink-0 border-t border-white/[0.06] px-4 py-2 text-center text-[10px] text-zinc-600">
+                  Licensed to {currentUsername} · Redistribution is prohibited ·{" "}
+                  <a href="/ai" target="_blank" className="text-[var(--accent-color)] hover:underline">Verify in Workspace AI →</a>
+                </div>
+              </div>,
+              document.body
             )}
           </div>
 
           {/* Right: purchase sidebar */}
           <div className="space-y-4">
             {/* Price card */}
-            <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+            <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
               <div className="mb-4 text-2xl">{formatPrice(listing)}</div>
               <button
                 onClick={handlePurchase}
@@ -616,15 +1086,39 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername }: {
               )}
             </div>
 
+            {/* Disclaimer — shown once, dismissed permanently */}
+            {!discDismissed && (
+              <div className="relative rounded-2xl border border-amber-400/20 bg-amber-400/5 p-3">
+                <button
+                  onClick={() => { localStorage.setItem("mp_disc_dismissed", "1"); setDiscDismissed(true); }}
+                  className="absolute right-2.5 top-2.5 text-zinc-600 hover:text-zinc-400"
+                  aria-label="Dismiss"
+                  style={{ lineHeight: 1 }}
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+                <div className="flex items-start gap-2 pr-4">
+                  <svg className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  </svg>
+                  <p className="text-[10px] leading-relaxed text-zinc-500">
+                    <span className="font-semibold text-amber-400/90">Not financial advice.</span> Always test strategies in a paper account before live trading. Past results do not guarantee future performance.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Quality badges */}
-            <div className="rounded-2xl border border-white/10 bg-[#050713] p-4 space-y-2">
+            <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4 space-y-2">
               <h4 className="text-xs font-semibold text-zinc-400">Quality Signals</h4>
               <QualityBadges listing={listing} />
             </div>
 
             {/* Tags */}
             {listing.tags.length > 0 && (
-              <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+              <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
                 <h4 className="mb-2 text-xs font-semibold text-zinc-400">Tags</h4>
                 <div className="flex flex-wrap gap-1">
                   {listing.tags.map((t) => (
@@ -635,11 +1129,13 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername }: {
             )}
 
             {/* About seller */}
-            <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+            <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
               <h4 className="mb-3 text-xs font-semibold text-zinc-400">About the Seller</h4>
               <SellerAvatar seller={listing.seller} />
               {listing.seller && (
-                <p className="mt-2 text-xs text-zinc-600">{listing.seller.total_sales} total sales</p>
+                <p className="mt-2 text-xs text-zinc-600">
+                  {sellerTotalSales !== null ? sellerTotalSales : listing.seller.total_sales} total sales
+                </p>
               )}
             </div>
           </div>
@@ -767,7 +1263,7 @@ function CropModal({ file, onConfirm, onCancel }: {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[#0A0E1A] shadow-2xl">
+      <div className="w-full max-w-2xl rounded-2xl border border-white/10 bg-[var(--app-bg)] shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div>
             <h3 className="text-sm font-bold text-zinc-50">Crop Cover Image</h3>
@@ -949,57 +1445,8 @@ function renderMarkdown(md: string): string {
 
 // ─── Watermarked Content Viewer ───────────────────────────────────────────────
 
-function WatermarkedContent({ content, username }: { content: string; username: string }) {
-  const label = username || "licensed";
-  // Build a repeating diagonal pattern of the username
-  const rows = Array.from({ length: 12 });
-  const cols = Array.from({ length: 6 });
-  return (
-    <div className="relative select-none" onContextMenu={(e) => e.preventDefault()}>
-      {/* Rendered content */}
-      <div
-        className="re-preview-wrap pointer-events-none min-h-[200px] px-1 py-1"
-        dangerouslySetInnerHTML={{ __html: renderMarkdown(content) }}
-      />
-      {/* Watermark overlay */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 overflow-hidden"
-        style={{ zIndex: 10 }}
-      >
-        {rows.map((_, ri) => (
-          <div key={ri} className="flex gap-16" style={{ marginTop: ri === 0 ? "3rem" : "4.5rem", transform: "rotate(-25deg) translateX(-20%)" }}>
-            {cols.map((_, ci) => (
-              <span
-                key={ci}
-                className="whitespace-nowrap text-xs font-medium tracking-widest text-white/[0.06]"
-                style={{ userSelect: "none" }}
-              >
-                {label}
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-      <style>{`
-        .re-preview-wrap h1 { font-size:1.25rem; font-weight:700; color:#f4f4f5; margin:1.25rem 0 0.5rem; }
-        .re-preview-wrap h2 { font-size:1.1rem; font-weight:700; color:#e4e4e7; margin:1rem 0 0.4rem; }
-        .re-preview-wrap h3 { font-size:0.95rem; font-weight:600; color:#d4d4d8; margin:0.75rem 0 0.3rem; }
-        .re-preview-wrap p  { color:#a1a1aa; font-size:0.875rem; line-height:1.7; margin:0.5rem 0; }
-        .re-preview-wrap strong { color:#f4f4f5; font-weight:600; }
-        .re-preview-wrap em { color:#d4d4d8; font-style:italic; }
-        .re-preview-wrap code { background:rgba(255,255,255,0.08); border-radius:4px; padding:1px 5px; font-family:monospace; font-size:0.8rem; color:#67e8f9; }
-        .re-preview-wrap hr { border:none; border-top:1px solid rgba(255,255,255,0.1); margin:1rem 0; }
-        .re-preview-wrap li { color:#a1a1aa; font-size:0.875rem; margin-left:1.25rem; margin-bottom:0.25rem; }
-        .re-preview-wrap li.ul { list-style:disc; }
-        .re-preview-wrap li.ol { list-style:decimal; }
-        .re-preview-wrap img { max-width:100%; border-radius:0.75rem; border:1px solid rgba(255,255,255,0.1); margin:0.5rem 0; }
-        .re-preview-wrap a { color:var(--accent-color); text-decoration:underline; }
-        .re-preview-wrap .video-wrap { position:relative; padding-top:56.25%; margin:0.75rem 0; border-radius:0.75rem; overflow:hidden; }
-        .re-preview-wrap .video-wrap iframe { position:absolute; inset:0; width:100%; height:100%; border:0; }
-      `}</style>
-    </div>
-  );
+function WatermarkedContent({ content, username, noWatermark, fullscreen }: { content: string; username: string; noWatermark?: boolean; fullscreen?: boolean }) {
+  return <SlideViewer content={content} username={username} noWatermark={noWatermark} fullscreen={fullscreen} />;
 }
 
 function RichEditor({ value, onChange, placeholder = "Write your content here…" }: {
@@ -1152,22 +1599,24 @@ function CreateListingModal({ onClose, onSubmit, initialData, editId }: {
     price: initialData?.price ?? 0,
     price_type: initialData?.price_type ?? "free",
     subscription_interval: initialData?.subscription_interval ?? "monthly",
-    backtest_data: initialData?.backtest_data ?? "",
     content_data: initialData?.content_data ?? "",
     preview_image_url: initialData?.preview_image_url ?? "",
+    preview_disabled: initialData?.preview_disabled ?? false,
   });
 
   const set = (k: keyof CreateForm, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
 
   const stepTitles = ["Choose Category", "Basic Info", "Pricing", "Content", "Review & Submit"];
+  const [submitError, setSubmitError] = useState("");
 
   async function handleSubmit() {
     setSubmitting(true);
+    setSubmitError("");
     try {
       await onSubmit(form);
       setSubmitted(true);
-    } catch {
-      // error handled by parent
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : "Save failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -1176,7 +1625,7 @@ function CreateListingModal({ onClose, onSubmit, initialData, editId }: {
   if (submitted) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0A0E1A] p-8 text-center">
+        <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[var(--app-bg)] p-8 text-center">
           <div className="mb-4 flex justify-center">
             <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-400/10 text-emerald-400">
               <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1200,7 +1649,7 @@ function CreateListingModal({ onClose, onSubmit, initialData, editId }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4 pt-8">
-      <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-[#0A0E1A] shadow-2xl">
+      <div className="w-full max-w-4xl rounded-2xl border border-white/10 bg-[var(--app-bg)] shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 p-5">
           <div>
@@ -1256,10 +1705,12 @@ function CreateListingModal({ onClose, onSubmit, initialData, editId }: {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-medium text-zinc-400">Description *</label>
-                <RichEditor
+                <RichEditorV2
                   value={form.description}
                   onChange={(v) => set("description", v)}
                   placeholder={"# Your Strategy Name\n\nDescribe what this is, who it's for, and what's included.\n\n## What You Get\n- Detail 1\n- Detail 2\n\n## How It Works\n\nExplain the logic, timeframes, signals, etc."}
+                  minHeight={220}
+                  simple
                 />
               </div>
               <div>
@@ -1303,9 +1754,21 @@ function CreateListingModal({ onClose, onSubmit, initialData, editId }: {
                 <>
                   <div>
                     <label className="mb-1 block text-xs font-medium text-zinc-400">Price (USD)</label>
-                    <input type="number" min="0" step="0.01" value={form.price}
-                      onChange={(e) => set("price", parseFloat(e.target.value) || 0)}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 focus:border-[var(--accent-color)]/50 focus:outline-none" />
+                    <div className="flex items-center overflow-hidden rounded-xl border border-white/10 bg-white/5 focus-within:border-[var(--accent-color)]/50">
+                      <button type="button"
+                        onClick={() => set("price", Math.max(0, +(form.price - 1).toFixed(2)))}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]">
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
+                      </button>
+                      <input type="number" min="0" step="0.01" value={form.price}
+                        onChange={(e) => set("price", parseFloat(e.target.value) || 0)}
+                        className="flex-1 bg-transparent py-2 text-center text-sm text-zinc-100 focus:outline-none" />
+                      <button type="button"
+                        onClick={() => set("price", +(form.price + 1).toFixed(2))}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]">
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                      </button>
+                    </div>
                   </div>
                   {form.price_type === "subscription" && (
                     <div className="flex gap-3">
@@ -1327,52 +1790,51 @@ function CreateListingModal({ onClose, onSubmit, initialData, editId }: {
 
           {/* Step 4: Content */}
           {step === 4 && (
-            <div className="space-y-4">
-              {form.categories.includes("strategy") && (
+            <div className="space-y-5">
+              {/* Multi-page content builder for all rich-content categories */}
+              {(form.categories.includes("course") || form.categories.includes("chart_preset") || form.categories.includes("indicator") || form.categories.includes("strategy")) && (
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-400">Backtest Parameters (JSON or description)</label>
-                  <textarea value={form.backtest_data} onChange={(e) => set("backtest_data", e.target.value)}
-                    rows={5} placeholder='{"entry": "EMA cross", "exit": "stop loss 2%", "timeframe": "1D", ...}'
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 font-mono text-xs text-zinc-100 placeholder-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none resize-none" />
-                  <p className="mt-1 text-[10px] text-zinc-600">Submit your backtest results for the Backtest Verified badge. Our engine will verify the claims.</p>
-                </div>
-              )}
-              {form.categories.includes("course") && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-400">Course Content</label>
-                  <RichEditor
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="text-xs font-medium text-zinc-400">
+                      {form.categories.includes("course") ? "Course Content"
+                        : form.categories.includes("chart_preset") ? "Setup Guide & Settings"
+                        : form.categories.includes("indicator") ? "Usage Guide"
+                        : "Strategy Content"}
+                    </label>
+                    <span className="text-[10px] text-zinc-600">
+                      Multi-page · Bold, underline, highlight, callout boxes, arrows, images & video supported
+                    </span>
+                  </div>
+                  <CourseBuilder
                     value={form.content_data}
                     onChange={(v) => set("content_data", v)}
-                    placeholder={"# Module 1: Introduction\n\n## Lesson 1.1: Market Structure\nContent here...\n\n## Lesson 1.2: Order Flow\nContent here..."}
                   />
                 </div>
               )}
-              {form.categories.includes("chart_preset") && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-400">Chart Setup Guide + Settings Export</label>
-                  <RichEditor
-                    value={form.content_data}
-                    onChange={(v) => set("content_data", v)}
-                    placeholder={"# Setup Guide\n\nExplain how to install and configure this chart preset.\n\n## Settings\n\n```\n{\"indicators\": [], \"timeframe\": \"1H\"}\n```"}
-                  />
-                </div>
+
+              {/* Preview toggle — only relevant for content-bearing categories */}
+              {(form.categories.includes("course") || form.categories.includes("chart_preset") || form.categories.includes("indicator") || form.categories.includes("strategy")) && (
+                <label className="flex cursor-pointer items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium text-zinc-200">Disable content preview</p>
+                    <p className="text-xs text-zinc-500">Buyers won&apos;t see a blurred preview before purchasing</p>
+                  </div>
+                  <div
+                    onClick={() => set("preview_disabled", !form.preview_disabled)}
+                    className={`relative h-5 w-9 rounded-full transition-colors ${form.preview_disabled ? "bg-[var(--accent-color)]" : "bg-white/10"}`}
+                  >
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${form.preview_disabled ? "translate-x-4" : "translate-x-0.5"}`} />
+                  </div>
+                </label>
               )}
-              {form.categories.includes("indicator") && (
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-zinc-400">Indicator Usage Guide</label>
-                  <RichEditor
-                    value={form.content_data}
-                    onChange={(v) => set("content_data", v)}
-                    placeholder={"# How to Use\n\nExplain the indicator logic and signals.\n\n## Settings\n- Period: 14\n- Source: Close\n\n## Signal Interpretation\n\nDescribe buy/sell signals..."}
-                  />
-                </div>
-              )}
+
               {form.categories.includes("signals") && (
                 <div className="rounded-xl border border-blue-400/20 bg-blue-400/5 p-4">
                   <p className="text-xs font-medium text-blue-400 mb-2">Performance Tracking Agreement</p>
                   <p className="text-xs text-zinc-400">By submitting a signals service, you agree that Quantiv will track and publicly display the real-time performance of your signals including win rate, return, and individual trade outcomes. False or manipulated signals will result in immediate removal and account ban.</p>
                 </div>
               )}
+
               {form.categories.length === 0 && (
                 <p className="text-sm text-zinc-500">Go back to Step 1 and select at least one category.</p>
               )}
@@ -1429,10 +1891,13 @@ function CreateListingModal({ onClose, onSubmit, initialData, editId }: {
               </button>
             )}
             {step === 5 && (
-              <button onClick={handleSubmit} disabled={submitting}
-                className="rounded-xl bg-[var(--accent-color)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
-                {submitting ? "Saving…" : isEdit ? "Save Changes" : "Submit for Review"}
-              </button>
+              <div className="flex flex-col items-end gap-1">
+                {submitError && <p className="text-xs text-red-400">{submitError}</p>}
+                <button onClick={handleSubmit} disabled={submitting}
+                  className="rounded-xl bg-[var(--accent-color)] px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
+                  {submitting ? "Saving…" : isEdit ? "Save Changes" : "Submit for Review"}
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -1443,12 +1908,57 @@ function CreateListingModal({ onClose, onSubmit, initialData, editId }: {
 
 // ─── Seller Dashboard ─────────────────────────────────────────────────────────
 
+function pollListingReviewStatic(listingId: string, onDone: (status: string) => void) {
+  let attempts = 0;
+  const tick = async () => {
+    try {
+      const res = await fetch("/api/marketplace/seller");
+      const data = await res.json() as { listings?: Array<{ id: string; status: string }> };
+      const found = (data.listings ?? []).find((l) => l.id === listingId);
+      if (found && found.status !== "pending") { onDone(found.status); return; }
+    } catch { /* ignore */ }
+    if (++attempts < 20) setTimeout(tick, 3000);
+  };
+  setTimeout(tick, 3000);
+}
+
 function SellerDashboard({ data, onClose, onCreate, onEdit }: {
   data: SellerDashboardData | null;
   onClose: () => void;
   onCreate: () => void;
   onEdit: (listing: SellerDashboardData["listings"][number]) => void;
 }) {
+  const [rereviewing, setRereviewing] = useState<string | null>(null);
+  const [rerviewMsg, setRerviewMsg] = useState<Record<string, string>>({});
+  const [isFounder, setIsFounder] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/profile/me")
+      .then((r) => r.ok ? r.json() : null)
+      .then((p) => { if (p?.is_founder) setIsFounder(true); })
+      .catch(() => {});
+  }, []);
+
+  async function approveOverride(listingId: string) {
+    const res = await fetch(`/api/marketplace/listings/${listingId}/approve`, { method: "POST" });
+    if (res.ok) setRerviewMsg((m) => ({ ...m, [listingId]: "✓ Approved!" }));
+  }
+
+  async function requestRereview(listingId: string, _title: string) {
+    setRereviewing(listingId);
+    try {
+      const res = await fetch(`/api/marketplace/listings/${listingId}/rereview`, { method: "POST" });
+      if (res.ok) {
+        setRerviewMsg((m) => ({ ...m, [listingId]: "Submitted for re-review…" }));
+        pollListingReviewStatic(listingId, (status) => {
+          setRerviewMsg((m) => ({ ...m, [listingId]: status === "approved" ? "✓ Approved!" : "✗ Rejected again" }));
+        });
+      }
+    } finally {
+      setRereviewing(null);
+    }
+  }
+
   const statusColor: Record<string, string> = {
     approved: "text-emerald-400 bg-emerald-400/10",
     pending:  "text-amber-400 bg-amber-400/10",
@@ -1457,7 +1967,7 @@ function SellerDashboard({ data, onClose, onCreate, onEdit }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 backdrop-blur-sm p-4 pt-8">
-      <div className="w-full max-w-3xl rounded-2xl border border-white/10 bg-[#0A0E1A] shadow-2xl">
+      <div className="w-full max-w-3xl rounded-2xl border border-white/10 bg-[var(--app-bg)] shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/10 p-5">
           <h2 className="text-base font-bold text-zinc-50">Seller Dashboard</h2>
           <div className="flex items-center gap-2">
@@ -1480,7 +1990,7 @@ function SellerDashboard({ data, onClose, onCreate, onEdit }: {
               { label: "Total Sales",    value: String(data?.totalSales ?? 0),                   color: "text-zinc-100" },
               { label: "Pending Payout", value: `$${(data?.pendingPayout ?? 0).toFixed(2)}`,    color: "text-amber-400" },
             ].map(({ label, value, color }) => (
-              <div key={label} className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+              <div key={label} className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
                 <p className="text-xs text-zinc-500">{label}</p>
                 <p className={`mt-1 text-xl font-bold ${color}`}>{value}</p>
               </div>
@@ -1492,7 +2002,7 @@ function SellerDashboard({ data, onClose, onCreate, onEdit }: {
           <div>
             <h3 className="mb-3 text-sm font-semibold text-zinc-300">Your Listings</h3>
             {!data || data.listings.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-[#050713] p-8 text-center">
+              <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-8 text-center">
                 <p className="text-sm text-zinc-500">No listings yet.</p>
                 <button onClick={onCreate} className="mt-3 text-xs text-[var(--accent-color)] hover:underline">
                   Create your first listing
@@ -1510,26 +2020,56 @@ function SellerDashboard({ data, onClose, onCreate, onEdit }: {
                   </thead>
                   <tbody>
                     {data.listings.map((l) => (
-                      <tr key={l.id} className="border-b border-white/5 hover:bg-white/5">
-                        <td className="px-4 py-3 font-medium text-zinc-200 max-w-[200px] truncate">{l.title}</td>
-                        <td className="px-4 py-3">
-                          <span className={`rounded px-2 py-0.5 text-[10px] font-medium capitalize ${statusColor[l.status] ?? "text-zinc-400 bg-zinc-400/10"}`}>
-                            {l.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-zinc-400">{l.view_count}</td>
-                        <td className="px-4 py-3 text-zinc-400">{l.sales_count}</td>
-                        <td className="px-4 py-3 text-zinc-400">{l.avg_rating > 0 ? l.avg_rating.toFixed(1) : "—"}</td>
-                        <td className="px-4 py-3 text-emerald-400">${(l.sales_count * l.price * 0.8).toFixed(2)}</td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => onEdit(l)}
-                            className="rounded-lg border border-white/10 px-3 py-1 text-[10px] font-medium text-zinc-400 transition hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)]"
-                          >
-                            Edit
-                          </button>
-                        </td>
-                      </tr>
+                      <React.Fragment key={l.id}>
+                        <tr className="border-b border-white/5 hover:bg-white/5">
+                          <td className="px-4 py-3 font-medium text-zinc-200 max-w-[200px] truncate">{l.title}</td>
+                          <td className="px-4 py-3">
+                            <span className={`rounded px-2 py-0.5 text-[10px] font-medium capitalize ${statusColor[l.status] ?? "text-zinc-400 bg-zinc-400/10"}`}>
+                              {rerviewMsg[l.id] ?? l.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-zinc-400">{l.view_count}</td>
+                          <td className="px-4 py-3 text-zinc-400">{l.sales_count}</td>
+                          <td className="px-4 py-3 text-zinc-400">{l.avg_rating > 0 ? l.avg_rating.toFixed(1) : "—"}</td>
+                          <td className="px-4 py-3 text-emerald-400">${(l.sales_count * l.price * 0.8).toFixed(2)}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => onEdit(l)}
+                                className="rounded-lg border border-white/10 px-3 py-1 text-[10px] font-medium text-zinc-400 transition hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)]"
+                              >
+                                Edit
+                              </button>
+                              {l.status === "rejected" && (
+                                <button
+                                  onClick={() => requestRereview(l.id, l.title)}
+                                  disabled={rereviewing === l.id}
+                                  className="rounded-lg border border-amber-500/30 px-3 py-1 text-[10px] font-medium text-amber-400 transition hover:bg-amber-400/10 disabled:opacity-50"
+                                >
+                                  {rereviewing === l.id ? "…" : "Re-review"}
+                                </button>
+                              )}
+                              {l.status === "rejected" && isFounder && (
+                                <button
+                                  onClick={() => approveOverride(l.id)}
+                                  className="rounded-lg border border-emerald-500/30 px-3 py-1 text-[10px] font-medium text-emerald-400 transition hover:bg-emerald-400/10"
+                                >
+                                  Approve
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        {l.status === "rejected" && l.rejection_reason && (
+                          <tr className="border-b border-white/5 bg-red-500/[0.03]">
+                            <td colSpan={7} className="px-4 py-2">
+                              <p className="text-[11px] text-red-400">
+                                <span className="font-semibold">Rejection reason: </span>{l.rejection_reason}
+                              </p>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -1545,7 +2085,7 @@ function SellerDashboard({ data, onClose, onCreate, onEdit }: {
             ) : (
               <div className="space-y-2">
                 {data.reviews.map((r) => (
-                  <div key={r.id} className="rounded-xl border border-white/5 bg-[#050713] p-3">
+                  <div key={r.id} className="rounded-xl border border-white/5 bg-[var(--app-card-alt)] p-3">
                     <div className="mb-1 flex items-center gap-2">
                       <div className="flex">
                         {[1,2,3,4,5].map((n) => (
@@ -1588,31 +2128,40 @@ export default function MarketplaceView() {
   const [sellerData, setSellerData] = useState<SellerDashboardData | null>(null);
   const [sellerLoading, setSellerLoading] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [warnDismissed, setWarnDismissed] = useState(() =>
+    typeof window !== "undefined" && !!localStorage.getItem("mp_disc_dismissed")
+  );
   const [currentUsername, setCurrentUsername] = useState("");
+  const [currentUserId, setCurrentUserId] = useState("");
+  const [isVerified, setIsVerified] = useState(false);
   const featuredRef = useRef<HTMLDivElement>(null);
 
-  // Fetch current user for watermarking
+  // Fetch current user for watermarking + verification check
   useEffect(() => {
     fetch("/api/profile/me")
       .then((r) => r.ok ? r.json() : null)
-      .then((p) => { if (p?.username || p?.name) setCurrentUsername(p.username ?? p.name); })
+      .then((p) => {
+        if (p?.username || p?.name) setCurrentUsername(p.username ?? p.name);
+        if (p?.user_id) setCurrentUserId(p.user_id);
+        if (p?.is_verified) setIsVerified(true);
+      })
       .catch(() => {});
   }, []);
 
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => { setSearch(searchInput); setPage(1); }, 300);
+    const t = setTimeout(() => setSearch(searchInput), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // Fetch listings
-  const fetchListings = useCallback(async () => {
+  // Fetch listings — pageNum param avoids stale closure; page state is UI-only
+  const fetchListings = useCallback(async (pageNum = 1, signal?: AbortSignal) => {
     setLoading(true);
     try {
       const pf = PRICE_FILTERS[priceFilter];
       const params = new URLSearchParams({
         sort,
-        page: String(page),
+        page: String(pageNum),
         limit: "18",
       });
       if (activeCategories.length > 0) params.set("categories", activeCategories.join(","));
@@ -1621,29 +2170,34 @@ export default function MarketplaceView() {
       if (pf.min > 0) params.set("minPrice", String(pf.min));
       if (pf.max !== null) params.set("maxPrice", String(pf.max));
 
-      const res = await fetch(`/api/marketplace/listings?${params}`);
-      if (!res.ok) return;
+      const res = await fetch(`/api/marketplace/listings?${params}`, { signal });
+      if (!res.ok || signal?.aborted) return;
       const data = (await res.json()) as { listings: Listing[]; total: number; pages: number };
+      if (signal?.aborted) return;
 
-      if (page === 1) {
+      if (pageNum === 1) {
         setListings(data.listings);
         setFeatured(data.listings.filter((l) => l.is_featured).slice(0, 4));
+        setPage(1);
       } else {
         setListings((prev) => [...prev, ...data.listings]);
+        setPage(pageNum);
       }
       setTotal(data.total);
       setTotalPages(data.pages);
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return;
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
-  }, [activeCategories, search, sort, assetClass, priceFilter, page]);
+  }, [activeCategories, search, sort, assetClass, priceFilter]); // page intentionally excluded
 
+  // Single effect — AbortController prevents Strict Mode double-fire in dev
   useEffect(() => {
-    fetchListings();
+    const controller = new AbortController();
+    fetchListings(1, controller.signal);
+    return () => controller.abort();
   }, [fetchListings]);
-
-  // Reset page on filter change
-  useEffect(() => { setPage(1); }, [activeCategories, search, sort, assetClass, priceFilter]);
 
   async function loadSellerDashboard() {
     setSellerLoading(true);
@@ -1683,11 +2237,16 @@ export default function MarketplaceView() {
         preview_image_url: form.preview_image_url,
       }),
     });
-    if (!res.ok) {
-      const err = await res.json() as { error: string };
-      throw new Error(err.error);
+    const json = await res.json() as { listing?: SellerDashboardData["listings"][number]; error?: string };
+    if (!res.ok) throw new Error(json.error ?? "Save failed");
+    const updated = json.listing;
+    if (updated) {
+      setSellerData((prev) => prev ? {
+        ...prev,
+        listings: prev.listings.map((l) => l.id === updated.id ? { ...l, ...updated } : l),
+      } : prev);
     }
-    fetchListings();
+    fetchListings(1);
   }
 
   async function handleCreateSubmit(form: CreateForm) {
@@ -1705,6 +2264,20 @@ export default function MarketplaceView() {
       const err = await res.json() as { error: string };
       throw new Error(err.error);
     }
+    const data = await res.json() as { listing?: { id: string; title: string } };
+    const listingId = data.listing?.id;
+    const listingTitle = data.listing?.title ?? form.title;
+    if (listingId) pollListingReview(listingId, listingTitle);
+  }
+
+  function pollListingReview(listingId: string, title: string) {
+    pollListingReviewStatic(listingId, (status) => {
+      if (status === "approved") {
+        addInAppNotification({ type: "marketplace", message: `Your listing "${title}" was approved and is now live!`, link: "/marketplace" });
+      } else {
+        addInAppNotification({ type: "marketplace", message: `Your listing "${title}" was not approved. Open My Listings for details.`, link: "/marketplace" });
+      }
+    });
   }
 
   const nonFeaturedListings = listings.filter((l) => !l.is_featured || featured.length === 0);
@@ -1713,25 +2286,64 @@ export default function MarketplaceView() {
     <div className="space-y-6">
       {/* Seller banner */}
       {!bannerDismissed && (
-        <div className="relative rounded-2xl border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/5 p-4">
+        <div className={`relative rounded-2xl border p-4 pr-10 ${isVerified ? "border-[var(--accent-color)]/30 bg-[var(--accent-color)]/5" : "border-white/10 bg-white/[0.03]"}`}>
           <button onClick={() => setBannerDismissed(true)}
             className="absolute right-3 top-3 text-zinc-600 hover:text-zinc-400">
             <I.X />
           </button>
           <div className="flex items-center gap-4">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--accent-color)]/10 text-[var(--accent-color)]">
+            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isVerified ? "bg-[var(--accent-color)]/10 text-[var(--accent-color)]" : "bg-white/5 text-zinc-500"}`}>
               <I.Store />
             </span>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-zinc-200">
-                Are you a Verified Trader? Start selling your strategies and earn <span className="text-[var(--accent-color)]">80%</span> of every sale.
+            {isVerified ? (
+              <>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-zinc-200">
+                    Start selling your strategies and earn <span className="text-[var(--accent-color)]">80%</span> of every sale.
+                  </p>
+                  <p className="text-xs text-zinc-500 mt-0.5">Chart presets · Strategies · Indicators · Courses · Signal services</p>
+                </div>
+                <button onClick={() => setShowCreate(true)}
+                  className="flex shrink-0 items-center gap-2 rounded-xl border border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10 px-4 py-2 text-xs font-semibold text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20">
+                  Become a Seller <I.ArrowRight />
+                </button>
+              </>
+            ) : (
+              <div className="flex-1">
+                <p className="text-sm font-medium text-zinc-300">Want to sell on the Marketplace?</p>
+                <p className="text-xs text-zinc-500 mt-0.5">
+                  Only <span className="font-medium text-zinc-400">Verified Traders</span> can list strategies, indicators, and courses.
+                  Build your track record and apply for verification in{" "}
+                  <a href="/settings" className="text-[var(--accent-color)] underline underline-offset-2">Settings</a>.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Disclaimer warning */}
+      {!warnDismissed && (
+        <div className="relative rounded-2xl border border-amber-400/30 bg-amber-400/5 p-4">
+          <button
+            onClick={() => { localStorage.setItem("mp_disc_dismissed", "1"); setWarnDismissed(true); }}
+            className="absolute right-3 top-3 text-zinc-600 hover:text-zinc-400"
+            aria-label="Dismiss"
+          >
+            <I.X />
+          </button>
+          <div className="flex items-start gap-3">
+            <svg className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            <div>
+              <p className="text-sm font-semibold text-amber-300">Important Disclaimer</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">
+                All content on the Marketplace is user-submitted and <span className="text-zinc-300 font-medium">not financial advice</span>. Past performance does not guarantee future results.
+                Always test any strategy, indicator, or code in a paper trading or sandbox environment before using real capital.
+                QuantivTrade is not responsible for trading losses arising from third-party content.
               </p>
-              <p className="text-xs text-zinc-500 mt-0.5">Chart presets · Strategies · Indicators · Courses · Signal services</p>
             </div>
-            <button onClick={() => setShowCreate(true)}
-              className="flex shrink-0 items-center gap-2 rounded-xl border border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10 px-4 py-2 text-xs font-semibold text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20">
-              Become a Seller <I.ArrowRight />
-            </button>
           </div>
         </div>
       )}
@@ -1780,22 +2392,31 @@ export default function MarketplaceView() {
         </div>
 
         {/* Asset class */}
-        <select value={assetClass} onChange={(e) => setAssetClass(e.target.value)}
-          className="rounded-xl border border-white/10 bg-[#050713] px-3 py-2 text-xs text-zinc-300 focus:outline-none hover:border-white/20">
-          {ASSET_CLASSES.map((a) => <option key={a}>{a}</option>)}
-        </select>
+        <div className="relative">
+          <select value={assetClass} onChange={(e) => setAssetClass(e.target.value)}
+            className="no-custom-arrow appearance-none rounded-xl border border-white/10 bg-[var(--app-card-alt)] pl-3 pr-8 py-2 text-xs text-zinc-300 focus:outline-none hover:border-white/20">
+            {ASSET_CLASSES.map((a) => <option key={a}>{a}</option>)}
+          </select>
+          <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </div>
 
         {/* Price filter */}
-        <select value={priceFilter} onChange={(e) => setPriceFilter(Number(e.target.value))}
-          className="rounded-xl border border-white/10 bg-[#050713] px-3 py-2 text-xs text-zinc-300 focus:outline-none hover:border-white/20">
-          {PRICE_FILTERS.map((f, i) => <option key={i} value={i}>{f.label}</option>)}
-        </select>
+        <div className="relative">
+          <select value={priceFilter} onChange={(e) => setPriceFilter(Number(e.target.value))}
+            className="no-custom-arrow appearance-none rounded-xl border border-white/10 bg-[var(--app-card-alt)] pl-3 pr-8 py-2 text-xs text-zinc-300 focus:outline-none hover:border-white/20">
+            {PRICE_FILTERS.map((f, i) => <option key={i} value={i}>{f.label}</option>)}
+          </select>
+          <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </div>
 
         {/* Sort */}
-        <select value={sort} onChange={(e) => setSort(e.target.value)}
-          className="rounded-xl border border-white/10 bg-[#050713] px-3 py-2 text-xs text-zinc-300 focus:outline-none hover:border-white/20">
-          {SORT_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
+        <div className="relative">
+          <select value={sort} onChange={(e) => setSort(e.target.value)}
+            className="no-custom-arrow appearance-none rounded-xl border border-white/10 bg-[var(--app-card-alt)] pl-3 pr-8 py-2 text-xs text-zinc-300 focus:outline-none hover:border-white/20">
+            {SORT_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+          <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+        </div>
 
         {/* Seller dashboard button */}
         <button onClick={loadSellerDashboard} disabled={sellerLoading}
@@ -1803,6 +2424,17 @@ export default function MarketplaceView() {
           <I.Store />
           {sellerLoading ? "Loading…" : "My Listings"}
         </button>
+
+        {/* Become a Seller — compact button shown after banner is dismissed, verified only */}
+        {bannerDismissed && isVerified && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/8 px-3 py-2 text-xs font-semibold text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/15"
+          >
+            <I.Store />
+            Sell
+          </button>
+        )}
       </div>
 
       {/* Featured section */}
@@ -1848,7 +2480,7 @@ export default function MarketplaceView() {
           ))}
         </div>
       ) : nonFeaturedListings.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-[#050713] py-20 text-center">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-[var(--app-card-alt)] py-20 text-center">
           <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-zinc-600">
             <I.Store />
           </span>
@@ -1872,7 +2504,7 @@ export default function MarketplaceView() {
           {/* Load more */}
           {page < totalPages && (
             <div className="flex justify-center pt-2">
-              <button onClick={() => setPage((p) => p + 1)} disabled={loading}
+              <button onClick={() => fetchListings(page + 1)} disabled={loading}
                 className="rounded-xl border border-white/10 px-6 py-2.5 text-sm text-zinc-400 transition hover:border-white/20 hover:text-zinc-300 disabled:opacity-50">
                 {loading ? "Loading…" : "Load more"}
               </button>
@@ -1888,6 +2520,7 @@ export default function MarketplaceView() {
           onClose={() => setSelectedListing(null)}
           onPurchase={handlePurchase}
           currentUsername={currentUsername}
+          currentUserId={currentUserId}
         />
       )}
 
@@ -1905,9 +2538,9 @@ export default function MarketplaceView() {
             price: editListing.price,
             price_type: editListing.price_type as CreateForm["price_type"],
             subscription_interval: (editListing.subscription_interval as "monthly" | "yearly") ?? "monthly",
-            backtest_data: editListing.backtest_data ?? "",
             content_data: editListing.content_data ?? "",
             preview_image_url: editListing.preview_image_url ?? "",
+            preview_disabled: editListing.preview_disabled ?? false,
           } : undefined}
         />
       )}

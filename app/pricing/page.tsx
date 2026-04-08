@@ -16,8 +16,8 @@ const PLANS = [
     tagline: "For the committed.",
     monthly: 19,
     annual: 190,
-    accentColor: "#4f9cf9",
-    glowColor: "rgba(79,156,249,0.18)",
+    accentColor: "#e8846a",
+    glowColor: "rgba(232,132,106,0.18)",
     features: [
       "Full map & all data layers",
       "Unlimited news & economic calendar",
@@ -482,7 +482,7 @@ export default function PricingPage() {
         className="pointer-events-none fixed inset-x-0 top-0 h-px z-50"
         style={{
           background:
-            "linear-gradient(90deg, transparent 0%, #4f9cf9 30%, #00e5ff 50%, #4f9cf9 70%, transparent 100%)",
+            "linear-gradient(90deg, transparent 0%, #e8846a 30%, #00e5ff 50%, #e8846a 70%, transparent 100%)",
           opacity: 0.7,
         }}
       />
@@ -493,7 +493,7 @@ export default function PricingPage() {
         style={{
           height: "55vh",
           background:
-            "linear-gradient(135deg, rgba(79,156,249,0) 0%, rgba(79,156,249,0.12) 30%, rgba(0,229,255,0.09) 55%, rgba(79,156,249,0.06) 75%, rgba(79,156,249,0) 100%)",
+            "linear-gradient(135deg, rgba(232,132,106,0) 0%, rgba(232,132,106,0.12) 30%, rgba(0,229,255,0.09) 55%, rgba(232,132,106,0.06) 75%, rgba(232,132,106,0) 100%)",
           backgroundSize: "300% 300%",
           animation: "aurora-shift 20s ease-in-out infinite, aurora-pulse 12s ease-in-out infinite",
           filter: "blur(48px)",
@@ -520,14 +520,14 @@ export default function PricingPage() {
 
           {/* System identifier */}
           <div className="mb-10 flex items-center justify-center gap-4">
-            <div className="h-px w-16" style={{ background: "rgba(79,156,249,0.35)" }} />
+            <div className="h-px w-16" style={{ background: "rgba(232,132,106,0.35)" }} />
             <span
               className="text-[9px] font-bold uppercase tracking-[0.4em]"
-              style={{ color: "rgba(79,156,249,0.7)" }}
+              style={{ color: "rgba(232,132,106,0.7)" }}
             >
               QUANTIV // ACCESS TIERS
             </span>
-            <div className="h-px w-16" style={{ background: "rgba(79,156,249,0.35)" }} />
+            <div className="h-px w-16" style={{ background: "rgba(232,132,106,0.35)" }} />
           </div>
 
           {/* Headline */}
@@ -539,7 +539,7 @@ export default function PricingPage() {
             <span
               style={{
                 background:
-                  "linear-gradient(135deg, #ffffff 0%, #a8caff 40%, #4f9cf9 100%)",
+                  "linear-gradient(135deg, #ffffff 0%, #f0c4b8 40%, #e8846a 100%)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
                 backgroundClip: "text",
@@ -578,7 +578,7 @@ export default function PricingPage() {
                 style={{
                   color: interval === iv ? "#000000" : "rgba(255,255,255,0.3)",
                   background:
-                    interval === iv ? "#4f9cf9" : "transparent",
+                    interval === iv ? "#e8846a" : "transparent",
                   transition: "all 0.2s ease",
                 }}
               >

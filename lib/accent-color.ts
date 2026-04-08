@@ -4,12 +4,12 @@
  */
 
 export const ACCENT_STORAGE_KEY = "quantivtrade-accent-color";
-export const DEFAULT_ACCENT = "#4f9cf9";
+export const DEFAULT_ACCENT = "#e8846a";
 
 export type AccentOption = { id: string; name: string; hex: string };
 
 export const ACCENT_OPTIONS: AccentOption[] = [
-  { id: "default", name: "QuantivTrade Blue", hex: "#4f9cf9" },
+  { id: "default", name: "Quantiv Salmon", hex: "#e8846a" },
   { id: "blue", name: "Ocean Blue", hex: "#3B82F6" },
   { id: "purple", name: "Royal Purple", hex: "#8B5CF6" },
   { id: "pink", name: "Rose Pink", hex: "#EC4899" },
@@ -25,6 +25,8 @@ export function getStoredAccent(): string {
   if (typeof window === "undefined") return DEFAULT_ACCENT;
   const raw = window.localStorage.getItem(ACCENT_STORAGE_KEY);
   if (!raw || !raw.startsWith("#")) return DEFAULT_ACCENT;
+  // Migrate users who had the old default blue to the new salmon default
+  if (raw.toLowerCase() === "#4f9cf9") return DEFAULT_ACCENT;
   return raw;
 }
 

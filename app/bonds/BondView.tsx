@@ -278,7 +278,7 @@ export default function BondView() {
 
   if (loading) {
     return (
-      <div className="mt-2 rounded-2xl border border-white/10 bg-[#050713] p-5 text-sm text-zinc-500">
+      <div className="mt-2 rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5 text-sm text-zinc-500">
         Loading fixed income dashboard...
       </div>
     );
@@ -286,7 +286,7 @@ export default function BondView() {
 
   if (!data) {
     return (
-      <div className="mt-2 rounded-2xl border border-white/10 bg-[#050713] p-5 text-sm text-red-400">
+      <div className="mt-2 rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5 text-sm text-red-400">
         Failed to load bond market data.
       </div>
     );
@@ -294,7 +294,7 @@ export default function BondView() {
 
   return (
     <div className="mt-2 space-y-3">
-      <section className="rounded-2xl border border-white/10 bg-[#050713] p-3">
+      <section className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">Yield Curve</p>
@@ -336,7 +336,7 @@ export default function BondView() {
           The yield curve plots current US Treasury yields across maturities from 1 month to 30 years. A normal (upward sloping) curve
           signals healthy growth expectations. An inverted curve (short rates above long rates) has historically preceded recessions.
         </p>
-        <div className="w-full rounded-xl border border-white/10 bg-[#050713] p-2">
+        <div className="w-full rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-2">
           {/* Explicit px height: percentage height inside padded boxes often resolves to 0 in flex layouts (Recharts blank). */}
           <div style={{ width: "100%", height: 304 }}>
             <ResponsiveContainer width="100%" height={304}>
@@ -350,7 +350,7 @@ export default function BondView() {
                 tickFormatter={(v) => `${v}%`}
               />
               <Tooltip
-                contentStyle={{ background: "#0F1520", border: "1px solid rgba(255,255,255,0.1)" }}
+                contentStyle={{ background: "var(--app-card)", border: "1px solid rgba(255,255,255,0.1)" }}
                 labelStyle={{ color: "#cbd5e1" }}
                 labelFormatter={(maturity) => `Maturity: ${String(maturity)}`}
                 formatter={(v) => (v == null ? "—" : `${Number(v).toFixed(3)}%`)}
@@ -378,7 +378,7 @@ export default function BondView() {
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
         <section className="min-w-0 space-y-3 xl:col-span-8">
-          <div className="rounded-2xl border border-white/10 bg-[#050713] p-3">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-3">
             <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Bond Market</p>
             <div className="mb-3 flex flex-wrap gap-1.5">
               {TAB_ORDER.map((id) => {
@@ -407,7 +407,7 @@ export default function BondView() {
 
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
               {country?.maturities.map((m) => (
-                <div key={`${country.id}-${m.seriesId}`} className="rounded-xl border border-white/10 bg-[#050713] p-3">
+                <div key={`${country.id}-${m.seriesId}`} className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3">
                   <div className="mb-1 flex items-center justify-between">
                     <p className="text-xs font-medium text-zinc-200">{m.label}</p>
                     <p className={`text-xs font-semibold ${directionClass(m.dailyChangeBps)}`}>
@@ -481,7 +481,7 @@ export default function BondView() {
                   })}
                 </div>
               )}
-              <div className="min-h-[320px] w-full min-w-0 rounded-xl border border-white/10 bg-[#050713] p-2">
+              <div className="min-h-[320px] w-full min-w-0 rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-2">
                 {chartRows.length === 0 ? (
                   <div className="flex h-[320px] items-center justify-center text-sm text-zinc-500">
                     No historical yield data for this market yet.
@@ -503,7 +503,7 @@ export default function BondView() {
                       />
                       <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} tickFormatter={(v) => `${v}%`} domain={["auto", "auto"]} />
                       <Tooltip
-                        contentStyle={{ background: "#0F1520", border: "1px solid rgba(255,255,255,0.1)" }}
+                        contentStyle={{ background: "var(--app-card)", border: "1px solid rgba(255,255,255,0.1)" }}
                         labelStyle={{ color: "#cbd5e1" }}
                         labelFormatter={(v) => {
                           const d = new Date(String(v));
@@ -547,7 +547,7 @@ export default function BondView() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-[#050713] p-3">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-3">
             <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Bond News</p>
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
               {data.news.length === 0 ? (
@@ -559,7 +559,7 @@ export default function BondView() {
                     href={n.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="rounded-xl border border-white/10 bg-[#050713] p-3 transition hover:border-[var(--accent-color)]/30 hover:bg-white/5"
+                    className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3 transition hover:border-[var(--accent-color)]/30 hover:bg-white/5"
                   >
                     <p className="line-clamp-2 text-sm font-medium text-zinc-100">{decodeHtml(n.title)}</p>
                     <p className="mt-1 text-[11px] text-zinc-500">{n.source} · {timeAgo(n.publishedAt)}</p>
@@ -571,7 +571,7 @@ export default function BondView() {
         </section>
 
         <aside className="space-y-3 xl:col-span-4">
-          <div className="rounded-2xl border border-white/10 bg-[#050713] p-3">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-3">
             <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Risk & Sentiment</p>
             <p className="mb-3 text-[11px] leading-relaxed text-zinc-500">
               This panel tracks equity volatility (VIX), the Treasury 10Y–2Y spread, and overall curve shape. An inverted yield curve has
@@ -586,7 +586,7 @@ export default function BondView() {
             ).map(({ key, name, item, kind }) => {
               if (kind === "vix") {
                 return (
-                  <div key={key} className="mb-2 rounded-xl border border-white/10 bg-[#050713] p-2.5">
+                  <div key={key} className="mb-2 rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-2.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs text-zinc-300">{name}</p>
                       <span className={`flex shrink-0 items-center gap-1.5 ${vixLevelClass(item.value)}`}>
@@ -605,7 +605,7 @@ export default function BondView() {
               }
               if (kind === "tenTwo") {
                 return (
-                  <div key={key} className="mb-2 rounded-xl border border-white/10 bg-[#050713] p-2.5">
+                  <div key={key} className="mb-2 rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-2.5">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs text-zinc-300">{name}</p>
                       <span className={`shrink-0 text-sm font-medium ${tenTwoValueClass(item.value)}`}>{fmtYield(item.value)}</span>
@@ -618,7 +618,7 @@ export default function BondView() {
               }
               const est = item.estimated === true;
               return (
-                <div key={key} className="mb-2 rounded-xl border border-white/10 bg-[#050713] p-2.5">
+                <div key={key} className="mb-2 rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-xs text-zinc-300">{name}</p>
                     <span className={`flex shrink-0 items-baseline gap-1 ${est ? "" : directionClass(item.change)}`}>
@@ -633,14 +633,14 @@ export default function BondView() {
               );
             })}
 
-            <div className="mt-2 rounded-xl border border-white/10 bg-[#050713] p-2.5">
+            <div className="mt-2 rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-2.5">
               <p className="text-xs text-zinc-300">Fear & Greed Proxy</p>
               <p className={`mt-1 text-2xl font-semibold ${scoreColor}`}>{score.toFixed(0)}</p>
               <p className="text-[11px] text-zinc-500">{data.sentiment.label}</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-[#050713] p-3">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-3">
             <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Central Bank Rates</p>
             <div className="space-y-2">
               {Object.values(data.centralBankRates).map((r) => {
@@ -648,7 +648,7 @@ export default function BondView() {
                 const chgUp = chg != null && chg > 0;
                 const chgDown = chg != null && chg < 0;
                 return (
-                  <div key={r.label} className="flex items-center justify-between rounded-lg border border-white/10 bg-[#050713] px-2.5 py-2">
+                  <div key={r.label} className="flex items-center justify-between rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-2.5 py-2">
                     <div>
                       <p className="text-xs font-semibold text-zinc-200">{r.label}</p>
                       <p className="text-[11px] text-zinc-400">{r.source}</p>

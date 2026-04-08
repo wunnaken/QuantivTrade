@@ -19,9 +19,9 @@ import { getInAppNotifications } from "../lib/price-alerts";
 import { usePriceContext } from "../lib/price-context";
 
 const SIDEBAR_WIDTH = 220;
-const SIDEBAR_BG = "#0A0E1A";
+const SIDEBAR_BG = "var(--app-sidebar-bg)";
 
-const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict" | "archive" | "marketplace" }[] = [
+const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "archive" | "marketplace" }[] = [
   { href: "/social-feed", label: "Social Feed" },
   { href: "/communities", label: "Communities" },
   { href: "/messages", label: "Messages" },
@@ -29,6 +29,7 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/news", label: "News" },
   { href: "/map", label: "Maps" },
   { href: "/bonds", label: "Bonds" },
+  { href: "/dividends", label: "Dividends" },
   { href: "/forex", label: "Forex" },
   { href: "/futures", label: "Futures" },
   { href: "/crypto", label: "Crypto" },
@@ -47,14 +48,14 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/datahub", label: "DataHub" },
   { href: "/backtest", label: "Backtest" },
   { href: "/journal", label: "Journal" },
-  { href: "/predict", label: "Prediction Markets", icon: "predict" },
+  { href: "/predict", label: "Prediction Markets" },
   { href: "/watchlist", label: "My Watchlist" },
   { href: "/workspace", label: "Workspace" },
 ];
 
 const SECTIONS: { id: string; label: string; hrefs: string[] }[] = [
   { id: "community", label: "Community", hrefs: ["/social-feed", "/communities", "/messages", "/trade-rooms"] },
-  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/forex", "/futures", "/crypto", "/market-relations", "/market-rates", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
+  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/dividends", "/forex", "/futures", "/crypto", "/market-relations", "/market-rates", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
   { id: "analytics", label: "Analytics", hrefs: ["/ceos", "/calendar", "/screener", "/supply-chain", "/datahub", "/backtest"] },
   { id: "personal", label: "Personal", hrefs: ["/journal", "/predict", "/watchlist", "/workspace"] },
 ];
@@ -91,7 +92,7 @@ function SidebarLogo({ narrow }: { narrow: boolean }) {
   );
 }
 
-function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict" | "archive" | "marketplace"; isActive: boolean }) {
+function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "archive" | "marketplace"; isActive: boolean }) {
   const cls = "h-5 w-5";
   const stroke = "currentColor";
   if (icon === "home") return (
@@ -129,11 +130,6 @@ function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedbac
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
     </svg>
   );
-  if (icon === "predict") return (
-    <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-    </svg>
-  );
   if (icon === "archive") return (
     <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -161,7 +157,7 @@ function NavItem({
 }: {
   href: string;
   label: string;
-  icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "predict" | "archive" | "marketplace";
+  icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "archive" | "marketplace";
   isActive: boolean;
   collapsed: boolean;
   onClick?: () => void;
@@ -356,15 +352,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [prefs]);
 
   return (
-    <div className="min-h-screen app-page font-[&quot;Times_New_Roman&quot;,serif]" style={{ paddingLeft: sidebarWidth }}>
+    <div className="min-h-screen app-page" style={{ paddingLeft: sidebarWidth }}>
       {/* Sidebar */}
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-full flex-col border-r border-white/10 transition-all duration-200 ${
+        className={`fixed left-0 top-0 z-50 flex h-full flex-col border-r transition-all duration-200 ${
           collapsed && !sidebarOpen ? "" : ""
         }`}
         style={{
           width: sidebarWidth,
           backgroundColor: SIDEBAR_BG,
+          borderColor: "rgba(232,132,106,0.12)",
         }}
       >
         {/* Mobile overlay */}
@@ -448,7 +445,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     className="mb-0.5 flex w-full items-center justify-between rounded px-2 py-1 text-left transition-colors hover:bg-white/5"
                     aria-expanded={!isSectionCollapsed}
                   >
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 hover:text-zinc-400 transition-colors">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors">
                       {section.label}
                     </span>
                     <svg
@@ -525,7 +522,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </button>
                 {hiddenPanelOpen && (
                   <div
-                    className={`absolute top-full z-50 mt-1 min-w-[180px] rounded-xl border border-white/10 bg-[#0F1520] py-2 shadow-xl ${collapsed ? "left-full ml-1" : "left-0"}`}
+                    className={`absolute top-full z-50 mt-1 min-w-[180px] rounded-xl border border-white/10 bg-[var(--app-card)] py-2 shadow-xl ${collapsed ? "left-full ml-1" : "left-0"}`}
                     role="menu"
                   >
                     <p className="px-3 py-1.5 text-xs text-zinc-500">Click Restore to show again</p>
@@ -622,8 +619,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Top navbar */}
       <header
-        className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b px-4 backdrop-blur"
-        style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-navbar-bg)", color: "var(--app-navbar-text)" }}
+        className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b px-4"
+        style={{ borderColor: "rgba(232,132,106,0.12)", backgroundColor: "var(--app-navbar-bg)", color: "var(--app-navbar-text)" }}
         role="banner"
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -683,7 +680,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
               </svg>
               {notificationCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-color)] text-[10px] font-bold text-[#020308] ring-2 ring-[#0A0E1A]" suppressHydrationWarning>
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--accent-color)] text-[10px] font-bold text-[#020308] ring-2 ring-[var(--app-bg)]" suppressHydrationWarning>
                   {notificationCount}
                 </span>
               )}
@@ -691,7 +688,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {notificationsOpen && (
               <div
                 className="absolute right-0 top-full z-50 mt-1 w-80 animate-[fadeIn_0.15s_ease-out] rounded-xl border border-white/10 py-2 shadow-xl"
-                style={{ backgroundColor: "#0F1520" }}
+                style={{ backgroundColor: "var(--app-card)" }}
                 role="menu"
               >
                 <button
@@ -706,7 +703,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <>
                     {inAppNotifs.slice(0, 5).map((n) => (
                       <Link key={n.id} href={n.link} onClick={() => setNotificationsOpen(false)} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/5">
-                        <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                        <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${
+                          n.type === "marketplace"
+                            ? n.message.includes("approved") ? "bg-emerald-500" : "bg-red-500"
+                            : "bg-emerald-500"
+                        }`} />
                         <div>
                           <p className="text-sm font-medium text-zinc-200">{n.message}</p>
                           <p className="text-xs text-zinc-500">{new Date(n.time).toLocaleString()}</p>
@@ -766,7 +767,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {messagesOpen && (
               <div
                 className="absolute right-0 top-full z-50 mt-1 w-72 animate-[fadeIn_0.15s_ease-out] rounded-xl border border-white/10 py-2 shadow-xl"
-                style={{ backgroundColor: "#0F1520" }}
+                style={{ backgroundColor: "var(--app-card)" }}
                 role="menu"
               >
                 <div className="flex items-center justify-between px-4 py-1.5">
@@ -834,7 +835,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 {profileOpen && (
                   <div
                     className="absolute right-0 top-full z-50 mt-1 min-w-[220px] animate-[fadeIn_0.15s_ease-out] rounded-xl border border-white/10 py-2 shadow-xl"
-                    style={{ backgroundColor: "#0F1520" }}
+                    style={{ backgroundColor: "var(--app-card)" }}
                     role="menu"
                   >
                     <div className="px-4 py-3">

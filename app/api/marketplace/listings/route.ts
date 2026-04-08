@@ -124,9 +124,10 @@ export async function POST(req: Request) {
     preview_images?: string[];
     backtest_data?: string;
     content_data?: string;
+    preview_disabled?: boolean;
   };
 
-  const { title, category, categories, description, price, price_type, subscription_interval, asset_classes, tags, preview_images, backtest_data, content_data } = body;
+  const { title, category, categories, description, price, price_type, subscription_interval, asset_classes, tags, preview_images, backtest_data, content_data, preview_disabled } = body;
 
   const primaryCategory = category || categories?.[0];
   if (!title?.trim() || !primaryCategory || !description?.trim()) {
@@ -151,6 +152,7 @@ export async function POST(req: Request) {
       preview_images: preview_images ?? [],
       backtest_data: backtest_data ?? null,
       content_data: content_data ?? null,
+      preview_disabled: preview_disabled ?? false,
       status: "pending",
       view_count: 0,
       sales_count: 0,

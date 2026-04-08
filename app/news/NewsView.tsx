@@ -156,7 +156,7 @@ function StoryCard({ article, onOpen, onSectorClick }: {
   const hasTags = article.sectors.length > 0 || article.tickers.length > 0;
 
   return (
-    <li className="flex flex-col rounded-xl border border-white/10 bg-[#0F1520] transition-colors hover:border-[var(--accent-color)]/30">
+    <li className="flex flex-col rounded-xl border border-white/10 bg-[var(--app-card)] transition-colors hover:border-[var(--accent-color)]/30">
       <button type="button" onClick={onOpen} className="flex w-full gap-4 p-4 text-left">
         <div className="relative h-20 w-24 shrink-0 overflow-hidden rounded-lg bg-zinc-800/50">
           {showImg ? (
@@ -455,7 +455,7 @@ export default function NewsView() {
       {/* Loading skeleton */}
       {loading ? (
         <div className="space-y-6">
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0F1520]">
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card)]">
             <div className="h-64 animate-pulse bg-white/5 sm:h-80" />
             <div className="space-y-3 p-6">
               <div className="h-4 w-1/3 animate-pulse rounded bg-white/10" />
@@ -465,7 +465,7 @@ export default function NewsView() {
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[1,2,3,4,5,6].map((i) => (
-              <div key={i} className="flex gap-4 rounded-xl border border-white/10 bg-[#0F1520] p-4">
+              <div key={i} className="flex gap-4 rounded-xl border border-white/10 bg-[var(--app-card)] p-4">
                 <div className="h-20 w-24 shrink-0 animate-pulse rounded-lg bg-white/10" />
                 <div className="min-w-0 flex-1 space-y-2">
                   <div className="h-3 w-full animate-pulse rounded bg-white/10" />
@@ -476,7 +476,7 @@ export default function NewsView() {
           </div>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-white/10 bg-[#0F1520] p-8 text-center">
+        <div className="rounded-xl border border-white/10 bg-[var(--app-card)] p-8 text-center">
           <p className="text-sm text-zinc-500">
             {sectorFilter ? `No articles matching "${sectorFilter}" — try clearing the sector filter.` : "Data temporarily unavailable — refresh to try again."}
           </p>
@@ -492,7 +492,7 @@ export default function NewsView() {
         </div>
       ) : compact ? (
         /* ── Compact list view ─────────────────────────────────────── */
-        <div className="rounded-xl border border-white/10 bg-[#0F1520] px-4">
+        <div className="rounded-xl border border-white/10 bg-[var(--app-card)] px-4">
           <ul>
             {filtered.map((article, i) => (
               <CompactRow
@@ -509,7 +509,7 @@ export default function NewsView() {
         <div className="space-y-8">
           {/* Featured story */}
           {featured && (
-            <article className="overflow-hidden rounded-2xl border border-white/10 bg-[#0F1520] transition-colors hover:border-white/15">
+            <article className="overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card)] transition-colors hover:border-white/15">
               {/* Use <a> so SectorChip <button>s below don't nest inside a <button> */}
               <a href={featured.url} target="_blank" rel="noopener noreferrer" className="block w-full text-left">
                 <div className="relative aspect-[2/1] w-full overflow-hidden bg-zinc-900 sm:aspect-[16/9]">
@@ -518,7 +518,7 @@ export default function NewsView() {
                     <img src={`/api/news-image?url=${encodeURIComponent(featured.urlToImage)}`}
                       alt="" className="h-full w-full object-cover blur-sm scale-105" onError={() => setFeaturedImgErr(true)} />
                   ) : (
-                    <div className="flex h-full items-center justify-center bg-gradient-to-br from-[#0A0E1A] to-zinc-900">
+                    <div className="flex h-full items-center justify-center bg-gradient-to-br from-[var(--app-bg)] to-zinc-900">
                       <span className="text-4xl text-white/20">📰</span>
                     </div>
                   )}

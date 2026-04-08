@@ -138,7 +138,7 @@ export function LandingPageContent({ hasInvite = false, hideTopBar = false }: { 
           </p>
         </div>
       </section>
-      <section className="dark-bg-section border-t border-white/5 bg-[#050713]">
+      <section className="dark-bg-section border-t border-white/5 bg-[var(--app-card-alt)]">
         <div className="mx-auto max-w-6xl px-6 py-14 lg:px-8 lg:py-16">
           <div className="mb-10 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
             <div>
@@ -164,7 +164,7 @@ export function LandingPageContent({ hasInvite = false, hideTopBar = false }: { 
           </div>
         </div>
       </section>
-      <section className="dark-bg-section border-t border-white/5 bg-[#050713]">
+      <section className="dark-bg-section border-t border-white/5 bg-[var(--app-card-alt)]">
         <div className="mx-auto max-w-4xl px-6 py-12 text-center lg:px-8 lg:py-16">
           <h2 className="text-xl font-semibold text-zinc-100 sm:text-2xl">Ready to think smarter about markets?</h2>
           <p className="mt-3 text-sm text-zinc-300 sm:text-base">

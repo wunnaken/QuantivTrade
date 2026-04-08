@@ -39,7 +39,7 @@ export default function BacktestPage() {
         {hasAccess ? (
           <BacktestView />
         ) : (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-[#050713] py-20 text-center">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-[var(--app-card-alt)] py-20 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--accent-color)]/10 text-[var(--accent-color)]">
               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
             </div>

@@ -30,7 +30,7 @@ export default function PrivacyPage() {
   }, []);
 
   return (
-    <div className="legal-page-print min-h-screen bg-[#0A0E1A] text-zinc-200">
+    <div className="legal-page-print min-h-screen bg-[var(--app-bg)] text-zinc-200">
       <div className="mx-auto flex max-w-6xl gap-8 px-4 py-8 lg:px-8">
         <aside className="hidden w-52 shrink-0 lg:block print:hidden">
           <nav className="sticky top-24 space-y-1" aria-label="Table of contents">

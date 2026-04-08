@@ -63,14 +63,14 @@ export function PlansFloatingTab() {
 
   return (
     <div
-      className="plans-tab-ping fixed right-0 top-1/2 z-[100] flex min-w-[72px] -translate-y-1/2 shrink-0 items-center justify-end gap-0.5 rounded-l-lg border-y border-l border-white/10 bg-[#050713]/98 px-2.5 py-1.5 shadow-xl backdrop-blur"
+      className="plans-tab-ping fixed right-0 top-1/2 z-[100] flex min-w-[72px] -translate-y-1/2 shrink-0 items-center justify-end gap-0.5 rounded-l-lg border-y border-l border-white/10 bg-[var(--app-card-alt)]/98 px-2.5 py-1.5 shadow-xl backdrop-blur"
       style={{ isolation: "isolate" }}
       role="complementary"
       aria-label="Plans"
     >
       <Link
         href="/plans"
-        className="whitespace-nowrap text-[11px] font-medium uppercase tracking-wider text-zinc-300 transition hover:text-[var(--accent-color)]"
+        className="plans-text whitespace-nowrap text-[11px] font-medium uppercase tracking-wider transition"
       >
         Plans
       </Link>

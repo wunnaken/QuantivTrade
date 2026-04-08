@@ -43,10 +43,10 @@ export function ConnectBrokerModal({ onClose, onConnect }: ConnectBrokerModalPro
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0F1520] shadow-xl max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-lg rounded-2xl border border-white/10 bg-[var(--app-card)] shadow-xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 flex justify-end border-b border-white/10 bg-[#0F1520] p-3">
+        <div className="sticky top-0 flex justify-end border-b border-white/10 bg-[var(--app-card)] p-3">
           <button type="button" onClick={onClose} className="rounded p-2 text-zinc-400 hover:bg-white/5 hover:text-zinc-200" aria-label="Close">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>

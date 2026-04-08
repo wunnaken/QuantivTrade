@@ -186,7 +186,7 @@ export default function TradeRoomsPage() {
             <h2 className="text-sm font-semibold text-zinc-400">Your Rooms</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {rooms.map((room) => (
-                <div key={room.id} className="flex flex-col rounded-xl border border-white/10 bg-[#050713] p-4 transition hover:border-white/20">
+                <div key={room.id} className="flex flex-col rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-4 transition hover:border-white/20">
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-semibold text-zinc-100 leading-tight">{room.name}</h3>
                     <LiveBadge isLive={room.is_live} scheduledAt={room.scheduled_at} endedAt={room.ended_at} />

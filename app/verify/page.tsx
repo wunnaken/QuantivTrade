@@ -45,7 +45,7 @@ export default function VerifyPage() {
 
   if (success) {
     return (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0A0E1A] p-6">
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[var(--app-bg)] p-6">
         <div className="relative z-10 flex flex-col items-center text-center">
           <div className="animate-[scaleIn_0.5s_ease-out]">
             <VerifiedBadge size={80} />
@@ -68,7 +68,7 @@ export default function VerifyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0A0E1A]" style={{ fontFamily: "var(--app-font)" }}>
+    <div className="min-h-screen bg-[var(--app-bg)]" style={{ fontFamily: "var(--app-font)" }}>
       <div className="mx-auto max-w-6xl px-4 py-10">
         <header className="mb-10 text-center">
           <div className="flex justify-center">
@@ -92,7 +92,7 @@ export default function VerifyPage() {
               { icon: "✓", title: "Monetize Your Community", desc: "Charge members for access to your private group. Keep 80%, we take 20%" },
               { icon: "✓", title: "Verified Trader Profile Card", desc: "Real performance stats displayed publicly on your profile" },
             ].map((b, i) => (
-              <div key={i} className="flex gap-3 rounded-xl border border-white/10 bg-[#0F1520] p-4">
+              <div key={i} className="flex gap-3 rounded-xl border border-white/10 bg-[var(--app-card)] p-4">
                 <span className="shrink-0 text-xl" style={{ color: VERIFIED_BLUE }}>{b.icon}</span>
                 <div>
                   <p className="font-medium text-white">{b.title}</p>
@@ -103,7 +103,7 @@ export default function VerifyPage() {
           </section>
 
           {/* Right — Application */}
-          <section className="rounded-2xl border border-white/10 bg-[#0F1520] p-6">
+          <section className="rounded-2xl border border-white/10 bg-[var(--app-card)] p-6">
             <h2 className="text-lg font-semibold text-white">Apply for Verified Status</h2>
             <div className="mt-4 flex gap-2 text-sm text-zinc-400">
               {STEP_LABELS.map((label, i) => (

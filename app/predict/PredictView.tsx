@@ -189,7 +189,7 @@ function StatsBar({ data }: { data: MarketsData | null }) {
   return (
     <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
       {stats.map((s) => (
-        <div key={s.label} className="rounded-xl border border-white/5 bg-[#050713] px-3 py-2">
+        <div key={s.label} className="rounded-xl border border-white/5 bg-[var(--app-card-alt)] px-3 py-2">
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">{s.label}</p>
           <p className="mt-0.5 text-sm font-semibold text-zinc-100">{s.value}</p>
           <p className="truncate text-[10px] text-zinc-600">{s.sub}</p>
@@ -241,7 +241,7 @@ function ExpandedCard({
   }));
 
   return (
-    <div className="col-span-full mt-1 rounded-2xl border border-[var(--accent-color)]/20 bg-[#050713] p-4">
+    <div className="col-span-full mt-1 rounded-2xl border border-[var(--accent-color)]/20 bg-[var(--app-card-alt)] p-4">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -335,7 +335,7 @@ function MarketCard({
   const days = daysLeft(market.endDate);
 
   return (
-    <div className={`rounded-2xl border bg-[#050713] transition-colors ${expanded ? "border-[var(--accent-color)]/30" : "border-white/10 hover:border-white/20"}`}>
+    <div className={`rounded-2xl border bg-[var(--app-card-alt)] transition-colors ${expanded ? "border-[var(--accent-color)]/30" : "border-white/10 hover:border-white/20"}`}>
       <div className="cursor-pointer p-4" onClick={onToggle}>
         <div className="mb-2 flex items-start justify-between gap-2">
           <SourceBadge source={market.source} />
@@ -450,7 +450,7 @@ function MarketsGrid({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-white/5 bg-[#050713] p-12 text-center text-sm text-zinc-600">
+        <div className="rounded-2xl border border-white/5 bg-[var(--app-card-alt)] p-12 text-center text-sm text-zinc-600">
           No markets found.
         </div>
       ) : (
@@ -511,7 +511,7 @@ function ArbitrageTab() {
       <div>
         <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Cross-Platform Discrepancies</p>
         {opps.length === 0 ? (
-          <div className="rounded-2xl border border-white/5 bg-[#050713] p-8 text-center text-sm text-zinc-600">
+          <div className="rounded-2xl border border-white/5 bg-[var(--app-card-alt)] p-8 text-center text-sm text-zinc-600">
             No significant cross-platform discrepancies detected right now.
           </div>
         ) : (
@@ -657,7 +657,7 @@ function AITab({ prefillMarket }: { prefillMarket: PredictMarket | null }) {
   return (
     <div className="space-y-6">
       {/* Probability Scanner */}
-      <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+      <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
         <p className="mb-1 text-sm font-semibold text-zinc-100">Probability Scanner</p>
         <p className="mb-4 text-xs text-zinc-500">Ask Claude to estimate a fair probability and analyze key factors for any question.</p>
         <div className="space-y-3">
@@ -747,7 +747,7 @@ function AITab({ prefillMarket }: { prefillMarket: PredictMarket | null }) {
       </div>
 
       {/* Mispricing Scanner */}
-      <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+      <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-zinc-100">Market Inefficiency Finder</p>
@@ -796,7 +796,7 @@ function TrackedPanel({ markets, tracked, onUntrack }: { markets: PredictMarket[
   if (!trackedMarkets.length) return null;
 
   return (
-    <div className="mt-6 rounded-2xl border border-white/10 bg-[#050713] p-4">
+    <div className="mt-6 rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
       <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">My Tracked Markets ({trackedMarkets.length})</p>
       <div className="space-y-2">
         {trackedMarkets.map((m) => {

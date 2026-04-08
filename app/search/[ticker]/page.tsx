@@ -19,7 +19,7 @@ import { usePriceContext } from "../../../lib/price-context";
 import { PriceDisplay } from "../../../components/PriceDisplay";
 import { CandlestickChart } from "../../../components/CandlestickChart";
 
-const CARD_BG = "#0F1520";
+const CARD_BG = "var(--app-card)";
 
 type ChartPoint = {
   time: number;
@@ -278,7 +278,7 @@ function TickerDataPanel({
 
 function AIAnalysisSkeleton() {
   return (
-    <div className="space-y-4 rounded-2xl border border-[var(--accent-color)]/30 bg-[#0F1520]/80 p-6">
+    <div className="space-y-4 rounded-2xl border border-[var(--accent-color)]/30 bg-[var(--app-card)]/80 p-6">
       <div className="search-skeleton h-8 w-32 rounded" />
       <div className="search-skeleton h-4 w-full rounded" />
       <div className="search-skeleton h-4 w-4/5 rounded" />

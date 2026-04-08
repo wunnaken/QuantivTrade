@@ -304,12 +304,12 @@ export function CountryDetailPanel({
 
   return (
     <div
-      className="flex w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0F1520] shadow-xl"
+      className="flex w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card)] shadow-xl"
       role="region"
       aria-label={`Country details: ${countryName}`}
     >
       {/* Sticky header */}
-      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-white/10 bg-[#0F1520] px-4 py-3">
+      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-white/10 bg-[var(--app-card)] px-4 py-3">
         <h2 className="flex items-center gap-2 truncate text-lg font-semibold text-zinc-100">
           <span className="text-2xl leading-none">{flag}</span>
           <span>{countryName}</span>

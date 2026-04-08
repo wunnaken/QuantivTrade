@@ -1167,7 +1167,7 @@ export default function MapView() {
                 i
               </button>
               {showEstimateInfo && (
-                <div className="absolute left-0 top-full z-[1100] mt-1 w-[min(420px,calc(100vw-2rem))] rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-[11px] leading-snug text-zinc-300 shadow-xl">
+                <div className="absolute left-0 top-full z-[1100] mt-1 w-[min(420px,calc(100vw-2rem))] rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-[11px] leading-snug text-zinc-300 shadow-xl">
                   Estimates up to 35 countries at a time to avoid lag. Run again to cover more.
                 </div>
               )}
@@ -1225,7 +1225,7 @@ export default function MapView() {
           width: "100%",
           height: "calc(100vh - 160px)",
           minHeight: 600,
-          background: "#050713",
+          background: "var(--app-card-alt)",
           borderRadius: "1rem",
           overflow: "hidden",
         }}
@@ -1252,7 +1252,7 @@ export default function MapView() {
               position: "absolute",
               bottom: "1.5rem",
               left: "1.5rem",
-              background: "#0A0E1A",
+              background: "var(--app-bg)",
               border: "1px solid rgba(255,255,255,0.1)",
               borderRadius: "0.75rem",
               padding: "1rem",
@@ -1317,7 +1317,7 @@ export default function MapView() {
 
         {mapMode === "trade" && (selectedFlight || selectedPort || selectedTradeArc || selectedRiskZone) && (
           <div
-            className="pointer-events-auto z-[1000] min-w-[220px] max-w-[min(340px,calc(100vw-2rem))] max-h-[min(75vh,calc(100%-5rem))] overflow-y-auto rounded-xl border border-white/10 bg-[#0A0E1A] p-4 shadow-xl"
+            className="pointer-events-auto z-[1000] min-w-[220px] max-w-[min(340px,calc(100vw-2rem))] max-h-[min(75vh,calc(100%-5rem))] overflow-y-auto rounded-xl border border-white/10 bg-[var(--app-bg)] p-4 shadow-xl"
             style={{ position: "absolute", bottom: "1.5rem", right: "1.5rem" }}
           >
             {selectedFlight ? (
@@ -1445,7 +1445,7 @@ export default function MapView() {
         )}
 
         {mapMode === "market" && !isMobile && compareMode && (
-          <p className="absolute right-4 top-14 z-[1000] max-w-[220px] rounded-lg border border-white/10 bg-[#0A0E1A]/95 px-2 py-1.5 text-[10px] leading-snug text-zinc-400">
+          <p className="absolute right-4 top-14 z-[1000] max-w-[220px] rounded-lg border border-white/10 bg-[var(--app-bg)]/95 px-2 py-1.5 text-[10px] leading-snug text-zinc-400">
             Click up to 4 countries. A comparison table and AI insight appear below.
           </p>
         )}
@@ -1466,7 +1466,7 @@ export default function MapView() {
               top: "1rem",
               right: "1rem",
               width: "280px",
-              background: "#0A0E1A",
+              background: "var(--app-bg)",
               borderColor: "rgba(255,255,255,0.1)",
             }}
           >
@@ -1660,8 +1660,8 @@ export default function MapView() {
                 onClick={() => setTradeLayers((prev) => ({ ...prev, [key]: !prev[key] }))}
                 className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition ${
                   tradeLayers[key]
-                    ? "border-white/20 bg-[#0A0E1A]/95 text-zinc-200"
-                    : "border-white/10 bg-[#0A0E1A]/80 text-zinc-500"
+                    ? "border-white/20 bg-[var(--app-bg)]/95 text-zinc-200"
+                    : "border-white/10 bg-[var(--app-bg)]/80 text-zinc-500"
                 }`}
                 style={{ borderColor: "rgba(255,255,255,0.1)" }}
               >
@@ -1694,7 +1694,7 @@ export default function MapView() {
       )}
 
       {mapMode === "market" && compareMode && compareCountries.length > 0 && !isMobile && (
-        <div className="animate-[fadeIn_0.2s_ease-out] mt-2 rounded-2xl border border-white/10 bg-[#0F1520] p-4">
+        <div className="animate-[fadeIn_0.2s_ease-out] mt-2 rounded-2xl border border-white/10 bg-[var(--app-card)] p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-zinc-200">Compare countries</h3>
             <div className="flex gap-2">

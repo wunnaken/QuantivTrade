@@ -66,7 +66,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     ? "border-amber-500/40 bg-amber-500/20 text-amber-100"
                     : t.type === "celebration"
                       ? "border-[var(--accent-color)]/50 bg-[var(--accent-color)]/20 text-zinc-100"
-                      : "border-white/20 bg-[#0F1520] text-zinc-100"
+                      : "border-white/20 bg-[var(--app-card)] text-zinc-100"
             }`}
           >
             <span className="text-sm font-medium">{t.message}</span>

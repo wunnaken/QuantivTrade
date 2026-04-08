@@ -128,7 +128,7 @@ export default function WatchlistChart({ tickers }: { tickers: string[] }) {
   const tfButtons: Timeframe[] = ["1D", "1W", "1M", "1Y"];
 
   return (
-    <div className="mt-8 rounded-xl border border-white/10 bg-[#050713] p-4">
+    <div className="mt-8 rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">WATCHLIST PERFORMANCE</p>

@@ -102,7 +102,7 @@ export default function CreateRoomPage() {
               <select
                 value={maxMembers}
                 onChange={(e) => setMaxMembers(Number(e.target.value))}
-                className="w-full appearance-none rounded-lg border border-white/10 bg-[#050713] px-3 py-2.5 pr-8 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                className="w-full appearance-none rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2.5 pr-8 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
               >
                 <option value={10}>10 members</option>
                 <option value={25}>25 members</option>

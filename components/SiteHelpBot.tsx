@@ -14,6 +14,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/news": "News",
   "/map": "Global Map",
   "/bonds": "Bonds",
+  "/dividends": "Dividends",
   "/forex": "Forex",
   "/futures": "Futures",
   "/crypto": "Crypto",
@@ -124,7 +125,7 @@ export function SiteHelpBot() {
       {/* Chat panel */}
       {open && (
         <div
-          className="fixed bottom-20 right-4 z-50 flex w-80 flex-col rounded-2xl border border-white/10 bg-[#0A0E1A]"
+          className="fixed bottom-20 right-4 z-50 flex w-80 flex-col rounded-2xl border border-white/10 bg-[var(--app-bg)]"
           style={{ maxHeight: "min(540px, calc(100vh - 100px))" }}
         >
           {/* Header */}
@@ -264,7 +265,7 @@ export function SiteHelpBot() {
       {/* Floating trigger */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full transition hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+        className="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full transition hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
         style={{ backgroundColor: "var(--accent-color)" }}
         aria-label={open ? "Close site guide" : "Open site guide"}
       >

@@ -182,13 +182,13 @@ export default function PublicProfilePage() {
       {/* Banner */}
       <div
         className="h-36 w-full sm:h-48"
-        style={{ background: "linear-gradient(135deg, var(--accent-color)/30 0%, #0A0E1A 100%)", backgroundColor: "#0F1520" }}
+        style={{ background: "linear-gradient(135deg, var(--accent-color)/30 0%, var(--app-bg) 100%)", backgroundColor: "var(--app-card)" }}
       />
 
       <div className="mx-auto max-w-2xl px-4">
         {/* Avatar + actions row */}
         <div className="-mt-12 flex items-end justify-between gap-4 sm:-mt-16">
-          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full border-4 border-[#0A0E1A] bg-[#0F1520] sm:h-32 sm:w-32 flex items-center justify-center text-3xl font-bold text-[var(--accent-color)]">
+          <div className="h-24 w-24 shrink-0 overflow-hidden rounded-full border-4 border-[var(--app-bg)] bg-[var(--app-card)] sm:h-32 sm:w-32 flex items-center justify-center text-3xl font-bold text-[var(--accent-color)]">
             {profile.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={profile.avatar_url} alt={displayName} className="h-full w-full object-cover" />

@@ -23,7 +23,7 @@ const Excalidraw = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-full items-center justify-center bg-[#0a0e1a] text-zinc-400">
+      <div className="flex h-full items-center justify-center bg-[var(--app-bg)] text-zinc-400">
         Loading whiteboard...
       </div>
     ),
@@ -217,7 +217,7 @@ function CreateBoardModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
-        className="w-[440px] max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#050713] p-6 shadow-2xl"
+        className="w-[440px] max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-6 shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         <h2 className="mb-4 text-base font-semibold text-zinc-100">New Board</h2>
@@ -253,7 +253,7 @@ function CreateBoardModal({
               <select
                 value={communityId}
                 onChange={e => setCommunityId(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-[#050713] px-3 py-2 text-sm text-zinc-400 outline-none"
+                className="w-full rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-400 outline-none"
               >
                 <option value="">No community</option>
                 {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -723,7 +723,7 @@ export default function WhiteboardPage() {
 
   if (!loaded) {
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center bg-[#0a0e1a] text-zinc-400">
+      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center bg-[var(--app-bg)] text-zinc-400">
         Loading boards...
       </div>
     );
@@ -738,7 +738,7 @@ export default function WhiteboardPage() {
         <CreateBoardModal onClose={() => setShowCreateModal(false)} onCreate={handleBoardCreated} />
       )}
 
-      <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden bg-[#0a0e1a]">
+      <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden bg-[var(--app-bg)]">
         {/* Header */}
         <header
           className="flex h-12 shrink-0 items-center justify-between gap-4 border-b border-white/10 px-4"
@@ -774,7 +774,7 @@ export default function WhiteboardPage() {
 
         <div className="flex min-h-0 flex-1">
           {/* Sidebar */}
-          <aside className="flex w-56 shrink-0 flex-col border-r border-white/10 bg-[#0A0E1A]">
+          <aside className="flex w-56 shrink-0 flex-col border-r border-white/10 bg-[var(--app-bg)]">
             {/* Tab selector */}
             <div className="flex gap-1 border-b border-white/10 p-1.5">
               {(["personal", "group"] as const).map(t => (
@@ -904,7 +904,7 @@ export default function WhiteboardPage() {
 
             {/* Autosave indicator */}
             {isGroupBoard && !isViewOnly && (
-              <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 rounded-lg border border-white/10 bg-[#0F1520]/90 px-2.5 py-1.5 text-[10px] text-zinc-500">
+              <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 rounded-lg border border-white/10 bg-[var(--app-card)]/90 px-2.5 py-1.5 text-[10px] text-zinc-500">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                 Live · auto-saves every 30s
               </div>
@@ -912,7 +912,7 @@ export default function WhiteboardPage() {
 
             {/* Save reminder for personal boards */}
             {!isGroupBoard && (
-              <div className="absolute bottom-4 left-1/2 z-10 w-[90%] max-w-sm -translate-x-1/2 rounded border border-white/10 bg-[#0F1520]/90 px-3 py-2 text-xs text-zinc-400 shadow-lg">
+              <div className="absolute bottom-4 left-1/2 z-10 w-[90%] max-w-sm -translate-x-1/2 rounded border border-white/10 bg-[var(--app-card)]/90 px-3 py-2 text-xs text-zinc-400 shadow-lg">
                 <p className="font-medium text-zinc-200">Save Whiteboard</p>
                 <p className="mt-1">Click Save to persist to Supabase. No auto-save.</p>
               </div>

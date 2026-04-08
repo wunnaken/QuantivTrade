@@ -336,7 +336,7 @@ function Typewriter({ text }: { text: string }) {
 function ChartTooltipContent({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string; color: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-lg border border-white/10 bg-[#050713] p-2 text-xs shadow-xl">
+    <div className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] p-2 text-xs shadow-xl">
       <p className="mb-1 text-zinc-500">{label}</p>
       {payload.map((p) => (
         <p key={p.name} style={{ color: p.color }}>
@@ -524,7 +524,7 @@ export default function BacktestView() {
             <select
               value={setup.assetType}
               onChange={(e) => setSetup({ ...setup, assetType: e.target.value })}
-              className="rounded-lg border border-white/10 bg-[#050713] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
+              className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
             >
               <option value="stock">Stock / Equity</option>
               <option value="etf">ETF</option>
@@ -703,7 +703,7 @@ export default function BacktestView() {
                 <select
                   value={p.maType}
                   onChange={(e) => set({ maType: e.target.value as "sma" | "ema" })}
-                  className="rounded-lg border border-white/10 bg-[#050713] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                  className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
                 >
                   <option value="sma">SMA</option>
                   <option value="ema">EMA</option>
@@ -741,7 +741,7 @@ export default function BacktestView() {
                 <select
                   value={p.optionStrategy}
                   onChange={(e) => set({ optionStrategy: e.target.value })}
-                  className="rounded-lg border border-white/10 bg-[#050713] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                  className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
                 >
                   <option value="covered_call">Covered Call</option>
                   <option value="cash_secured_put">Cash Secured Put</option>
@@ -930,7 +930,7 @@ export default function BacktestView() {
     return (
       <div className="space-y-6">
         {/* ── Header row ── */}
-        <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-[#050713] p-5">
+        <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5">
           <div>
             <p className="text-xs text-zinc-500 uppercase tracking-widest">{result.ticker} · {result.strategy_type.replace("_", " ")}</p>
             <p className={`mt-1 text-4xl font-bold ${retColor(m.total_return)}`}>
@@ -963,7 +963,7 @@ export default function BacktestView() {
             { label: "Avg Hold Time", value: m.avg_hold_time_days != null ? `${m.avg_hold_time_days.toFixed(1)}d` : "—", color: "text-zinc-200" },
             { label: "Calmar Ratio", value: fmtNum(m.calmar_ratio), color: m.calmar_ratio > 1 ? "text-emerald-400" : m.calmar_ratio > 0 ? "text-amber-400" : "text-red-400" },
           ].map((item) => (
-            <div key={item.label} className="rounded-xl border border-white/10 bg-[#050713] p-3">
+            <div key={item.label} className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3">
               <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{item.label}</p>
               <p className={`mt-1 text-lg font-semibold ${item.color}`}>{item.value}</p>
             </div>
@@ -972,7 +972,7 @@ export default function BacktestView() {
 
         {/* ── Equity curve ── */}
         {chartData.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
             <p className="mb-4 text-sm font-semibold text-zinc-200">Equity Curve</p>
             <ResponsiveContainer width="100%" height={280}>
               <LineChart data={chartData}>
@@ -1006,7 +1006,7 @@ export default function BacktestView() {
 
         {/* ── Drawdown chart ── */}
         {m.drawdown_curve?.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
             <p className="mb-4 text-sm font-semibold text-zinc-200">Drawdown</p>
             <ResponsiveContainer width="100%" height={160}>
               <AreaChart data={m.drawdown_curve}>
@@ -1015,7 +1015,7 @@ export default function BacktestView() {
                 <YAxis tick={{ fill: "#52525b", fontSize: 10 }} tickFormatter={(v: number) => v.toFixed(0) + "%"} width={40} />
                 <Tooltip
                   formatter={(v: unknown) => [typeof v === "number" ? v.toFixed(2) + "%" : String(v), "Drawdown"] as [string, string]}
-                  contentStyle={{ background: "#050713", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                  contentStyle={{ background: "var(--app-card-alt)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
                   labelStyle={{ color: "#71717a" }}
                 />
                 <Area type="monotone" dataKey="drawdown" stroke="#ef4444" fill="rgba(239,68,68,0.2)" dot={false} strokeWidth={1} />
@@ -1026,7 +1026,7 @@ export default function BacktestView() {
 
         {/* ── Monthly returns heatmap ── */}
         {years.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
             <p className="mb-4 text-sm font-semibold text-zinc-200">Monthly Returns</p>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-center text-[10px]">
@@ -1071,11 +1071,11 @@ export default function BacktestView() {
 
         {/* ── Trade list ── */}
         {m.trades?.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
             <p className="mb-4 text-sm font-semibold text-zinc-200">Trade History ({m.trades.length} trades)</p>
             <div className="overflow-x-auto max-h-72 overflow-y-auto">
               <table className="w-full min-w-[560px] text-xs">
-                <thead className="sticky top-0 bg-[#050713]">
+                <thead className="sticky top-0 bg-[var(--app-card-alt)]">
                   <tr className="border-b border-white/10 text-left">
                     <th className="pb-2 pr-4 font-medium text-zinc-500">Entry</th>
                     <th className="pb-2 pr-4 font-medium text-zinc-500">Exit</th>
@@ -1106,7 +1106,7 @@ export default function BacktestView() {
 
         {/* ── Walk-forward ── */}
         {result.walk_forward && (
-          <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
             <p className="mb-1 text-sm font-semibold text-zinc-200">Walk-Forward Analysis</p>
             <p className={`mb-4 text-xs ${result.walk_forward.avg_efficiency_ratio != null && result.walk_forward.avg_efficiency_ratio > 0.5 ? "text-emerald-400" : "text-amber-400"}`}>
               {result.walk_forward.verdict}
@@ -1117,7 +1117,7 @@ export default function BacktestView() {
                 <XAxis dataKey="split" tick={{ fill: "#52525b", fontSize: 10 }} />
                 <YAxis tick={{ fill: "#52525b", fontSize: 10 }} />
                 <Tooltip
-                  contentStyle={{ background: "#050713", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                  contentStyle={{ background: "var(--app-card-alt)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
                   labelStyle={{ color: "#71717a" }}
                 />
                 <Legend wrapperStyle={{ fontSize: 11, color: "#71717a" }} />
@@ -1146,7 +1146,7 @@ export default function BacktestView() {
 
         {/* ── Monte Carlo ── */}
         {result.monte_carlo && mcData.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
             <p className="mb-1 text-sm font-semibold text-zinc-200">Monte Carlo Simulation</p>
             <p className="mb-4 text-xs text-zinc-500">{result.monte_carlo.n_runs.toLocaleString()} simulations of {result.monte_carlo.n_trades} trades</p>
             <ResponsiveContainer width="100%" height={220}>
@@ -1155,7 +1155,7 @@ export default function BacktestView() {
                 <XAxis dataKey="trade" tick={{ fill: "#52525b", fontSize: 10 }} />
                 <YAxis tick={{ fill: "#52525b", fontSize: 10 }} tickFormatter={(v: number) => fmtDollars(v)} width={60} />
                 <Tooltip
-                  contentStyle={{ background: "#050713", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                  contentStyle={{ background: "var(--app-card-alt)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
                   labelStyle={{ color: "#71717a" }}
                   formatter={(v: unknown) => typeof v === "number" ? fmtDollars(v) : String(v)}
                 />

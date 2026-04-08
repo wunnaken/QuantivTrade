@@ -119,7 +119,7 @@ function BentoCard({ href, title, icon, children, loading=false, delay=0, classN
       onMouseLeave={() => setHovered(false)}
       onClick={() => router.push(href)}
       style={{ boxShadow: hovered ? "0 0 16px color-mix(in srgb, var(--accent-color) 12%, transparent)" : "none", transition: "box-shadow 0.15s ease" }}
-      className={`cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-[#050713] ${className}`}
+      className={`cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card-alt)] ${className}`}
     >
       <div className="flex items-center justify-between px-4 pt-3 pb-1.5">
         <div className="flex items-center gap-2">
@@ -259,7 +259,7 @@ function DashboardHeader() {
         </div>
         <button
           onClick={() => setShowBriefing(true)}
-          className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-[#0F1520] px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)]"
+          className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-[var(--app-card)] px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)]"
         >
           Morning Briefing
         </button>
@@ -317,7 +317,7 @@ function BondYieldCurveCard({delay}:{delay:number}) {
           <LineChart data={chartData} margin={{top:4,right:4,bottom:0,left:-22}}>
             <XAxis dataKey="date" tick={{fill:"#52525b",fontSize:8,dy:6}} axisLine={false} tickLine={false} tickFormatter={v=>String(v).slice(5)} interval="preserveStartEnd"/>
             <YAxis tick={{fill:"#52525b",fontSize:9}} axisLine={false} tickLine={false} domain={["auto","auto"]}/>
-            <Tooltip contentStyle={{backgroundColor:"#0F1520",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,fontSize:11}} labelStyle={{color:"#a1a1aa"}}
+            <Tooltip contentStyle={{backgroundColor:"var(--app-card)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,fontSize:11}} labelStyle={{color:"#a1a1aa"}}
               formatter={(v:any,name:any)=>[`${Number(v).toFixed(2)}%`,name]} cursor={{stroke:"rgba(255,255,255,0.08)"}}/>
             {Object.entries(YIELD_COLORS).map(([lbl,col])=>(
               <Line key={lbl} type="monotone" dataKey={lbl} stroke={col} strokeWidth={1.5} dot={false} activeDot={{r:3}} connectNulls/>
@@ -651,7 +651,7 @@ function LiveChartCard({delay}:{delay:number}) {
 
   return (
     <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}} transition={{delay,duration:0.35,ease:"easeOut"}}
-      className="overflow-hidden rounded-2xl border border-white/10 bg-[#050713] min-h-[420px] flex flex-col">
+      className="overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card-alt)] min-h-[420px] flex flex-col">
       <div className="flex items-center justify-between px-4 pt-3 pb-1.5 shrink-0">
         <div className="flex items-center gap-2">
           <span className="flex h-4 w-4 items-center justify-center text-zinc-600">{I.barChart}</span>
@@ -691,7 +691,7 @@ function LiveChartCard({delay}:{delay:number}) {
                 </defs>
                 <XAxis dataKey="date" tick={{fill:"#52525b",fontSize:9}} axisLine={false} tickLine={false} tickFormatter={v=>String(v).slice(-5)}/>
                 <YAxis domain={[minV-pad,maxV+pad]} tick={{fill:"#52525b",fontSize:9}} axisLine={false} tickLine={false}/>
-                <Tooltip contentStyle={{backgroundColor:"#0F1520",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,fontSize:11}} labelStyle={{color:"#a1a1aa"}}
+                <Tooltip contentStyle={{backgroundColor:"var(--app-card)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,fontSize:11}} labelStyle={{color:"#a1a1aa"}}
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
                   formatter={(v:any)=>[`$${Number(v).toFixed(2)}`,"Price"]} cursor={{stroke:"rgba(255,255,255,0.08)"}}/>
                 <Area type="monotone" dataKey="close" stroke="var(--accent-color)" strokeWidth={1.5} fill="url(#chartGrad)" dot={false} activeDot={{r:3,fill:"var(--accent-color)"}}/>

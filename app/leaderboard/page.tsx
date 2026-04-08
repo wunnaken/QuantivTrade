@@ -133,7 +133,7 @@ export default function LeaderboardPage() {
           </div>
         )}
         {tab === "verified" ? (
-          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0F1520]">
+          <div className="overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card)]">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-white/10 bg-black/20">
@@ -173,7 +173,7 @@ export default function LeaderboardPage() {
             </table>
           </div>
         ) : (
-        <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0F1520]">
+        <div className="overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card)]">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-white/10 bg-black/20">

@@ -34,7 +34,7 @@ import {
   Cell,
 } from "recharts";
 
-const BG = "#0A0E1A";
+const BG = "var(--app-bg)";
 const GRID_COLOR = "#1a2535";
 const MAX_TRADES_PER_DAY = 10;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -493,7 +493,7 @@ Trades data: ${JSON.stringify(last20)}`;
                 <select
                   value={filterStatus}
                   onChange={(e) => setFilterStatus(e.target.value as "all" | "open" | "closed")}
-                  className="rounded-lg border border-white/10 bg-[#0F1520] px-3 py-1.5 text-xs text-zinc-200"
+                  className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-1.5 text-xs text-zinc-200"
                 >
                   <option value="all">All</option>
                   <option value="open">Open</option>
@@ -504,12 +504,12 @@ Trades data: ${JSON.stringify(last20)}`;
                   placeholder="Filter by asset"
                   value={filterAsset}
                   onChange={(e) => setFilterAsset(e.target.value)}
-                  className="w-32 rounded-lg border border-white/10 bg-[#0F1520] px-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-500"
+                  className="w-32 rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-500"
                 />
                 <select
                   value={filterDirection}
                   onChange={(e) => setFilterDirection(e.target.value as "all" | "LONG" | "SHORT")}
-                  className="rounded-lg border border-white/10 bg-[#0F1520] px-3 py-1.5 text-xs text-zinc-200"
+                  className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-1.5 text-xs text-zinc-200"
                 >
                   <option value="all">All</option>
                   <option value="LONG">Long</option>
@@ -518,7 +518,7 @@ Trades data: ${JSON.stringify(last20)}`;
                 <select
                   value={filterOutcome}
                   onChange={(e) => setFilterOutcome(e.target.value as "all" | "winners" | "losers")}
-                  className="rounded-lg border border-white/10 bg-[#0F1520] px-3 py-1.5 text-xs text-zinc-200"
+                  className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-1.5 text-xs text-zinc-200"
                 >
                   <option value="all">All</option>
                   <option value="winners">Winners</option>
@@ -528,13 +528,13 @@ Trades data: ${JSON.stringify(last20)}`;
                   type="date"
                   value={dateFrom}
                   onChange={(e) => setDateFrom(e.target.value)}
-                  className="rounded-lg border border-white/10 bg-[#0F1520] px-3 py-1.5 text-xs text-zinc-200"
+                  className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-1.5 text-xs text-zinc-200"
                 />
                 <input
                   type="date"
                   value={dateTo}
                   onChange={(e) => setDateTo(e.target.value)}
-                  className="rounded-lg border border-white/10 bg-[#0F1520] px-3 py-1.5 text-xs text-zinc-200"
+                  className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-1.5 text-xs text-zinc-200"
                 />
               </div>
               <button
@@ -584,7 +584,7 @@ Trades data: ${JSON.stringify(last20)}`;
                         const d = new Date(calYear, calMonth - 1, 1);
                         setCalendarMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
                       }}
-                      className="rounded-lg border border-white/10 bg-[#0F1520] px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
+                      className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
                     >
                       ← Prev
                     </button>
@@ -594,7 +594,7 @@ Trades data: ${JSON.stringify(last20)}`;
                         const d = new Date(calYear, calMonth + 1, 1);
                         setCalendarMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
                       }}
-                      className="rounded-lg border border-white/10 bg-[#0F1520] px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
+                      className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/5"
                     >
                       Next →
                     </button>
@@ -742,7 +742,7 @@ Trades data: ${JSON.stringify(last20)}`;
                         <XAxis dataKey="label" tick={{ fill: "#71717a", fontSize: 10 }} stroke={GRID_COLOR} />
                         <YAxis tick={{ fill: "#71717a", fontSize: 10 }} stroke={GRID_COLOR} tickFormatter={(v) => `$${v}`} />
                         <Tooltip
-                          contentStyle={{ backgroundColor: "#0F1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }}
+                          contentStyle={{ backgroundColor: "var(--app-card)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }}
                           labelStyle={{ color: "#a1a1aa" }}
                           formatter={(value: unknown) => [formatCurrency(Number(value ?? 0)), "P&L"]}
                         />
@@ -1287,10 +1287,10 @@ function LogTradeModal({
       aria-label="Log a trade"
     >
       <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-white/10 bg-[#0F1520] shadow-xl sm:rounded-2xl"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-white/10 bg-[var(--app-card)] shadow-xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 flex items-center justify-between border-b border-white/10 bg-[#0F1520] px-6 py-4">
+        <div className="sticky top-0 flex items-center justify-between border-b border-white/10 bg-[var(--app-card)] px-6 py-4">
           <h2 className="text-lg font-semibold text-zinc-100">{initialTrade ? "Edit trade" : "Log a trade"}</h2>
           <button type="button" onClick={onClose} className="rounded p-2 text-zinc-400 hover:bg-white/10 hover:text-zinc-200">
             ✕
@@ -1405,7 +1405,7 @@ function LogTradeModal({
             <select
               value={strategy}
               onChange={(e) => setStrategy(e.target.value as Strategy)}
-              className="mt-1 w-full rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-sm text-zinc-100"
+              className="mt-1 w-full rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-sm text-zinc-100"
             >
               {STRATEGIES.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -1420,7 +1420,7 @@ function LogTradeModal({
               value={optionPl}
               onChange={(e) => setOptionPl(e.target.value)}
               placeholder="e.g. premium P/L in $"
-              className="mt-1 w-full rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500"
+              className="mt-1 w-full rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500"
             />
           </div>
           <div className="flex items-center gap-2">

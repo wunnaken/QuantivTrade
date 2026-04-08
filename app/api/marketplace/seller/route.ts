@@ -14,7 +14,7 @@ export async function GET() {
     supabase
       .from("marketplace_listings")
       .select(
-        "id, title, category, categories, status, view_count, sales_count, avg_rating, review_count, price, price_type, subscription_interval, description, tags, asset_classes, backtest_data, content_data, preview_image_url, created_at, rejection_reason"
+        "id, title, category, categories, status, view_count, sales_count, avg_rating, review_count, price, price_type, subscription_interval, description, tags, asset_classes, backtest_data, content_data, preview_image_url, preview_disabled, created_at, rejection_reason"
       )
       .eq("seller_id", userId)
       .order("created_at", { ascending: false }),

@@ -100,8 +100,8 @@ export function setLastDashboardId(id: string): void {
 }
 
 const DEFAULT_THEME: DashboardTheme = {
-  background: "#0A0E1A",
-  widgetBg: "#0F1520",
+  background: "var(--app-bg)",
+  widgetBg: "var(--app-card)",
   widgetBorder: "subtle",
   widgetRadius: "rounded",
   gridLineColor: "#1a2535",

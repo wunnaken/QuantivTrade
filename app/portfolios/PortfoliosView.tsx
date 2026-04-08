@@ -307,7 +307,7 @@ function PortfolioChart({ portfolioId, color, timeframe, tickersOverride }: { po
   const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: number }) => {
     if (!active || !payload?.length) return null;
     return (
-      <div className="rounded-lg border border-white/10 bg-[#0a0e1a] px-3 py-2 text-xs shadow-xl">
+      <div className="rounded-lg border border-white/10 bg-[var(--app-bg)] px-3 py-2 text-xs shadow-xl">
         <p className="text-zinc-500 mb-1">{label ? fmtTs(label, timeframe) : ""}</p>
         {payload.map((p) => (
           <p key={p.name} style={{ color: p.color }}>{p.name}: {p.value != null ? pct(p.value) : "—"}</p>
@@ -383,7 +383,7 @@ function HoldingsRadar({ holdings, color }: { holdings: ThematicHolding[]; color
           strokeWidth={1.5}
         />
         <Tooltip
-          contentStyle={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
+          contentStyle={{ background: "var(--app-bg)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
           formatter={(_v, _n, props: { payload?: { raw?: number } }) => [
             pct(props.payload?.raw ?? 0),
             "Day Change",
@@ -410,7 +410,7 @@ function ThematicCard({
   return (
     <button
       onClick={onToggle}
-      className="text-left w-full rounded-2xl border border-white/10 bg-[#050713] overflow-hidden transition-all duration-200 hover:border-white/20 hover:bg-white/[0.025]"
+      className="text-left w-full rounded-2xl border border-white/10 bg-[var(--app-card-alt)] overflow-hidden transition-all duration-200 hover:border-white/20 hover:bg-white/[0.025]"
       style={{ borderLeft: `3px solid ${portfolio.color}` }}
     >
       <div className="p-4">
@@ -471,7 +471,7 @@ function ThematicDetail({ portfolio }: { portfolio: ThematicPortfolio }) {
   );
 
   return (
-    <div className="col-span-full rounded-2xl border border-white/10 bg-[#050713] p-5 space-y-5"
+    <div className="col-span-full rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5 space-y-5"
       style={{ borderLeft: `3px solid ${portfolio.color}` }}
     >
       {/* Header */}
@@ -639,7 +639,7 @@ function InvestorCard({
   return (
     <button
       onClick={onToggle}
-      className="text-left w-full rounded-2xl border border-white/10 bg-[#050713] p-4 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.025]"
+      className="text-left w-full rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.025]"
     >
       <div className="flex items-start gap-3 mb-3">
         <div
@@ -708,7 +708,7 @@ function InvestorDetail({ investor }: { investor: FamousInvestor }) {
   }));
 
   return (
-    <div className="col-span-full rounded-2xl border border-white/10 bg-[#050713] p-5 space-y-5">
+    <div className="col-span-full rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5 space-y-5">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-4">
@@ -822,7 +822,7 @@ function InvestorDetail({ investor }: { investor: FamousInvestor }) {
                       strokeWidth={1.5}
                     />
                     <Tooltip
-                      contentStyle={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
+                      contentStyle={{ background: "var(--app-bg)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
                       formatter={(v, _n, props) => {
                         const raw = (props as { payload?: { raw?: number | null } }).payload?.raw;
                         return [`${(v as number).toFixed(1)}% portfolio${raw != null ? ` · ${pct(raw, 2)} today` : ""}`, ""];
@@ -914,7 +914,7 @@ function ComparisonTool({
   const selectClass = "rounded-lg border border-white/10 bg-[#0d1120] px-3 py-2 text-sm text-zinc-200 outline-none focus:border-white/20 transition-colors appearance-none";
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] p-5">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--accent-color)]/70 mb-1">Compare Portfolios</p>
       <h3 className="text-sm font-semibold text-zinc-200 mb-4">Side-by-side comparison</h3>
 

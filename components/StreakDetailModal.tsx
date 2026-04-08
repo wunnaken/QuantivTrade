@@ -13,7 +13,7 @@ export function StreakDetailModal({ data, onClose }: { data: StreakData; onClose
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="streak-modal-title">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-hidden onClick={onClose} />
-      <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[#0F1520] p-6 shadow-xl">
+      <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[var(--app-card)] p-6 shadow-xl">
         <h2 id="streak-modal-title" className="text-lg font-semibold text-zinc-100">Your Streaks</h2>
         <p className="mt-1 text-xs text-zinc-500">Consecutive days. Keep it going!</p>
         <div className="mt-4 space-y-4">

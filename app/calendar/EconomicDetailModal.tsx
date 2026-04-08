@@ -22,7 +22,7 @@ type EconomicEventDetail = {
   actual?: string;
 };
 
-const CARD_BG = "#0F1520";
+const CARD_BG = "var(--app-card)";
 const GRID_COLOR = "#1a2535";
 
 const FRED_CACHE_KEY = "quantivtrade-calendar-fred-";
@@ -267,7 +267,7 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
         style={{ backgroundColor: CARD_BG }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0F1520]/95 px-4 py-3 backdrop-blur">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[var(--app-card)]/95 px-4 py-3 backdrop-blur">
           <h2 className="text-lg font-semibold text-zinc-100">{event.name}</h2>
           <button
             type="button"

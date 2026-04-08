@@ -42,7 +42,7 @@ function HeroSection() {
   return (
     <section
       className="relative flex flex-col items-center justify-center overflow-hidden"
-      style={{ minHeight: "100vh", background: "#000000" }}
+      style={{ minHeight: "100vh", background: "var(--app-bg)" }}
     >
       <ParticleField />
 
@@ -56,7 +56,7 @@ function HeroSection() {
           className="mb-10"
         >
           <span className="hero-badge badge-pulse">
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#4f9cf9", display: "inline-block", flexShrink: 0 }} />
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#e8846a", display: "inline-block", flexShrink: 0 }} />
             Next-Generation Trading Intelligence
           </span>
         </motion.div>
@@ -69,8 +69,8 @@ function HeroSection() {
             transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
           >
             <span
-              className="block font-black text-white"
-              style={{ fontSize: "clamp(56px, 9vw, 96px)", letterSpacing: "-0.02em" }}
+              className="block font-bold text-white landing-hero-headline"
+              style={{ fontSize: "clamp(52px, 8.5vw, 90px)", letterSpacing: "-0.01em" }}
             >
               Trade Smarter.
             </span>
@@ -82,8 +82,8 @@ function HeroSection() {
           >
             {/* Extra bottom padding so descenders (y, g) don't get clipped */}
             <span
-              className="hero-accent font-black"
-              style={{ fontSize: "clamp(56px, 9vw, 96px)", letterSpacing: "-0.02em", lineHeight: 1, paddingBottom: "0.12em" }}
+              className="hero-accent font-bold landing-hero-headline"
+              style={{ fontSize: "clamp(52px, 8.5vw, 90px)", letterSpacing: "-0.01em", lineHeight: 1, paddingBottom: "0.12em" }}
             >
               See Everything.
             </span>
@@ -111,7 +111,7 @@ function HeroSection() {
         >
           <motion.a
             href="/auth/sign-up"
-            whileHover={{ scale: 1.04, boxShadow: "0 0 32px rgba(79,156,249,0.5)" }}
+            whileHover={{ scale: 1.04, boxShadow: "0 0 32px rgba(232,132,106,0.5)" }}
             whileTap={{ scale: 0.97 }}
             className="cta-primary px-8 py-4 rounded-xl text-sm"
           >
@@ -135,8 +135,8 @@ function HeroSection() {
         transition={{ delay: 1.1 }}
         className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 flex flex-col items-center gap-1.5"
       >
-        <div className="w-px h-10 relative" style={{ background: "linear-gradient(to bottom, transparent, rgba(79,156,249,0.25))" }}>
-          <div className="scroll-dot w-1 h-1 rounded-full absolute left-1/2 -translate-x-1/2 top-0" style={{ background: "#4f9cf9" }} />
+        <div className="w-px h-10 relative" style={{ background: "linear-gradient(to bottom, transparent, rgba(232,132,106,0.25))" }}>
+          <div className="scroll-dot w-1 h-1 rounded-full absolute left-1/2 -translate-x-1/2 top-0" style={{ background: "#e8846a" }} />
         </div>
       </motion.div>
     </section>
@@ -155,11 +155,11 @@ function AnimatedChart() {
   return (
     <div ref={ref} className="flex flex-col gap-1">
       <svg width={w} height={h} className="overflow-visible">
-        <motion.path d={d} fill="none" stroke="rgba(79,156,249,0.7)" strokeWidth={1.5}
+        <motion.path d={d} fill="none" stroke="rgba(232,132,106,0.7)" strokeWidth={1.5}
           initial={{ pathLength: 0 }} animate={{ pathLength: inView ? 1 : 0 }}
           transition={{ duration: 1.8, ease: "easeInOut", delay: 0.3 }} />
       </svg>
-      <span style={{ color: "rgba(79,156,249,0.6)", fontSize: "10px", fontFamily: "monospace" }}>+240% return</span>
+      <span style={{ color: "rgba(232,132,106,0.6)", fontSize: "10px", fontFamily: "monospace" }}>+240% return</span>
     </div>
   );
 }
@@ -198,7 +198,7 @@ function YieldCurve() {
   return (
     <div ref={ref}>
       <svg width={w} height={h}>
-        <motion.path d={d} fill="none" stroke="rgba(79,156,249,0.5)" strokeWidth={1.5}
+        <motion.path d={d} fill="none" stroke="rgba(232,132,106,0.5)" strokeWidth={1.5}
           initial={{ pathLength: 0 }} animate={{ pathLength: inView ? 1 : 0 }}
           transition={{ duration: 1.4, ease: "easeInOut", delay: 0.2 }} />
       </svg>
@@ -246,7 +246,7 @@ function AiTypewriter() {
   return (
     <div ref={ref} className="leading-relaxed font-mono" style={{ fontSize: "10px", color: "rgba(255,255,255,0.4)" }}>
       {displayed}
-      <span className="typewriter-cursor inline-block w-px h-3 ml-0.5 align-middle" style={{ background: "#4f9cf9" }} />
+      <span className="typewriter-cursor inline-block w-px h-3 ml-0.5 align-middle" style={{ background: "#e8846a" }} />
     </div>
   );
 }
@@ -269,7 +269,7 @@ function ScreenerRows() {
           <span className="w-9" style={{ color: "rgba(255,255,255,0.55)" }}>{s.sym}</span>
           <div className="flex-1 h-0.5 rounded-full" style={{ background: "rgba(255,255,255,0.05)" }}>
             <motion.div className="h-full rounded-full"
-              style={{ background: "rgba(79,156,249,0.5)" }}
+              style={{ background: "rgba(232,132,106,0.5)" }}
               initial={{ width: 0 }} animate={{ width: `${s.score}%` }}
               transition={{ delay: i * 0.11 + 0.38, duration: 0.55 }} />
           </div>
@@ -294,8 +294,8 @@ function FeaturesSection() {
   const inView = useInView(ref, { once: true, margin: "-80px" });
 
   return (
-    <section id="features" ref={ref} className="relative py-32 px-6" style={{ background: "#000000" }}>
-      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(79,156,249,0.04) 0%, transparent 70%)", pointerEvents: "none" }} />
+    <section id="features" ref={ref} className="relative py-32 px-6" style={{ background: "var(--app-bg)" }}>
+      <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(232,132,106,0.04) 0%, transparent 70%)", pointerEvents: "none" }} />
       <div className="relative max-w-6xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6 }} className="text-center mb-16">
@@ -318,15 +318,15 @@ function FeaturesSection() {
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="rounded-full" style={{
                 width: "240px", height: "240px", opacity: 0.1,
-                background: "radial-gradient(circle at 38% 38%, rgba(79,156,249,0.9), rgba(79,156,249,0.2), transparent 65%)",
+                background: "radial-gradient(circle at 38% 38%, rgba(232,132,106,0.9), rgba(232,132,106,0.2), transparent 65%)",
               }} />
             </div>
             <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.05, pointerEvents: "none" }}>
               {Array.from({ length: 6 }).map((_, i) => (
-                <ellipse key={i} cx="50%" cy={`${14 + i * 14}%`} rx="34%" ry="3%" fill="none" stroke="#4f9cf9" strokeWidth="0.5" />
+                <ellipse key={i} cx="50%" cy={`${14 + i * 14}%`} rx="34%" ry="3%" fill="none" stroke="#e8846a" strokeWidth="0.5" />
               ))}
               {Array.from({ length: 5 }).map((_, i) => (
-                <line key={i} x1={`${18 + i * 16}%`} y1="4%" x2={`${18 + i * 16}%`} y2="96%" stroke="#4f9cf9" strokeWidth="0.5" />
+                <line key={i} x1={`${18 + i * 16}%`} y1="4%" x2={`${18 + i * 16}%`} y2="96%" stroke="#e8846a" strokeWidth="0.5" />
               ))}
             </svg>
             <div className="relative z-10">
@@ -372,7 +372,7 @@ function GlobeSection() {
   ];
 
   return (
-    <section id="markets" ref={ref} className="relative py-32 px-6" style={{ background: "#000000" }}>
+    <section id="markets" ref={ref} className="relative py-32 px-6" style={{ background: "var(--app-bg)" }}>
       <hr className="section-rule" />
       <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center gap-20 pt-32">
         <div className="flex-1">
@@ -390,7 +390,7 @@ function GlobeSection() {
                   transition={{ delay: 0.15 + i * 0.08, duration: 0.42 }}
                   className="flex items-start gap-3 text-sm"
                   style={{ color: "rgba(255,255,255,0.4)" }}>
-                  <span className="shrink-0 mt-0.5" style={{ color: "#4f9cf9", opacity: 0.6 }}>—</span>
+                  <span className="shrink-0 mt-0.5" style={{ color: "#e8846a", opacity: 0.6 }}>—</span>
                   {b}
                 </motion.li>
               ))}
@@ -410,20 +410,20 @@ function GlobeSection() {
           <div className="relative" style={{ width: "340px", height: "340px" }}>
             {/* Outer glow ring */}
             <div className="absolute inset-0 rounded-full" style={{
-              background: "radial-gradient(circle, transparent 45%, rgba(79,156,249,0.06) 65%, transparent 80%)",
+              background: "radial-gradient(circle, transparent 45%, rgba(232,132,106,0.06) 65%, transparent 80%)",
             }} />
             {/* Globe */}
             <div className="absolute inset-4 rounded-full overflow-hidden" style={{
-              background: "radial-gradient(circle at 35% 32%, rgba(79,156,249,0.14) 0%, rgba(79,156,249,0.03) 45%, transparent 65%)",
-              border: "1px solid rgba(79,156,249,0.12)",
-              boxShadow: "0 0 50px rgba(79,156,249,0.06)",
+              background: "radial-gradient(circle at 35% 32%, rgba(232,132,106,0.14) 0%, rgba(232,132,106,0.03) 45%, transparent 65%)",
+              border: "1px solid rgba(232,132,106,0.12)",
+              boxShadow: "0 0 50px rgba(232,132,106,0.06)",
             }}>
               <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.08 }} viewBox="0 0 320 320">
                 {Array.from({ length: 7 }).map((_, i) => (
-                  <ellipse key={i} cx="160" cy="160" rx={18 + i * 22} ry="7" fill="none" stroke="#4f9cf9" strokeWidth="0.6" />
+                  <ellipse key={i} cx="160" cy="160" rx={18 + i * 22} ry="7" fill="none" stroke="#e8846a" strokeWidth="0.6" />
                 ))}
                 {Array.from({ length: 8 }).map((_, i) => (
-                  <line key={i} x1={40 * i} y1="0" x2={40 * i} y2="320" stroke="#4f9cf9" strokeWidth="0.5" />
+                  <line key={i} x1={40 * i} y1="0" x2={40 * i} y2="320" stroke="#e8846a" strokeWidth="0.5" />
                 ))}
               </svg>
               {[
@@ -431,7 +431,7 @@ function GlobeSection() {
                 { t: "44%", l: "72%" }, { t: "68%", l: "62%" }, { t: "28%", l: "76%" },
               ].map((d, i) => (
                 <motion.div key={i} className="absolute rounded-full"
-                  style={{ top: d.t, left: d.l, width: 6, height: 6, background: "#4f9cf9", opacity: 0.7 }}
+                  style={{ top: d.t, left: d.l, width: 6, height: 6, background: "#e8846a", opacity: 0.7 }}
                   animate={{ scale: [1, 2, 1], opacity: [0.7, 0.15, 0.7] }}
                   transition={{ duration: 2.4 + i * 0.3, repeat: Infinity, ease: "easeInOut" }} />
               ))}
@@ -473,7 +473,7 @@ function SocialProofSection() {
   const inView = useInView(ref, { once: true, margin: "-80px" });
 
   return (
-    <section ref={ref} className="relative py-32 px-6" style={{ background: "#000000" }}>
+    <section ref={ref} className="relative py-32 px-6" style={{ background: "var(--app-bg)" }}>
       <hr className="section-rule mb-32" />
       <div className="max-w-6xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -494,7 +494,7 @@ function SocialProofSection() {
               className="glass-card rounded-2xl p-6 flex flex-col gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                  style={{ background: "rgba(79,156,249,0.08)", color: "rgba(79,156,249,0.8)", border: "1px solid rgba(79,156,249,0.15)" }}>
+                  style={{ background: "rgba(232,132,106,0.08)", color: "rgba(232,132,106,0.8)", border: "1px solid rgba(232,132,106,0.15)" }}>
                   {t.initials}
                 </div>
                 <div>
@@ -504,7 +504,7 @@ function SocialProofSection() {
               </div>
               <div className="flex gap-0.5">
                 {Array.from({ length: 5 }).map((_, s) => (
-                  <span key={s} style={{ color: "rgba(79,156,249,0.45)", fontSize: "12px" }}>★</span>
+                  <span key={s} style={{ color: "rgba(232,132,106,0.45)", fontSize: "12px" }}>★</span>
                 ))}
               </div>
               <p className="text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.42)" }}>{t.quote}</p>
@@ -518,7 +518,7 @@ function SocialProofSection() {
               initial={{ opacity: 0, y: 12 }} animate={inView ? { opacity: 1, y: 0 } : {}}
               transition={{ delay: 0.3 + i * 0.07, duration: 0.45 }}
               className="flex flex-col gap-1">
-              <span className="font-black tracking-tight" style={{ fontSize: "clamp(28px, 3.5vw, 42px)", color: "#4f9cf9" }}>
+              <span className="font-black tracking-tight" style={{ fontSize: "clamp(28px, 3.5vw, 42px)", color: "#e8846a" }}>
                 <AnimatedNumber value={s.value} />
               </span>
               <span className="text-xs" style={{ color: "rgba(255,255,255,0.28)" }}>{s.label}</span>
@@ -566,7 +566,7 @@ function PricingSection() {
   const [annual, setAnnual] = useState(false);
 
   return (
-    <section id="pricing" ref={ref} className="relative py-32 px-6" style={{ background: "#000000" }}>
+    <section id="pricing" ref={ref} className="relative py-32 px-6" style={{ background: "var(--app-bg)" }}>
       <hr className="section-rule mb-32" />
       <div className="max-w-4xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -586,14 +586,14 @@ function PricingSection() {
           <button
             onClick={() => setAnnual(!annual)}
             className="toggle-track"
-            style={{ background: annual ? "rgba(79,156,249,0.25)" : "rgba(255,255,255,0.07)" }}
+            style={{ background: annual ? "rgba(232,132,106,0.25)" : "rgba(255,255,255,0.07)" }}
             aria-label="Toggle annual billing"
           >
             <span className="toggle-thumb" style={{ left: annual ? "23px" : "3px" }} />
           </button>
           <span className="text-sm" style={{ color: annual ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.22)" }}>
             Annual{" "}
-            <span style={{ color: "#4f9cf9", fontSize: "11px", fontWeight: 600 }}>· 2 months free</span>
+            <span style={{ color: "#e8846a", fontSize: "11px", fontWeight: 600 }}>· 2 months free</span>
           </span>
         </motion.div>
 
@@ -607,7 +607,7 @@ function PricingSection() {
               {plan.badge && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <span className="text-xs font-semibold px-3 py-1 rounded-full whitespace-nowrap"
-                    style={{ background: "rgba(79,156,249,0.15)", color: "#4f9cf9", border: "1px solid rgba(79,156,249,0.25)" }}>
+                    style={{ background: "rgba(232,132,106,0.15)", color: "#e8846a", border: "1px solid rgba(232,132,106,0.25)" }}>
                     {plan.badge}
                   </span>
                 </div>
@@ -624,7 +624,7 @@ function PricingSection() {
               <ul className="flex flex-col gap-2.5 flex-1">
                 {plan.features.map(f => (
                   <li key={f} className="flex items-start gap-2.5 text-xs" style={{ color: "rgba(255,255,255,0.42)" }}>
-                    <span className="shrink-0 mt-px" style={{ color: "#4f9cf9", opacity: 0.7 }}>—</span>
+                    <span className="shrink-0 mt-px" style={{ color: "#e8846a", opacity: 0.7 }}>—</span>
                     {f}
                   </li>
                 ))}
@@ -650,10 +650,10 @@ function CTASection() {
 
   return (
     <section ref={ref} className="relative flex items-center justify-center overflow-hidden py-40 px-6"
-      style={{ background: "#000000" }}>
+      style={{ background: "var(--app-bg)" }}>
       <ParticleField dense />
       <div className="absolute inset-0 pointer-events-none" style={{
-        background: "radial-gradient(ellipse 60% 60% at 50% 50%, rgba(79,156,249,0.04) 0%, transparent 70%)",
+        background: "radial-gradient(ellipse 60% 60% at 50% 50%, rgba(232,132,106,0.04) 0%, transparent 70%)",
       }} />
       <div className="relative z-10 text-center max-w-2xl mx-auto">
         <motion.h2 initial={{ opacity: 0, y: 22 }} animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -669,7 +669,7 @@ function CTASection() {
         </motion.p>
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
           <motion.a href="/auth/sign-up"
-            whileHover={{ scale: 1.04, boxShadow: "0 0 36px rgba(79,156,249,0.5)" }}
+            whileHover={{ scale: 1.04, boxShadow: "0 0 36px rgba(232,132,106,0.5)" }}
             whileTap={{ scale: 0.97 }}
             initial={{ opacity: 0, y: 12 }} animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ delay: 0.3, duration: 0.48 }}
@@ -711,7 +711,7 @@ export default function Home() {
   return (
     <div className="landing-page">
       {!ready ? (
-        <div className="flex min-h-screen items-center justify-center" style={{ background: "#000000" }}>
+        <div className="flex min-h-screen items-center justify-center" style={{ background: "var(--app-bg)" }}>
           <motion.div animate={{ opacity: [0.15, 0.5, 0.15] }} transition={{ duration: 2, repeat: Infinity }}
             className="font-black tracking-tight text-white" style={{ fontSize: "24px", letterSpacing: "-0.02em" }}>
             Quantiv

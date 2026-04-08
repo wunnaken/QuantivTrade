@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { QuantivTradeLogoImage } from "./XchangeLogoImage";
 import { useAuth } from "./AuthContext";
 
-const FOOTER_BG = "#080B14";
+const FOOTER_BG = "var(--app-bg)";
 const FOOTER_TEXT = "#6B7280";
 
 const SOCIAL_LINKS = [

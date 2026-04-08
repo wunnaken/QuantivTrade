@@ -31,6 +31,7 @@ const PROTECTED_PATHS = [
   "/portfolios",
   "/futures",
   "/crypto",
+  "/dividends",
 ];
 
 function isProtectedPath(pathname: string): boolean {
@@ -139,5 +140,7 @@ export const config = {
     "/futures/:path*",
     "/crypto",
     "/crypto/:path*",
+    "/dividends",
+    "/dividends/:path*",
   ],
 };

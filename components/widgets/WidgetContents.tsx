@@ -871,7 +871,7 @@ export function LiveChartWidget({ onLoaded }: WidgetContentProps) {
         {suggestOpen && (addInput || suggestions.length > 0) && suggestRect && typeof document !== "undefined" &&
           createPortal(
             <ul
-              className="fixed z-[100] max-h-32 overflow-auto rounded border border-white/10 bg-[#0F1520] py-1 shadow-lg"
+              className="fixed z-[100] max-h-32 overflow-auto rounded border border-white/10 bg-[var(--app-card)] py-1 shadow-lg"
               style={{ top: suggestRect.top + 4, left: suggestRect.left, width: suggestRect.width, minWidth: 120 }}
             >
               {suggestions.length === 0 ? (
@@ -1015,7 +1015,7 @@ export function AIAssistantWidget() {
               className={`rounded-lg px-2 py-1.5 text-[11px] whitespace-pre-wrap ${
                 m.role === "user"
                   ? "bg-[var(--accent-color)] text-white"
-                  : "bg-[#0F1520] text-zinc-200 border border-white/5"
+                  : "bg-[var(--app-card)] text-zinc-200 border border-white/5"
               }`}
             >
               {m.content}

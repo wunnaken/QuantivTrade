@@ -153,7 +153,7 @@ function SessionBar() {
   function pxPct(h: number) { return (h / 24) * 100; }
 
   return (
-    <div className="border-b border-white/10 bg-[#0A0E1A] px-6 py-3">
+    <div className="border-b border-white/10 bg-[var(--app-bg)] px-6 py-3">
       {/* Session indicators */}
       <div className="mb-3 flex flex-wrap gap-3">
         {SESSIONS.map((s) => {
@@ -251,7 +251,7 @@ function DXYPanel({ dxy }: { dxy: ForexData["dxy"] }) {
   ];
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] p-5">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5">
       <div className="grid gap-5 lg:grid-cols-3">
         {/* Left: value */}
         <div className="flex flex-col justify-center">
@@ -294,7 +294,7 @@ function DXYPanel({ dxy }: { dxy: ForexData["dxy"] }) {
               <YAxis domain={["auto", "auto"]} tick={{ fontSize: 8, fill: "#52525b" }} tickLine={false}
                 axisLine={false} width={32} tickCount={4} tickFormatter={(v: number) => v.toFixed(1)} />
               <RechartTooltip
-                contentStyle={{ background: "#0f1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                contentStyle={{ background: "var(--app-card)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
                 formatter={(v) => [typeof v === "number" ? v.toFixed(2) : v, "DXY"]}
               />
               <ReferenceLine y={dxy.history[0]?.value ?? 100} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
@@ -396,7 +396,7 @@ function StrengthMeter({ data }: { data: StrengthData | null }) {
 
   if (sorted.length === 0 || sorted.every((s) => s.value === 0)) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+      <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
         <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--accent-color)]/70">Strength Index</p>
         <p className="mb-3 text-sm font-semibold text-zinc-100">Currency Strength</p>
         <p className="text-xs text-zinc-600">Strength data unavailable — market may be closed or API limit reached</p>
@@ -405,7 +405,7 @@ function StrengthMeter({ data }: { data: StrengthData | null }) {
   }
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
       <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--accent-color)]/70">Strength Index</p>
       <p className="mb-3 text-sm font-semibold text-zinc-100">Currency Strength</p>
       <p className="mb-3 text-[10px] text-zinc-600">Relative strength over last 24h · 0=weakest, 100=strongest</p>
@@ -443,7 +443,7 @@ function CBRatesPanel() {
   const eur = CB_RATES.find((r) => r.currency === "EUR")?.rate ?? 0;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
       <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--accent-color)]/70">Carry Trade</p>
       <p className="mb-3 text-sm font-semibold text-zinc-100">Central Bank Rates</p>
       <div className="space-y-1.5">
@@ -503,7 +503,7 @@ function CarryTradePanel({ pairs }: { pairs: ForexPair[] }) {
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
       <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--accent-color)]/70">Strategy</p>
       <p className="mb-1 text-sm font-semibold text-zinc-100">Carry Trade Opportunities</p>
       <p className="mb-3 text-[10px] text-zinc-600">Borrow low-yield · Invest high-yield · Profit from the rate differential</p>
@@ -545,7 +545,7 @@ function NewsPanel({ articles }: { articles: NewsArticle[] }) {
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
       <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--accent-color)]/70">Market Intelligence</p>
       <p className="mb-3 text-sm font-semibold text-zinc-100">Forex News</p>
       {articles.length === 0 ? (
@@ -634,7 +634,7 @@ function EconCalPanel() {
   };
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] p-5">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5">
       <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-[var(--accent-color)]/70">Upcoming</p>
       <p className="mb-1 text-base font-semibold text-zinc-100">Forex Economic Calendar</p>
       <p className="mb-4 text-xs text-zinc-500">High and medium impact events affecting forex markets · Times in ET</p>
@@ -773,7 +773,7 @@ export default function ForexView() {
             </div>
 
             {/* Pairs table */}
-            <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+            <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
               {loading && !data ? (
                 <div className="space-y-2">
                   {[...Array(6)].map((_, i) => <div key={i} className="h-8 rounded-lg bg-white/5" />)}
@@ -784,7 +784,7 @@ export default function ForexView() {
             </div>
 
             {/* TradingView */}
-            <div className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#050713]" style={{ height: 672 }}>
+            <div className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card-alt)]" style={{ height: 672 }}>
               <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-zinc-100">{selectedPair}</span>

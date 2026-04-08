@@ -360,7 +360,7 @@ function CorrelationModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-[#050713] p-5 shadow-2xl"
+        className="relative w-full max-w-lg overflow-y-auto rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5 shadow-2xl"
         style={{ maxHeight: "85vh" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -449,7 +449,7 @@ function CorrelationModal({
                     tickLine={false} axisLine={false} width={30} tickCount={4} tickFormatter={(v: number) => v.toFixed(0)} />
                   <YAxis yAxisId="b" orientation="right" domain={["auto", "auto"]} tick={{ fontSize: 8, fill: "#52525b" }}
                     tickLine={false} axisLine={false} width={30} tickCount={4} tickFormatter={(v: number) => v.toFixed(0)} />
-                  <RechartTooltip contentStyle={{ background: "#0f1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                  <RechartTooltip contentStyle={{ background: "var(--app-card)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
                     labelStyle={{ color: "#71717a" }} />
                   <Line yAxisId="a" type="monotone" dataKey={assetA} stroke="var(--accent-color)" dot={false} strokeWidth={2} />
                   <Line yAxisId="b" type="monotone" dataKey={assetB} stroke="#60a5fa" dot={false} strokeWidth={2} />
@@ -522,7 +522,7 @@ function ExpandedCorrelationCard({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[#050713] p-5 shadow-2xl"
+        className="relative w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5 shadow-2xl"
         style={{ maxHeight: "90vh" }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -581,7 +581,7 @@ function ExpandedCorrelationCard({
                     tick={{ fontSize: 9, fill: clrB + "cc" }} tickLine={false} axisLine={false}
                     width={36} tickCount={4} tickFormatter={(v: number) => v.toFixed(0)} />
                   <RechartTooltip
-                    contentStyle={{ background: "#0f1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                    contentStyle={{ background: "var(--app-card)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
                     labelStyle={{ color: "#71717a" }}
                   />
                   <Line yAxisId="a" type="monotone" dataKey={pair.assetA} stroke={clrA} dot={false} strokeWidth={2} />
@@ -637,7 +637,7 @@ function SurprisingCard({
 
   return (
     <div
-      className="flex cursor-pointer flex-col rounded-2xl border border-white/10 bg-[#050713] p-4 transition-colors hover:border-white/20"
+      className="flex cursor-pointer flex-col rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4 transition-colors hover:border-white/20"
       onClick={onExpand}
     >
       {/* Header: two asset badges + correlation */}
@@ -729,7 +729,7 @@ function SafeHavenCard({
     : "text-red-400 border-red-500/30 bg-red-500/10";
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
       <div className="mb-2 flex items-center gap-2">
         <span className="h-2.5 w-2.5 rounded-full" style={{ background: config.dotColor }} />
         <div>
@@ -798,7 +798,7 @@ function CommodityFxCard({
     : null;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] p-4">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
       <div className="mb-2 flex items-center gap-2 text-sm">
         <span className="h-2 w-2 rounded-full" style={{ background: pair.dotColorA }} />
         <span className="font-semibold text-zinc-200">{pair.commodityName}</span>
@@ -850,7 +850,7 @@ function CommodityFxCard({
               <YAxis yAxisId="b" orientation="right" domain={["auto", "auto"]}
                 tick={{ fontSize: 7, fill: pair.dotColorB }} tickLine={false} axisLine={false}
                 width={28} tickCount={3} tickFormatter={(v: number) => v.toFixed(0)} />
-              <RechartTooltip contentStyle={{ background: "#0f1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, fontSize: 10 }} />
+              <RechartTooltip contentStyle={{ background: "var(--app-card)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 6, fontSize: 10 }} />
               <Line yAxisId="a" type="monotone" dataKey={pair.commodityTicker} stroke={pair.dotColorA} dot={false} strokeWidth={1.5} />
               <Line yAxisId="b" type="monotone" dataKey={pair.fxTicker} stroke={pair.dotColorB} dot={false} strokeWidth={1.5} />
             </LineChart>
@@ -877,7 +877,7 @@ function RegimePanel({ performance }: { performance: Record<string, Record<strin
   const explanation = REGIME_EXPLANATIONS[regime.name];
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] p-5">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5">
       <div className="mb-4 flex items-center gap-3">
         <span className="h-3 w-3 rounded-full" style={{ background: regime.dotColor }} />
         <div>
@@ -1095,13 +1095,13 @@ export default function MarketRelationsView() {
 
         {hmLoading ? <SectionSkeleton height={320} /> : hmData && (
           <>
-            <div className="w-full overflow-x-auto rounded-2xl border border-white/10 bg-[#050713]">
+            <div className="w-full overflow-x-auto rounded-2xl border border-white/10 bg-[var(--app-card-alt)]">
               <table className="border-collapse" style={{ width: "100%", minWidth: "max-content", fontSize: "8px" }}>
                 <thead>
                   <tr>
-                    <th className="sticky left-0 top-0 z-20 w-[60px] min-w-[60px] bg-[#050713] p-0" />
+                    <th className="sticky left-0 top-0 z-20 w-[60px] min-w-[60px] bg-[var(--app-card-alt)] p-0" />
                     {orderedTickers.map((colTicker, ci) => (
-                      <th key={colTicker} className="sticky top-0 z-10 bg-[#050713] p-0"
+                      <th key={colTicker} className="sticky top-0 z-10 bg-[var(--app-card-alt)] p-0"
                         style={{ width: 20, minWidth: 20, maxWidth: 20, borderRight: classBoundaries.has(ci) ? "1px solid rgba(255,255,255,0.08)" : undefined }}>
                         <div style={{ height: 76, width: 20, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", paddingBottom: 3 }}>
                           <span style={{
@@ -1120,7 +1120,7 @@ export default function MarketRelationsView() {
                 <tbody>
                   {orderedTickers.map((rowTicker, ri) => (
                     <tr key={rowTicker} style={{ borderBottom: classBoundaries.has(ri) ? "1px solid rgba(255,255,255,0.08)" : undefined }}>
-                      <td className="sticky left-0 z-10 bg-[#050713] py-0 pl-2 pr-1 font-medium"
+                      <td className="sticky left-0 z-10 bg-[var(--app-card-alt)] py-0 pl-2 pr-1 font-medium"
                         style={{ color: CLASS_COLORS[TICKER_CLASS[rowTicker]] ?? "#71717a" }}>
                         {rowTicker}
                       </td>

@@ -558,7 +558,7 @@ export default function ProfileView() {
           aria-modal="true"
           role="dialog"
         >
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0F1520] p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[var(--app-card)] p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-zinc-100">
               {profileChangeModal.kind === "blocked" ? "Profile changes not allowed yet" : "Change profile details?"}
             </h2>
@@ -571,7 +571,7 @@ export default function ProfileView() {
               <button
                 type="button"
                 onClick={closeProfileChangeModal}
-                className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[#0F1520]"
+                className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-card)]"
               >
                 {profileChangeModal.kind === "blocked" ? "OK" : "Cancel"}
               </button>
@@ -579,7 +579,7 @@ export default function ProfileView() {
                 <button
                   type="button"
                   onClick={applyConfirmedProfileChanges}
-                  className="rounded-full border border-[var(--accent-color)] bg-[var(--accent-color)]/10 px-4 py-2 text-sm font-semibold text-[var(--accent-color)] transition-colors hover:bg-[var(--accent-color)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/60 focus:ring-offset-2 focus:ring-offset-[#0F1520]"
+                  className="rounded-full border border-[var(--accent-color)] bg-[var(--accent-color)]/10 px-4 py-2 text-sm font-semibold text-[var(--accent-color)] transition-colors hover:bg-[var(--accent-color)]/20 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/60 focus:ring-offset-2 focus:ring-offset-[var(--app-card)]"
                 >
                   Yes, save changes
                 </button>
@@ -590,7 +590,7 @@ export default function ProfileView() {
       )}
       {showVerifiedModal && (
         <div className="fixed inset-0 z-[115] flex items-center justify-center bg-black/70 p-4" aria-modal="true" role="dialog">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0F1520] p-6 shadow-xl">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[var(--app-card)] p-6 shadow-xl">
             <h2 className="text-lg font-semibold text-zinc-100">Verified Trader</h2>
             {verifiedSubmitted ? (
               <>
@@ -689,7 +689,7 @@ export default function ProfileView() {
               await signOut();
               window.location.href = "/";
             }}
-            className="rounded-full border border-white/15 px-4 py-1.5 text-xs font-medium text-zinc-200 transition-colors duration-200 hover:border-white/30 hover:bg-white/5 hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+            className="rounded-full border border-white/15 px-4 py-1.5 text-xs font-medium text-zinc-200 transition-colors duration-200 hover:border-white/30 hover:bg-white/5 hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
           >
             Sign out
           </button>
@@ -710,7 +710,7 @@ export default function ProfileView() {
               className="absolute inset-0"
               style={{
                 backgroundImage: `
-                  linear-gradient(to bottom right, #0A0E1A, color-mix(in srgb, var(--accent-color) 22%, #0A0E1A)),
+                  linear-gradient(to bottom right, var(--app-bg), color-mix(in srgb, var(--accent-color) 22%, var(--app-bg))),
                   linear-gradient(color-mix(in srgb, var(--accent-color) 6%, transparent) 1px, transparent 1px),
                   linear-gradient(90deg, color-mix(in srgb, var(--accent-color) 6%, transparent) 1px, transparent 1px)
                 `,
@@ -729,7 +729,7 @@ export default function ProfileView() {
           <button
             type="button"
             onClick={openBannerPicker}
-            className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white/90 transition-all duration-200 hover:bg-black/80 hover:text-white focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+            className="absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white/90 transition-all duration-200 hover:bg-black/80 hover:text-white focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
             aria-label="Change banner photo"
           >
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -756,7 +756,7 @@ export default function ProfileView() {
               <button
                 type="button"
                 onClick={openAvatarPicker}
-                className="absolute inset-0 z-10 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-all duration-200 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+                className="absolute inset-0 z-10 flex items-center justify-center rounded-full bg-black/50 opacity-0 transition-all duration-200 group-hover:opacity-100 focus:opacity-100 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
                 aria-label="Change profile photo"
               >
                 <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -771,11 +771,11 @@ export default function ProfileView() {
                   width={120}
                   height={120}
                   unoptimized
-                  className="h-[120px] w-[120px] rounded-full border-4 border-[#0A0E1A] object-cover transition-all duration-200"
+                  className="h-[120px] w-[120px] rounded-full border-4 border-[var(--app-bg)] object-cover transition-all duration-200"
                 />
               ) : (
                 <div
-                  className="flex h-[120px] w-[120px] items-center justify-center rounded-full border-4 border-[#0A0E1A] text-3xl font-semibold transition-all duration-200"
+                  className="flex h-[120px] w-[120px] items-center justify-center rounded-full border-4 border-[var(--app-bg)] text-3xl font-semibold transition-all duration-200"
                   style={{ backgroundColor: "color-mix(in srgb, var(--accent-color) 15%, transparent)", color: "var(--accent-color)" }}
                   aria-hidden
                 >
@@ -823,7 +823,7 @@ export default function ProfileView() {
                     <button
                       type="button"
                       onClick={saveProfile}
-                      className="rounded-full px-4 py-2 text-sm font-semibold text-[#020308] transition-all duration-200 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+                      className="rounded-full px-4 py-2 text-sm font-semibold text-[#020308] transition-all duration-200 hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)] focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
                       style={{ backgroundColor: "var(--accent-color)" }}
                     >
                       Save
@@ -831,7 +831,7 @@ export default function ProfileView() {
                     <button
                       type="button"
                       onClick={cancelEditing}
-                      className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors duration-200 hover:border-white/25 hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+                      className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-zinc-300 transition-colors duration-200 hover:border-white/25 hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
                     >
                       Cancel
                     </button>
@@ -930,7 +930,7 @@ export default function ProfileView() {
               <button
                 type="button"
                 onClick={startEditing}
-                className="mt-4 rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-zinc-200 transition-all duration-200 hover:border-[var(--accent-color)]/60 hover:bg-[var(--accent-color)]/10 hover:text-[var(--accent-color)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[#0A0E1A] sm:mt-0"
+                className="mt-4 rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-zinc-200 transition-all duration-200 hover:border-[var(--accent-color)]/60 hover:bg-[var(--accent-color)]/10 hover:text-[var(--accent-color)] focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)] sm:mt-0"
               >
                 Edit Profile
               </button>

@@ -11,7 +11,7 @@ import {
 } from "../lib/briefing-preferences";
 import { BriefingPreferencesForm } from "./BriefingPreferencesForm";
 
-const BG = "#0A0E1A";
+const BG = "var(--app-bg)";
 
 export type BriefingData = {
   headline: string;
@@ -193,7 +193,7 @@ export function MorningBriefing({
     return (
       <div className="fixed inset-0 z-[100] flex flex-col overflow-hidden" style={{ backgroundColor: BG }} aria-live="polite">
         <div className="flex-1 overflow-y-auto">
-          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0A0E1A]/95 px-4 py-3 backdrop-blur">
+          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[var(--app-bg)]/95 px-4 py-3 backdrop-blur">
             <div className="flex items-center gap-3">
               <QuantivTradeLogoImage size={36} />
               <span className="font-semibold text-zinc-100">Morning Briefing</span>
@@ -235,7 +235,7 @@ export function MorningBriefing({
     return (
       <div className="fixed inset-0 z-[100] flex flex-col overflow-hidden" style={{ backgroundColor: BG }} aria-live="polite">
         <div className="flex-1 overflow-y-auto">
-          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[#0A0E1A]/95 px-4 py-3 backdrop-blur">
+          <header className="sticky top-0 z-10 flex items-center justify-between border-b border-white/10 bg-[var(--app-bg)]/95 px-4 py-3 backdrop-blur">
             <div className="flex items-center gap-3">
               <QuantivTradeLogoImage size={36} />
               <span className="font-semibold text-zinc-100">Morning Briefing</span>
@@ -266,7 +266,7 @@ export function MorningBriefing({
           </header>
 
           {showPrefsEdit && (
-            <div className="border-b border-white/10 bg-[#0F1520] px-4 py-6">
+            <div className="border-b border-white/10 bg-[var(--app-card)] px-4 py-6">
               <div className="mx-auto max-w-2xl">
                 <h3 className="mb-4 text-sm font-semibold text-zinc-200">Edit Briefing Preferences</h3>
                 <BriefingPreferencesForm
@@ -313,7 +313,7 @@ export function MorningBriefing({
                 <h2 className="mb-4 text-lg font-semibold text-zinc-100">Top Stories</h2>
                 <div className="grid gap-4 md:grid-cols-3">
                   {briefing.topStories?.slice(0, 3).map((s, i) => (
-                    <div key={i} className={`rounded-xl border-l-4 bg-[#0F1520] p-4 ${s.impact === "Bullish" ? "border-emerald-500" : s.impact === "Bearish" ? "border-red-500" : "border-zinc-500"}`}>
+                    <div key={i} className={`rounded-xl border-l-4 bg-[var(--app-card)] p-4 ${s.impact === "Bullish" ? "border-emerald-500" : s.impact === "Bearish" ? "border-red-500" : "border-zinc-500"}`}>
                       <span className={`text-xs font-medium ${s.impact === "Bullish" ? "text-emerald-400" : s.impact === "Bearish" ? "text-red-400" : "text-zinc-400"}`}>{s.impact}</span>
                       <p className="mt-1 font-medium text-zinc-200">{s.title}</p>
                       <p className="mt-2 text-sm text-zinc-500">{s.detail}</p>
@@ -326,7 +326,7 @@ export function MorningBriefing({
                 <h2 className="mb-4 text-lg font-semibold text-zinc-100">Assets to Watch Today</h2>
                 <div className="flex flex-wrap gap-3">
                   {briefing.watchlist?.slice(0, 4).map((w, i) => (
-                    <div key={i} className="rounded-xl bg-[#0F1520] px-4 py-3">
+                    <div key={i} className="rounded-xl bg-[var(--app-card)] px-4 py-3">
                       <span className="font-mono text-sm font-medium text-[var(--accent-color)]">{w.asset}</span>
                       <p className="mt-1 text-sm text-zinc-400">{w.reason}</p>
                     </div>
@@ -336,7 +336,7 @@ export function MorningBriefing({
 
               <section className="mb-10">
                 <h2 className="mb-4 text-lg font-semibold text-zinc-100">Key Levels</h2>
-                <div className="overflow-hidden rounded-xl border border-white/10 bg-[#0F1520]">
+                <div className="overflow-hidden rounded-xl border border-white/10 bg-[var(--app-card)]">
                   <table className="w-full text-left text-sm">
                     <thead>
                       <tr className="border-b border-white/10 text-zinc-400">
@@ -360,14 +360,14 @@ export function MorningBriefing({
 
               <section className="mb-10">
                 <h2 className="mb-2 text-lg font-semibold text-zinc-100">Geopolitical Pulse</h2>
-                <div className="rounded-xl border border-white/10 bg-[#0F1520] p-4">
+                <div className="rounded-xl border border-white/10 bg-[var(--app-card)] p-4">
                   <p className="text-zinc-300">{briefing.geopolitical}</p>
                 </div>
               </section>
 
               <section className="mb-10">
                 <div className="rounded-xl p-[2px]" style={{ background: "linear-gradient(to right, var(--accent-color), rgba(245,158,11,0.8))" }}>
-                  <div className="rounded-[10px] bg-[#0F1520] p-4">
+                  <div className="rounded-[10px] bg-[var(--app-card)] p-4">
                     <div className="text-lg font-semibold text-zinc-100">Trader&apos;s Edge</div>
                     <p className="mt-2 text-zinc-300">{briefing.tradersEdge}</p>
                   </div>

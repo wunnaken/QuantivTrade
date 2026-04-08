@@ -21,7 +21,7 @@ const CANVAS_W = 3000;
 const CANVAS_H = 2000;
 const LINK_COLOR = "rgba(30, 58, 95, 0.4)";
 const LINK_HOVER = "rgba(255,255,255,0.9)";
-const PANEL_BG = "#0F1520";
+const PANEL_BG = "var(--app-card)";
 
 const CEO_PANELS_KEY = "quantivtrade-ceo-panels";
 
@@ -834,7 +834,7 @@ function CEOGraph({
 
       {hoverTooltip && (
         <div
-          className="pointer-events-none absolute z-50 max-w-[260px] rounded-lg border border-white/10 bg-[#0F1520]/95 px-3 py-2 shadow-xl backdrop-blur"
+          className="pointer-events-none absolute z-50 max-w-[260px] rounded-lg border border-white/10 bg-[var(--app-card)]/95 px-3 py-2 shadow-xl backdrop-blur"
           style={{
             left: hoverTooltip.x,
             top: hoverTooltip.y,
@@ -951,7 +951,7 @@ function FilterPanel({
       className="absolute left-0 top-0 z-20 flex h-full min-w-[48px] shrink-0 flex-col rounded-r-lg border-r border-white/10 shadow-xl transition-all duration-200"
       style={{
         width: collapsed ? 48 : 220,
-        backgroundColor: collapsed ? "#0F1520" : "rgba(15, 21, 32, 0.96)",
+        backgroundColor: collapsed ? "var(--app-card)" : "rgba(15, 21, 32, 0.96)",
         backdropFilter: collapsed ? "none" : "blur(8px)",
       }}
     >
@@ -1046,7 +1046,7 @@ function FilterPanel({
             <select
               value={filters.sentiment}
               onChange={(e) => onFiltersChange({ ...filters, sentiment: e.target.value as FilterState["sentiment"] })}
-              className="w-full rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[#0F1520] [&>option]:text-zinc-200"
+              className="w-full rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[var(--app-card)] [&>option]:text-zinc-200"
             >
               <option value="all">All</option>
               <option value="positive">Positive only</option>
@@ -1059,7 +1059,7 @@ function FilterPanel({
             <select
               value={filters.tenure}
               onChange={(e) => onFiltersChange({ ...filters, tenure: e.target.value as FilterState["tenure"] })}
-              className="w-full rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[#0F1520] [&>option]:text-zinc-200"
+              className="w-full rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[var(--app-card)] [&>option]:text-zinc-200"
             >
               <option value="all">All</option>
               <option value="new">New (&lt; 2 years)</option>
@@ -1072,7 +1072,7 @@ function FilterPanel({
             <select
               value={filters.marketCap}
               onChange={(e) => onFiltersChange({ ...filters, marketCap: e.target.value as FilterState["marketCap"] })}
-              className="w-full rounded-lg border border-white/10 bg-[#0F1520] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[#0F1520] [&>option]:text-zinc-200"
+              className="w-full rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[var(--app-card)] [&>option]:text-zinc-200"
             >
               <option value="all">All</option>
               <option value="mega">Mega cap (&gt;500B)</option>
@@ -1397,7 +1397,7 @@ Ticker: ${ceo.ticker}`;
   const fallbackSentimentColor = sentimentColor(shownSentiment);
   const avatarColor = claudeProfile ? claudeSentimentStyles(claudeProfile.sentiment).color : fallbackSentimentColor;
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden border-l border-white/10 bg-[#0F1520]/98 shadow-2xl backdrop-blur-sm">
+    <div className="flex h-full w-full flex-col overflow-hidden border-l border-white/10 bg-[var(--app-card)]/98 shadow-2xl backdrop-blur-sm">
       <div className="flex shrink-0 items-start justify-between border-b border-white/10 p-4">
         <div className="flex items-center gap-3">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white" style={{ backgroundColor: avatarColor }}>
@@ -1598,7 +1598,7 @@ function CompareModal({ ceos, onClose }: { ceos: CEOEntry[]; onClose: () => void
   if (ceos.length === 0) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-white/10 bg-[#0F1520] p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-white/10 bg-[var(--app-card)] p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <h3 className="text-lg font-semibold text-zinc-100">Compare CEOs</h3>
           <button type="button" onClick={onClose} className="rounded p-1 text-zinc-500 hover:bg-white/10">×</button>
@@ -1930,8 +1930,8 @@ export default function CEOsView() {
   }, []);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-hidden bg-[#0A0E1A]">
-      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-[#0F1520] px-4" style={{ borderColor: "var(--app-border, rgba(255,255,255,0.1))" }}>
+    <div className="flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-hidden bg-[var(--app-bg)]">
+      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-[var(--app-card)] px-4" style={{ borderColor: "var(--app-border, rgba(255,255,255,0.1))" }}>
         <div>
           <h1 className="text-xl font-bold text-zinc-100">CEO Intelligence</h1>
           <p className="text-sm text-zinc-500">Track the leaders behind the world&apos;s biggest companies</p>
@@ -1951,7 +1951,7 @@ export default function CEOsView() {
               className="w-48 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-500 focus:border-[var(--accent-color)] focus:outline-none sm:w-64"
             />
             {searchMatches.length > 0 && (
-              <ul className="absolute left-0 top-full z-50 mt-1 max-h-60 w-64 overflow-y-auto rounded-lg border border-white/10 bg-[#0F1520] py-1 shadow-xl">
+              <ul className="absolute left-0 top-full z-50 mt-1 max-h-60 w-64 overflow-y-auto rounded-lg border border-white/10 bg-[var(--app-card)] py-1 shadow-xl">
                 {searchMatches.map((c) => (
                   <li key={c.id}>
                     <button
@@ -2033,7 +2033,7 @@ export default function CEOsView() {
               </button>
               {showLinesInfo && (
                 <>
-                  <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-white/10 bg-[#0F1520] p-3 shadow-xl">
+                  <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-white/10 bg-[var(--app-card)] p-3 shadow-xl">
                     <p className="text-xs text-zinc-300">Lines connect CEOs in the same sector (typically to the tier below); some cross-sector links are shown for context.</p>
                     <button type="button" onClick={() => setShowLinesInfo(false)} className="mt-2 text-[10px] text-zinc-500 underline hover:text-zinc-400">Close</button>
                   </div>
@@ -2069,7 +2069,7 @@ export default function CEOsView() {
                 <button
                   type="button"
                   onClick={() => setDetailPanelCollapsed(false)}
-                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center border-l border-white/10 bg-[#0F1520] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center border-l border-white/10 bg-[var(--app-card)] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
                   aria-label="Expand CEO panel"
                 >
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
@@ -2083,7 +2083,7 @@ export default function CEOsView() {
                     onMouseDown={startResize}
                   />
                   <div
-                    className="flex min-h-0 flex-1 flex-col overflow-hidden border-l border-white/10 bg-[#0F1520] shadow-2xl md:flex-shrink-0"
+                    className="flex min-h-0 flex-1 flex-col overflow-hidden border-l border-white/10 bg-[var(--app-card)] shadow-2xl md:flex-shrink-0"
                     style={{ width: detailPanelWidth, minWidth: 320 }}
                   >
                     <div className="flex shrink-0 items-center justify-end border-b border-white/5 px-2 py-1">
@@ -2106,7 +2106,7 @@ export default function CEOsView() {
             </div>
             {/* Mobile: bottom sheet overlay */}
             <div className="fixed inset-0 z-50 flex items-end bg-black/60 md:hidden" onClick={() => setSelected(null)} aria-hidden>
-              <div className="max-h-[85vh] w-full overflow-hidden rounded-t-xl bg-[#0F1520] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="max-h-[85vh] w-full overflow-hidden rounded-t-xl bg-[var(--app-card)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
                 <DetailPanel
                   ceo={selected}
                   onClose={() => setSelected(null)}
@@ -2118,7 +2118,7 @@ export default function CEOsView() {
             </div>
           </>
         )}
-        <div className="absolute inset-x-0 bottom-0 z-10 max-h-[40vh] overflow-y-auto rounded-t-lg border-t border-white/10 bg-[#0F1520]/95 p-4 md:hidden scrollbar-hide">
+        <div className="absolute inset-x-0 bottom-0 z-10 max-h-[40vh] overflow-y-auto rounded-t-lg border-t border-white/10 bg-[var(--app-card)]/95 p-4 md:hidden scrollbar-hide">
           <p className="mb-2 text-sm font-medium text-zinc-400">CEO list</p>
           <ul className="space-y-2">
             {filtered.slice(0, 50).map((c) => (

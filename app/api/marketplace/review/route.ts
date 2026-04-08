@@ -36,24 +36,26 @@ export async function POST(req: Request) {
       messages: [
         {
           role: "user",
-          content: `Review this marketplace listing submission:
+          content: `Review this marketplace listing for a professional trading platform.
 
 Title: ${title}
 Category: ${category ?? "unknown"}
 Description: ${description}
 
-Evaluate against these criteria:
-1. Is this genuinely trading/investing/finance related?
-2. Does it make false or unverified performance claims (e.g. "guaranteed returns", "never lose", "500% profit")?
-3. Is the content clearly described with real value for traders — not spam or vague filler?
-4. Is it appropriate for a professional trading community?
+ONLY reject if one or more of these hard violations is clearly present:
+1. Guarantees specific returns or claims "never lose money" / "risk-free" / "guaranteed profit"
+2. Completely unrelated to trading, finance, investing, or markets (e.g. recipe, dating advice, unrelated software)
+3. Obvious spam, nonsense, or placeholder content with no real substance
+4. Promotes illegal activity
+
+Approve everything else, including: strategies that discuss historical results, indicators with backtested stats, educational content at any quality level, signal services, chart presets, courses, and tools — even if imperfect or basic. Be very lenient.
 
 Return ONLY this JSON object:
 {
   "approved": true or false,
-  "issues": ["specific issue if any"],
-  "suggestions": ["improvement suggestion if any"],
-  "rejection_reason": "brief reason string if rejected, null if approved"
+  "issues": ["specific issue if any — omit if approved"],
+  "suggestions": ["one helpful suggestion if any"],
+  "rejection_reason": "one-sentence reason if rejected, null if approved"
 }`,
         },
       ],

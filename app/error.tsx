@@ -21,7 +21,7 @@ export default function Error({
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0F1520] p-8 text-center">
+      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[var(--app-card)] p-8 text-center">
         <h1 className="text-xl font-semibold text-zinc-100">Something went wrong</h1>
         {isConnectionError ? (
           <p className="mt-3 text-sm text-zinc-400">

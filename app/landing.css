@@ -1,17 +1,24 @@
-/* ─── Landing page — pure black, electric blue accent ───────────────────── */
+/* ─── Landing page — grey background, salmon accent, Lora headlines ──────── */
 
 .landing-page {
-  background: #000000;
+  background: var(--app-bg);
   color: #ffffff;
 }
 
-/* Hero headline accent — white to electric blue */
+/* Lora on all landing headlines */
+.landing-page h1,
+.landing-page h2,
+.landing-page h3,
+.landing-hero-headline {
+  font-family: var(--font-lora), Georgia, serif;
+}
+
+/* Hero headline accent — warm gradient into salmon */
 .hero-accent {
-  background: linear-gradient(135deg, #ffffff 0%, #a8caff 50%, #4f9cf9 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #f0c4b8 45%, var(--accent-color) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  /* Extra padding so descenders (g, y) never clip */
   padding-bottom: 0.1em;
   display: inline-block;
 }
@@ -22,33 +29,33 @@
   font-weight: 600;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: #4f9cf9;
+  color: var(--accent-color);
 }
 
 /* Glass card */
 .glass-card {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--app-card);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   transition: border-color 0.25s ease, background 0.25s ease, box-shadow 0.25s ease, transform 0.2s ease;
 }
 
 .glass-card:hover {
-  background: rgba(255, 255, 255, 0.045);
-  border-color: rgba(79, 156, 249, 0.35);
-  box-shadow: 0 0 24px rgba(79, 156, 249, 0.08);
+  background: var(--app-card-hover);
+  border-color: rgba(232, 132, 106, 0.3);
+  box-shadow: 0 0 24px rgba(232, 132, 106, 0.07);
 }
 
 /* Primary CTA */
 .cta-primary {
-  background: #4f9cf9;
-  color: #000000;
+  background: var(--accent-color);
+  color: #ffffff;
   font-weight: 700;
   transition: opacity 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
 }
 
 .cta-primary:hover {
   opacity: 0.88;
-  box-shadow: 0 0 28px rgba(79, 156, 249, 0.45);
+  box-shadow: 0 0 28px rgba(232, 132, 106, 0.4);
 }
 
 /* Secondary CTA */
@@ -60,22 +67,22 @@
 }
 
 .cta-secondary:hover {
-  border-color: rgba(79, 156, 249, 0.5);
+  border-color: rgba(232, 132, 106, 0.45);
   color: #ffffff;
-  background: rgba(79, 156, 249, 0.06);
+  background: rgba(232, 132, 106, 0.05);
 }
 
 /* Pro pricing card */
 .pricing-card-pro {
-  background: rgba(79, 156, 249, 0.04);
-  border: 1px solid rgba(79, 156, 249, 0.3);
-  box-shadow: 0 0 40px rgba(79, 156, 249, 0.07);
+  background: rgba(232, 132, 106, 0.04);
+  border: 1px solid rgba(232, 132, 106, 0.28);
+  box-shadow: 0 0 40px rgba(232, 132, 106, 0.06);
   transition: box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
 .pricing-card-pro:hover {
-  box-shadow: 0 0 60px rgba(79, 156, 249, 0.14);
-  border-color: rgba(79, 156, 249, 0.5);
+  box-shadow: 0 0 60px rgba(232, 132, 106, 0.12);
+  border-color: rgba(232, 132, 106, 0.45);
 }
 
 /* Horizontal divider */
@@ -113,13 +120,13 @@
   gap: 8px;
   padding: 6px 14px;
   border-radius: 100px;
-  border: 1px solid rgba(79, 156, 249, 0.2);
-  background: rgba(79, 156, 249, 0.05);
+  border: 1px solid rgba(232, 132, 106, 0.22);
+  background: rgba(232, 132, 106, 0.06);
   font-size: 10.5px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   font-weight: 500;
-  color: rgba(79, 156, 249, 0.8);
+  color: rgba(232, 132, 106, 0.85);
 }
 
 @keyframes badge-pulse {

@@ -39,7 +39,7 @@ type Props = {
   onClose: () => void;
 };
 
-const CARD_BG = "#0F1520";
+const CARD_BG = "var(--app-card)";
 
 function fmtMktCap(mc: number): string {
   if (mc >= 1e6) return `$${(mc / 1e6).toFixed(2)}T`;

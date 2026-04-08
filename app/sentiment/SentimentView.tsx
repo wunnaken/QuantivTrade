@@ -187,7 +187,7 @@ function MainRadarChart({ data, tfFilter }: { data: SentimentData; tfFilter: TFK
   const accent = "var(--accent-color)";
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] p-5">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--accent-color)]/70">Sector Analysis</p>
@@ -213,7 +213,7 @@ function MainRadarChart({ data, tfFilter }: { data: SentimentData; tfFilter: TFK
           <PolarAngleAxis dataKey="dimension" tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 500 }} />
           <PolarRadiusAxis domain={[0, 100]} tickCount={4} tick={false} axisLine={false} />
           <Tooltip
-            contentStyle={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 11 }}
+            contentStyle={{ background: "var(--app-bg)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 11 }}
             formatter={(v, name) => [`${v}`, String(name)]}
           />
           {(showAll || tfFilter === "monthAgo") && (
@@ -289,7 +289,7 @@ function CountryCards({
           return (
             <div
               key={c.key}
-              className="rounded-xl bg-[#050713] p-3 border"
+              className="rounded-xl bg-[var(--app-card-alt)] p-3 border"
               style={{ borderColor: `${cfg.color}28` }}
             >
               <div className="flex items-center justify-between mb-1.5">
@@ -338,7 +338,7 @@ function DimensionCard({
   const cfg = getScoreConfig(score);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-[#050713] p-3 flex flex-col gap-2">
+    <div className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3 flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-zinc-300">{DIM_LABELS[dimKey]}</span>
         <div className="flex items-center gap-2">
@@ -366,7 +366,7 @@ function DimensionCard({
 function HistoryChart({ score }: { score: number }) {
   const data = buildHistory(score);
   return (
-    <div className="rounded-xl border border-white/10 bg-[#050713] p-4">
+    <div className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-4">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-3">30-Day Sentiment History</p>
       <ResponsiveContainer width="100%" height={140}>
         <LineChart data={data} margin={{ top: 4, right: 40, left: -24, bottom: 0 }}>
@@ -380,7 +380,7 @@ function HistoryChart({ score }: { score: number }) {
             label={{ value: "Extreme Fear", position: "right", fontSize: 8, fill: "#ef4444" }} />
           <Line type="monotone" dataKey="score" stroke="var(--accent-color)" strokeWidth={2} dot={false} />
           <Tooltip
-            contentStyle={{ background: "#0a0e1a", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
+            contentStyle={{ background: "var(--app-bg)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
             formatter={(v) => [v, "Score"]}
             labelFormatter={(l) => String(l)}
           />
@@ -526,7 +526,7 @@ export default function SentimentView() {
                 className="rounded-2xl p-5"
                 style={{
                   border: `1px solid ${cfg.color}40`,
-                  background: `linear-gradient(145deg, #050713 55%, ${cfg.color}10 100%)`,
+                  background: `linear-gradient(145deg, var(--app-card-alt) 55%, ${cfg.color}10 100%)`,
                 }}
               >
                 <div className="flex items-center justify-between mb-1">

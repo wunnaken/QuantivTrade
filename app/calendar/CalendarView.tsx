@@ -5,7 +5,7 @@ import type { EarningsItem as ApiEarnings, EconomicItem as ApiEconomic } from ".
 import { EconomicDetailModal } from "./EconomicDetailModal";
 import { EarningsDetailModal } from "./EarningsDetailModal";
 
-const CARD_BG = "#0F1520";
+const CARD_BG = "var(--app-card)";
 
 /** Approx SPY move on event day (for mini chart) */
 const EVENT_AVG_MOVE: Record<string, number> = {
@@ -115,7 +115,7 @@ function YearHeatmap({ year, events }: { year: number; events: YearEventPoint[] 
     if (d.type === "high") return "#EF4444";
     if (d.type === "medium") return "#F59E0B";
     if (d.type === "low") return "#1a3a2a";
-    return "#0F1520";
+    return "var(--app-card)";
   };
 
   return (
@@ -634,7 +634,7 @@ export default function CalendarView() {
                   <YearHeatmap year={yearViewYear} events={yearEvents} />
                 </div>
                 <div className="flex flex-wrap gap-4 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-xs">
-                  <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded" style={{ backgroundColor: "#0F1520" }} /> No events</span>
+                  <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded" style={{ backgroundColor: "var(--app-card)" }} /> No events</span>
                   <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-[#1a3a2a]" /> Low impact</span>
                   <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-[#166534]" /> Medium</span>
                   <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-[#F59E0B]" /> High impact</span>

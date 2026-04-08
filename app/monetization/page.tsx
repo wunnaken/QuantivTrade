@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-const PAGE_BG = "#0A0E1A";
+const PAGE_BG = "var(--app-bg)";
 
 export default function MonetizationPage() {
   return (

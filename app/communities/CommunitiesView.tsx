@@ -120,11 +120,11 @@ export default function CommunitiesView() {
       {showIntro && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="intro-title">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" aria-hidden />
-          <div ref={introTrapRef} className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[#0A0E1A] p-6 shadow-2xl">
+          <div ref={introTrapRef} className="relative w-full max-w-md rounded-2xl border border-white/10 bg-[var(--app-bg)] p-6 shadow-2xl">
             <button
               type="button"
               onClick={dismissIntro}
-              className="absolute right-3 top-3 rounded-full p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-[#11c60f]/50 focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+              className="absolute right-3 top-3 rounded-full p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-[#11c60f]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
               aria-label="Close"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -143,7 +143,7 @@ export default function CommunitiesView() {
             <button
               type="button"
               onClick={dismissIntro}
-              className="mt-4 rounded-full bg-[#11c60f] px-4 py-2 text-sm font-semibold text-[#020308] hover:bg-[#13e211] focus:outline-none focus:ring-2 focus:ring-[#11c60f] focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+              className="mt-4 rounded-full bg-[#11c60f] px-4 py-2 text-sm font-semibold text-[#020308] hover:bg-[#13e211] focus:outline-none focus:ring-2 focus:ring-[#11c60f] focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
             >
               Got it
             </button>
@@ -164,14 +164,14 @@ export default function CommunitiesView() {
               <button
                 type="button"
                 onClick={() => setLeaveConfirmRoom(null)}
-                className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-[#11c60f]/50 focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+                className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-[#11c60f]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
               >
                 Go back
               </button>
               <button
                 type="button"
                 onClick={() => { if (leaveConfirmRoom) handleLeaveRoom(leaveConfirmRoom); }}
-                className="rounded-full bg-red-500/90 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+                className="rounded-full bg-red-500/90 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 focus:outline-none focus:ring-2 focus:ring-red-400 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
               >
                 Yes, leave
               </button>
@@ -223,7 +223,7 @@ export default function CommunitiesView() {
         </div>
 
         {/* Filters */}
-        <section className="mb-8 rounded-2xl border border-white/5 bg-[#050713] px-4 py-3">
+        <section className="mb-8 rounded-2xl border border-white/5 bg-[var(--app-card-alt)] px-4 py-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-zinc-300">
               <span className="mr-1 text-zinc-400">Filter by focus:</span>
@@ -291,7 +291,7 @@ export default function CommunitiesView() {
             ].map((room) => {
               const verified = user?.isVerified ?? false;
               return (
-                <article key={room.id} className={`relative overflow-hidden rounded-2xl border border-white/5 p-4 ${verified ? "border-[#3B82F6]/30 bg-gradient-to-br from-[#3B82F6]/10 to-white/[0.02]" : "bg-[#050713]"}`}>
+                <article key={room.id} className={`relative overflow-hidden rounded-2xl border border-white/5 p-4 ${verified ? "border-[#3B82F6]/30 bg-gradient-to-br from-[#3B82F6]/10 to-white/[0.02]" : "bg-[var(--app-card-alt)]"}`}>
                   {!verified && (
                     <div className="absolute inset-0 z-10 bg-black/50 backdrop-blur-sm" aria-hidden />
                   )}
@@ -317,7 +317,7 @@ export default function CommunitiesView() {
           {/* Rooms list */}
           <div className="space-y-4">
             {roomMode === "joined" && joinedRoomIds.length === 0 ? (
-              <div className="rounded-2xl border border-white/10 bg-[#050713] p-8 text-center">
+              <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-8 text-center">
                 <p className="text-sm font-medium text-zinc-300">You haven&apos;t joined any rooms yet.</p>
                 <p className="mt-2 text-xs text-zinc-500">
                   Switch to &quot;All rooms&quot; and click &quot;Join room&quot; on a room to add it here.
@@ -537,7 +537,7 @@ export default function CommunitiesView() {
           </div>
 
           {/* Right-hand: room preview */}
-          <aside className="rounded-2xl border border-white/5 bg-gradient-to-b from-[#050713] to-black/90 p-4 shadow-[0_0_45px_rgba(15,23,42,0.9)]">
+          <aside className="rounded-2xl border border-white/5 bg-gradient-to-b from-[var(--app-card-alt)] to-black/90 p-4 shadow-[0_0_45px_rgba(15,23,42,0.9)]">
             {justJoinedRoom && (
               <div className="mb-4 rounded-xl border border-[#11c60f]/40 bg-[#11c60f]/10 px-3 py-2 text-[11px] font-medium text-emerald-200">
                 You joined <span className="font-semibold">{justJoinedRoom}</span>. It&apos;s now in your profile under Groups you&apos;re in.

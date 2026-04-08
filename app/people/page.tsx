@@ -38,7 +38,7 @@ function UserCard({
   return (
     <div
       className="rounded-2xl border border-white/10 p-4 transition-colors hover:border-white/15"
-      style={{ backgroundColor: "#0F1520" }}
+      style={{ backgroundColor: "var(--app-card)" }}
     >
       <div className="flex items-start gap-4">
         <Link
@@ -209,7 +209,7 @@ function PeopleContent() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search by name or @handle..."
-        className="mt-4 w-full rounded-xl border border-white/10 bg-[#0F1520] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors focus:border-[var(--accent-color)]/50"
+        className="mt-4 w-full rounded-xl border border-white/10 bg-[var(--app-card)] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors focus:border-[var(--accent-color)]/50"
         aria-label="Search users"
       />
       {loading ? (
@@ -242,7 +242,7 @@ function PeopleContent() {
 
 export default function PeoplePage() {
   return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[#0A0E1A]"><div className="h-8 w-8 animate-pulse rounded-full bg-white/10" /></div>}>
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center bg-[var(--app-bg)]"><div className="h-8 w-8 animate-pulse rounded-full bg-white/10" /></div>}>
       <PeopleContent />
     </Suspense>
   );

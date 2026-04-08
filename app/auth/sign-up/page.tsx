@@ -81,7 +81,7 @@ export default function SignUpPage() {
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-2xl border border-white/10 bg-[#050713] p-5 shadow-[0_0_40px_rgba(15,23,42,0.9)]"
+          className="space-y-4 rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5 shadow-[0_0_40px_rgba(15,23,42,0.9)]"
         >
           <p className="mb-1 flex items-center gap-1.5 text-[10px] text-zinc-500">
             <svg className="h-3 w-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>

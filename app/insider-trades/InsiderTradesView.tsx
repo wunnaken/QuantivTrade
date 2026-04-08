@@ -212,7 +212,7 @@ function PoliticianModal({ profile, onClose }: { profile: PolProfile; onClose: (
                 <YAxis tick={{ fill: "#52525b", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
                 <ReferenceLine y={0} stroke="rgba(255,255,255,0.15)" />
                 <Tooltip
-                  contentStyle={{ backgroundColor: "#0F1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+                  contentStyle={{ backgroundColor: "var(--app-card)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
                   formatter={(val: unknown, name: unknown) => [`${val}%`, name === "politician" ? `${profile.name.split(" ").pop()} total` : "S&P 500 total"]}
                   labelStyle={{ color: "#71717a", marginBottom: 4 }}
                 />
@@ -318,7 +318,7 @@ function PartyPieChart({
               ))}
             </Pie>
             <Tooltip
-              contentStyle={{ backgroundColor: "#0F1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
+              contentStyle={{ backgroundColor: "var(--app-card)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
             />
           </PieChart>
         </ResponsiveContainer>
@@ -822,7 +822,7 @@ export default function InsiderTradesView() {
                 <BarChart data={tickerChart} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                   <XAxis dataKey="ticker" tick={{ fill: "#71717a", fontSize: 10 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: "#71717a", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "#0F1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "var(--app-card)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
                   <Bar dataKey="count" name="Trades" fill="var(--accent-color)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -837,7 +837,7 @@ export default function InsiderTradesView() {
                 <BarChart data={monthChart} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
                   <XAxis dataKey="month" tick={{ fill: "#71717a", fontSize: 9 }} axisLine={false} tickLine={false} />
                   <YAxis tick={{ fill: "#71717a", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "#0F1520", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "var(--app-card)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} cursor={{ fill: "rgba(255,255,255,0.05)" }} />
                   <Bar dataKey="buys" name="Purchases" fill="#10B981" radius={[2,2,0,0]} stackId="a" />
                   <Bar dataKey="sells" name="Sales" fill="#EF4444" radius={[2,2,0,0]} stackId="a" />
                 </BarChart>

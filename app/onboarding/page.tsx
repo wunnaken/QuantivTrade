@@ -9,7 +9,7 @@ import { WelcomeAnimation } from "../../components/WelcomeAnimation";
 const WELCOMED_KEY = "quantivtrade-welcomed";
 
 const TOTAL_STEPS = 7;
-const BG = "#0A0E1A";
+const BG = "var(--app-bg)";
 const ACCENT = "var(--accent-color)";
 
 type Experience = "beginner" | "some" | "intermediate" | "advanced" | null;

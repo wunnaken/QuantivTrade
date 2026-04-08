@@ -36,7 +36,7 @@ export function WidgetWrapper({
   return (
     <div
       className={
-        "flex h-full flex-col rounded-lg border bg-[#0F1520] text-zinc-200 " +
+        "flex h-full flex-col rounded-lg border bg-[var(--app-card)] text-zinc-200 " +
         (editMode ? "overflow-hidden" : "overflow-visible widget-view-mode ") +
         (editMode
           ? "ring-1 ring-[var(--accent-color)]/25 shadow-[0_0_0_1px_rgba(59,130,246,0.15),0_0_18px_rgba(59,130,246,0.08)]"
@@ -46,7 +46,7 @@ export function WidgetWrapper({
     >
       <div
         className={`widget-header widget-drag-handle flex shrink-0 items-center justify-between gap-2 border-b border-white/5 px-3 py-2 ${editMode ? "cursor-grab active:cursor-grabbing" : ""}`}
-        style={{ backgroundColor: editMode ? "#080B14" : "#0A0E1A" }}
+        style={{ backgroundColor: editMode ? "#080B14" : "var(--app-bg)" }}
       >
         <div className="flex min-w-0 items-center gap-2">
           <span className="truncate text-xs font-medium text-zinc-200">{displayTitle}</span>
@@ -67,7 +67,7 @@ export function WidgetWrapper({
       {!minimized && (
         <div className="relative flex min-h-0 flex-1 flex-col overflow-auto">
           {loading && (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#0F1520]/80">
+            <div className="absolute inset-0 flex items-center justify-center bg-[var(--app-card)]/80">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--accent-color)] border-t-transparent" />
             </div>
           )}

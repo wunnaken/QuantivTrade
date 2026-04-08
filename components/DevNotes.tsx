@@ -166,7 +166,7 @@ export function DevNotes() {
           <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} aria-hidden />
           <div
             className="relative max-h-[85vh] w-full max-w-md overflow-hidden rounded-t-xl border-2 shadow-2xl"
-            style={{ backgroundColor: "#0F1520", borderColor: ORANGE }}
+            style={{ backgroundColor: "var(--app-card)", borderColor: ORANGE }}
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-3" style={{ borderColor: "rgba(249,115,22,0.3)" }}>
               <div className="flex items-center gap-2">

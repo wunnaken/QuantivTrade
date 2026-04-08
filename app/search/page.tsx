@@ -194,7 +194,7 @@ export default function SearchPage() {
             onBlur={() => setTimeout(() => setFocused(false), 150)}
             onKeyDown={handleKeyDown}
             placeholder="Search tickers, pages, features…"
-            className="w-full rounded-2xl border border-white/10 bg-[#0F1520] py-4 pl-11 pr-10 text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors focus:border-[var(--accent-color)]/50 focus:bg-[#111926]"
+            className="w-full rounded-2xl border border-white/10 bg-[var(--app-card)] py-4 pl-11 pr-10 text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors focus:border-[var(--accent-color)]/50 focus:bg-[#111926]"
             autoComplete="off"
             aria-label="Search"
           />
@@ -214,7 +214,7 @@ export default function SearchPage() {
 
         {/* Dropdown */}
         {showDropdown && (
-          <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-white/10 bg-[#0F1520] shadow-2xl">
+          <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card)] shadow-2xl">
 
             {/* Page results */}
             {pageResults.length > 0 && (

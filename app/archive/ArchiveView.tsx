@@ -155,7 +155,7 @@ function ArticleCard({
   return (
     <button
       onClick={onClick}
-      className="group w-full rounded-2xl border border-white/10 bg-[#050713] p-4 text-left transition-all duration-200 hover:border-white/20 hover:bg-white/5"
+      className="group w-full rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4 text-left transition-all duration-200 hover:border-white/20 hover:bg-white/5"
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <CategoryBadge category={article.category} size="xs" />
@@ -671,7 +671,7 @@ export default function ArchiveView() {
 
         {/* Search dropdown */}
         {showDropdown && searchResults.length > 0 && (
-          <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-white/10 bg-[#0A0E1A] shadow-xl">
+          <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-white/10 bg-[var(--app-bg)] shadow-xl">
             {searchResults.map((result) => (
               <button
                 key={result.slug}
@@ -755,7 +755,7 @@ export default function ArchiveView() {
                 className={`rounded-2xl border p-4 text-left transition-all duration-200 ${
                   activeCategory === cat.category
                     ? "border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10"
-                    : "border-white/10 bg-[#050713] hover:border-white/20 hover:bg-white/5"
+                    : "border-white/10 bg-[var(--app-card-alt)] hover:border-white/20 hover:bg-white/5"
                 }`}
               >
                 <span className="text-2xl">{cat.emoji}</span>
@@ -774,7 +774,7 @@ export default function ArchiveView() {
                   <button
                     key={a.slug}
                     onClick={() => loadArticle(a.slug, a.title)}
-                    className="group w-56 shrink-0 rounded-2xl border border-white/10 bg-[#050713] p-4 text-left transition-all hover:border-white/20 hover:bg-white/5"
+                    className="group w-56 shrink-0 rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4 text-left transition-all hover:border-white/20 hover:bg-white/5"
                   >
                     <CategoryBadge category={a.category} size="xs" />
                     <p className="mt-2 text-sm font-semibold text-zinc-100 leading-snug group-hover:text-white">{a.title}</p>

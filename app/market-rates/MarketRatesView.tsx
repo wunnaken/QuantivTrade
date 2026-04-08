@@ -124,7 +124,7 @@ const CHART_STYLE = {
 };
 
 const TOOLTIP_STYLE = {
-  backgroundColor: "#0F1520",
+  backgroundColor: "var(--app-card)",
   border: "1px solid rgba(255,255,255,0.12)",
   borderRadius: 8,
   fontSize: 12,
@@ -290,7 +290,7 @@ function StockPerformanceChart() {
   const noData = !loading && !fetchError && chartData.length === 0;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#050713] px-4 pb-4 pt-4">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] px-4 pb-4 pt-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
@@ -520,7 +520,7 @@ function GasPricesTab() {
 
       {/* All grades + crude trend chart with timeframe toggle */}
       {data.allGradesHistory.length > 1 && (
-        <div className="rounded-2xl border border-white/10 bg-[#050713] px-4 pb-4 pt-4">
+        <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] px-4 pb-4 pt-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
@@ -552,7 +552,7 @@ function GasPricesTab() {
               <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
                 formatter={(v) => (({ regular: "Regular", midgrade: "Midgrade", premium: "Premium", diesel: "Diesel", crude: "WTI Crude (÷42)" } as Record<string, string>)[v] ?? v)} />
               <Line type="monotone" dataKey="crude"    stroke="#71717a" strokeWidth={1.5} strokeDasharray="4 3" dot={false} connectNulls name="crude" />
-              <Line type="monotone" dataKey="regular"  stroke="#4f9cf9" strokeWidth={2}   dot={false} connectNulls name="regular" />
+              <Line type="monotone" dataKey="regular"  stroke="#e8846a" strokeWidth={2}   dot={false} connectNulls name="regular" />
               <Line type="monotone" dataKey="midgrade" stroke="#a78bfa" strokeWidth={1.5} dot={false} connectNulls name="midgrade" />
               <Line type="monotone" dataKey="premium"  stroke="#f59e0b" strokeWidth={1.5} dot={false} connectNulls name="premium" />
               <Line type="monotone" dataKey="diesel"   stroke="#f97316" strokeWidth={2}   dot={false} connectNulls name="diesel" />
@@ -817,7 +817,7 @@ export default function MarketRatesView() {
           )}
 
           {/* Mortgage rate history chart */}
-          <div className="rounded-2xl border border-white/10 bg-[#050713] px-4 pb-4 pt-4">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] px-4 pb-4 pt-4">
             <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-400">
               Mortgage Rate History (Since 2020)
             </p>
@@ -915,7 +915,7 @@ export default function MarketRatesView() {
           </div>
 
           {/* Key benchmark rates panel */}
-          <div className="rounded-2xl border border-white/10 bg-[#050713] px-4 py-4">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] px-4 py-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400">
               Key Benchmark Rates
             </p>
@@ -1000,7 +1000,7 @@ export default function MarketRatesView() {
           </div>
 
           {/* Combined trend chart with timeframe toggle */}
-          <div className="rounded-2xl border border-white/10 bg-[#050713] px-4 pb-4 pt-4">
+          <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] px-4 pb-4 pt-4">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-widest text-zinc-400">
@@ -1091,7 +1091,7 @@ export default function MarketRatesView() {
               return (
                 <div
                   key={key}
-                  className="rounded-2xl border border-white/10 bg-[#050713] px-4 pb-4 pt-4"
+                  className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] px-4 pb-4 pt-4"
                 >
                   <div className="mb-3 flex items-start justify-between">
                     <div>

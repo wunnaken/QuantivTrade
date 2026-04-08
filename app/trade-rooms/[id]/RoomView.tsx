@@ -366,7 +366,7 @@ export default function RoomView({ roomId }: { roomId: number }) {
   return (
     <main className="app-page flex flex-col" style={{ height: "calc(100vh - 60px)" }}>
       {/* Top bar */}
-      <div className="flex shrink-0 items-center justify-between border-b border-white/10 bg-[#050713] pl-2 pr-4 py-3">
+      <div className="flex shrink-0 items-center justify-between border-b border-white/10 bg-[var(--app-card-alt)] pl-2 pr-4 py-3">
         <div className="flex items-center gap-3">
           <Link href="/trade-rooms" className="text-zinc-500 hover:text-zinc-300 transition">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -436,7 +436,7 @@ export default function RoomView({ roomId }: { roomId: number }) {
 
       {/* Trade call form (host only) */}
       {showTradeForm && isHost && (
-        <div className="shrink-0 border-b border-white/10 bg-[#050713] px-4 py-3">
+        <div className="shrink-0 border-b border-white/10 bg-[var(--app-card-alt)] px-4 py-3">
           <form onSubmit={submitTradeCall} className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
               <label className="text-[10px] font-medium text-zinc-500">TICKER</label>
@@ -540,7 +540,7 @@ export default function RoomView({ roomId }: { roomId: number }) {
         <div className="flex flex-1 flex-col min-w-0 border-r border-white/10">
           {/* Trade calls strip */}
           {tradeCalls.length > 0 && (
-            <div className="shrink-0 border-b border-white/10 bg-[#050713] px-4 py-2">
+            <div className="shrink-0 border-b border-white/10 bg-[var(--app-card-alt)] px-4 py-2">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Trade Calls</p>
               <div className="flex gap-3 overflow-x-auto pb-1">
                 {tradeCalls.map((tc) => {
@@ -635,7 +635,7 @@ export default function RoomView({ roomId }: { roomId: number }) {
 
           {/* Message input */}
           {!room.ended_at ? (
-            <form onSubmit={sendMessage} className="shrink-0 flex items-center gap-2 border-t border-white/10 bg-[#050713] px-4 py-3">
+            <form onSubmit={sendMessage} className="shrink-0 flex items-center gap-2 border-t border-white/10 bg-[var(--app-card-alt)] px-4 py-3">
               <input
                 type="text"
                 value={msgInput}
@@ -654,14 +654,14 @@ export default function RoomView({ roomId }: { roomId: number }) {
               </button>
             </form>
           ) : (
-            <div className="shrink-0 border-t border-white/10 bg-[#050713] px-4 py-3 text-center text-xs text-zinc-500">
+            <div className="shrink-0 border-t border-white/10 bg-[var(--app-card-alt)] px-4 py-3 text-center text-xs text-zinc-500">
               This room has ended.
             </div>
           )}
         </div>
 
         {/* Right panel */}
-        <div className="hidden lg:flex w-64 shrink-0 flex-col overflow-y-auto bg-[#050713]">
+        <div className="hidden lg:flex w-64 shrink-0 flex-col overflow-y-auto bg-[var(--app-card-alt)]">
           {/* Members */}
           <div className="border-b border-white/10 px-4 py-3">
             <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">

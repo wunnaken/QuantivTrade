@@ -4,6 +4,56 @@ import { getCurrentProfileId } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
+export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const supabase = createServerClient();
+
+  const { data, error } = await supabase
+    .from("marketplace_listings")
+    .select("id, content_data, backtest_data, description, seller_id, preview_disabled, updated_at, status")
+    .eq("id", id)
+    .single();
+
+  if (error || !data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const userId = await getCurrentProfileId();
+  let purchased = false;
+  let purchasedAt: string | null = null;
+
+  if (userId) {
+    const { data: purchase } = await supabase
+      .from("marketplace_purchases")
+      .select("id, purchased_at")
+      .eq("listing_id", id)
+      .eq("buyer_id", userId)
+      .eq("status", "completed")
+      .maybeSingle();
+    purchased = !!purchase || data.seller_id === userId;
+    purchasedAt = purchase?.purchased_at ?? null;
+  }
+
+  // Only return content if buyer/seller OR listing is approved (for preview)
+  const canAccess = purchased || data.status === "approved";
+  if (!canAccess) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  // Total sales across all of this seller's paid listings
+  const { count: sellerTotalSales } = await supabase
+    .from("marketplace_purchases")
+    .select("id", { count: "exact", head: true })
+    .eq("seller_id", data.seller_id)
+    .eq("status", "completed");
+
+  return NextResponse.json({
+    content_data: data.content_data,
+    backtest_data: purchased ? (data.backtest_data ?? null) : null,
+    purchased,
+    purchased_at: purchasedAt,
+    content_updated_at: data.updated_at,
+    preview_disabled: data.preview_disabled ?? false,
+    seller_total_sales: sellerTotalSales ?? 0,
+  });
+}
+
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentProfileId();
   if (!userId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
@@ -36,6 +86,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     backtest_data?: string;
     content_data?: string;
     preview_image_url?: string;
+    preview_disabled?: boolean;
   };
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -51,6 +102,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.backtest_data !== undefined) updates.backtest_data = body.backtest_data;
   if (body.content_data !== undefined)  updates.content_data = body.content_data;
   if (body.preview_image_url !== undefined) updates.preview_image_url = body.preview_image_url;
+  if (body.preview_disabled !== undefined) updates.preview_disabled = body.preview_disabled;
 
   // Only re-review if content actually differs from what's already saved
   const contentChanged =
@@ -63,6 +115,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (contentChanged) {
     updates.status = "pending";
     updates.rejection_reason = null;
+    // updated_at (already set above) serves as the content-change timestamp
   }
 
   const { data: updated, error: updateErr } = await supabase

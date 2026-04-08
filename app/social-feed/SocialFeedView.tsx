@@ -55,7 +55,7 @@ function VerifiedBadgeWithTooltip() {
     <span className="relative inline-flex" onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
       <VerifiedBadge size={16} />
       {showTooltip && !isUserVerified && (
-        <span className="absolute left-0 top-full z-50 mt-1 max-w-[200px] rounded-lg border border-white/20 bg-[#0F1520] px-2.5 py-1.5 text-xs text-zinc-200 shadow-xl">
+        <span className="absolute left-0 top-full z-50 mt-1 max-w-[200px] rounded-lg border border-white/20 bg-[var(--app-card)] px-2.5 py-1.5 text-xs text-zinc-200 shadow-xl">
           This trader is Verified ✓ Get your own badge for $9/month
         </span>
       )}
@@ -525,14 +525,14 @@ export default function SocialFeedView() {
                   type="search"
                   name="q"
                   placeholder="Search by name or @handle..."
-                  className="w-full rounded-xl border border-white/10 bg-[#0F1520] px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors focus:border-[var(--accent-color)]/50"
+                  className="w-full rounded-xl border border-white/10 bg-[var(--app-card)] px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors focus:border-[var(--accent-color)]/50"
                   aria-label="Search users"
                 />
               </form>
               <button
                 type="button"
                 onClick={() => setShowBriefing(true)}
-                className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-[#0F1520] px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)]"
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-[var(--app-card)] px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)]"
               >
                 Morning Briefing
               </button>

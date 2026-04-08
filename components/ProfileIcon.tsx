@@ -28,7 +28,7 @@ export function ProfileIcon() {
         </svg>
       </Link>
       <div className="invisible absolute right-0 top-full z-[100] pt-1 opacity-0 transition-[visibility,opacity] duration-150 group-hover:visible group-hover:opacity-100" style={{ position: "absolute" }}>
-        <div className="min-w-[220px] rounded-xl border border-white/10 bg-[#0F1520] py-2 pb-4 shadow-xl" style={{ backgroundColor: "#0F1520" }} role="menu">
+        <div className="min-w-[220px] rounded-xl border border-white/10 bg-[var(--app-card)] py-2 pb-4 shadow-xl" style={{ backgroundColor: "var(--app-card)" }} role="menu">
           {user ? (
             <>
               <div className="px-4 py-2">

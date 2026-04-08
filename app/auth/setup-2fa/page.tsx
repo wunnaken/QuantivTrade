@@ -156,7 +156,7 @@ export default function SetupTwoFactorPage() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#050713] p-5 shadow-[0_0_40px_rgba(15,23,42,0.9)]">
+        <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5 shadow-[0_0_40px_rgba(15,23,42,0.9)]">
           {/* Loading */}
           {phase.id === "loading" && (
             <p className="py-4 text-center text-xs text-zinc-500">Loading…</p>

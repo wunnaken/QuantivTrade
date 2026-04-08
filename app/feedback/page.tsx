@@ -59,7 +59,7 @@ export default function FeedbackPage() {
             placeholder="Tell us what you think, what you'd like to see, or report an issue..."
             rows={5}
             disabled={sending}
-            className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#0F1520] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors focus:border-[var(--accent-color)]/50 disabled:opacity-60"
+            className="mt-1.5 w-full rounded-xl border border-white/10 bg-[var(--app-card)] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors focus:border-[var(--accent-color)]/50 disabled:opacity-60"
           />
         </div>
         <div>
@@ -73,7 +73,7 @@ export default function FeedbackPage() {
             onChange={(e) => setReplyEmail(e.target.value)}
             placeholder="you@example.com"
             disabled={sending}
-            className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#0F1520] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors focus:border-[var(--accent-color)]/50 disabled:opacity-60"
+            className="mt-1.5 w-full rounded-xl border border-white/10 bg-[var(--app-card)] px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors focus:border-[var(--accent-color)]/50 disabled:opacity-60"
           />
         </div>
         {error && (
@@ -96,7 +96,7 @@ export default function FeedbackPage() {
           role="alert"
           aria-live="polite"
         >
-          <div className="rounded-2xl border border-[var(--accent-color)]/30 bg-[#0F1520] px-8 py-6 text-center shadow-xl">
+          <div className="rounded-2xl border border-[var(--accent-color)]/30 bg-[var(--app-card)] px-8 py-6 text-center shadow-xl">
             <p className="text-lg font-semibold text-[var(--accent-color)]">Feedback sent!</p>
             <p className="mt-1 text-sm text-zinc-400">Thank you — we’ll read it soon.</p>
           </div>

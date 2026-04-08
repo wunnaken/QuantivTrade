@@ -30,7 +30,7 @@ export function DemoInfoIcon() {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-zinc-400 transition hover:border-white/25 hover:bg-white/5 hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-[#11c60f]/50 focus:ring-offset-2 focus:ring-offset-[#0A0E1A]"
+        className="flex h-8 w-8 items-center justify-center rounded-full border border-white/15 text-zinc-400 transition hover:border-white/25 hover:bg-white/5 hover:text-zinc-200 focus:outline-none focus:ring-2 focus:ring-[#11c60f]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
         aria-label="Demo info"
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -42,7 +42,7 @@ export function DemoInfoIcon() {
       {open && (
         <div
           role="tooltip"
-          className="absolute right-0 top-full z-50 mt-2 w-72 rounded-lg border border-white/10 bg-[#0A0E1A] px-3 py-2.5 text-left text-xs text-zinc-300 shadow-xl"
+          className="absolute right-0 top-full z-50 mt-2 w-72 rounded-lg border border-white/10 bg-[var(--app-bg)] px-3 py-2.5 text-left text-xs text-zinc-300 shadow-xl"
         >
           <p>{MESSAGE}</p>
         </div>

@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useState, useEffect, useCallback, useMemo } from "react";
 
-const PAGE_BG = "#0A0E1A";
-const CARD_BG = "#0F1520";
+const PAGE_BG = "var(--app-bg)";
+const CARD_BG = "var(--app-card)";
 const PRO_GOLD = "#F59E0B";
 
 const TOOLS: { id: number; name: string; description: string }[] = [
@@ -94,7 +94,7 @@ export default function DataHubView() {
               key={tool.id}
               type="button"
               onClick={() => setSelectedTool(tool.id)}
-              className="group flex flex-col rounded-xl border border-[var(--accent-color)]/30 bg-[#0F1520] p-5 text-left transition duration-200 hover:border-[var(--accent-color)]/60 hover:shadow-lg hover:bg-[var(--accent-color)]/5"
+              className="group flex flex-col rounded-xl border border-[var(--accent-color)]/30 bg-[var(--app-card)] p-5 text-left transition duration-200 hover:border-[var(--accent-color)]/60 hover:shadow-lg hover:bg-[var(--accent-color)]/5"
             >
               <div className="flex flex-1 flex-col">
                 <h3 className="font-semibold text-white transition duration-200 group-hover:text-[var(--accent-color)] group-hover:scale-[1.02]">{tool.name}</h3>
@@ -199,7 +199,7 @@ function OptionsFlowView() {
         <button type="button" onClick={() => setTypeFilter("puts")} className={`rounded px-3 py-1 text-xs ${typeFilter === "puts" ? "bg-white/20 text-white" : "bg-white/5 text-zinc-400 hover:bg-white/10"}`}>Puts only</button>
         <label className="ml-2 flex items-center gap-1 text-xs text-zinc-500">
           Min premium:
-          <select value={minPremium} onChange={(e) => setMinPremium(Number(e.target.value))} className="rounded border border-white/20 bg-[#0F1520] px-2 py-1 text-zinc-300 focus:border-white/40 focus:outline-none">
+          <select value={minPremium} onChange={(e) => setMinPremium(Number(e.target.value))} className="rounded border border-white/20 bg-[var(--app-card)] px-2 py-1 text-zinc-300 focus:border-white/40 focus:outline-none">
             <option value={0}>Any</option>
             <option value={100}>$100K</option>
             <option value={500}>$500K</option>
@@ -207,7 +207,7 @@ function OptionsFlowView() {
           </select>
         </label>
         <label className="flex items-center gap-1 text-xs text-zinc-500">
-          <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as "today" | "week")} className="rounded border border-white/20 bg-[#0F1520] px-2 py-1 text-zinc-300 focus:border-white/40 focus:outline-none">
+          <select value={periodFilter} onChange={(e) => setPeriodFilter(e.target.value as "today" | "week")} className="rounded border border-white/20 bg-[var(--app-card)] px-2 py-1 text-zinc-300 focus:border-white/40 focus:outline-none">
             <option value="today">Today</option>
             <option value="week">This week</option>
           </select>

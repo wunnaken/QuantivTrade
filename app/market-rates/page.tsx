@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 const MarketRatesView = dynamic(() => import("./MarketRatesView"), {
   ssr: false,
   loading: () => (
-    <div className="relative flex min-h-[520px] items-center justify-center rounded-2xl border border-white/10 bg-[#050713] text-sm text-zinc-500">
+    <div className="relative flex min-h-[520px] items-center justify-center rounded-2xl border border-white/10 bg-[var(--app-card-alt)] text-sm text-zinc-500">
       Loading market rates...
     </div>
   ),

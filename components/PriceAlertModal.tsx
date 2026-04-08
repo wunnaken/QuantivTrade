@@ -176,7 +176,7 @@ export function PriceAlertModal({ open, onClose, editingAlert, prefilledTicker, 
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
       <div
         className="relative w-full max-w-md rounded-2xl border border-white/10 py-6 px-5 shadow-2xl animate-[fadeIn_0.2s_ease-out]"
-        style={{ backgroundColor: "#0F1520" }}
+        style={{ backgroundColor: "var(--app-card)" }}
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="price-alert-modal-title" className="text-lg font-semibold text-zinc-100">

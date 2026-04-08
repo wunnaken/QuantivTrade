@@ -645,7 +645,7 @@ export default function WatchlistPage() {
                 return (
                   <li
                     key={alert.id}
-                    className={`rounded-lg border border-white/10 bg-[#0F1520] pl-4 pr-3 py-3 border-l-4 ${borderColor} ${triggered ? "ring-1 ring-emerald-500/20" : ""}`}
+                    className={`rounded-lg border border-white/10 bg-[var(--app-card)] pl-4 pr-3 py-3 border-l-4 ${borderColor} ${triggered ? "ring-1 ring-emerald-500/20" : ""}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">

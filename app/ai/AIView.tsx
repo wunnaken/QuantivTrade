@@ -663,7 +663,7 @@ export default function AIView() {
     <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden app-page">
       {/* Left panels: Quick topics + Recent chats (hidden on mobile) */}
       <div
-        className={`hidden min-h-0 flex-col border-r border-white/10 bg-[#0A0E1A] transition-all duration-200 lg:flex ${
+        className={`hidden min-h-0 flex-col border-r border-white/10 bg-[var(--app-bg)] transition-all duration-200 lg:flex ${
           leftPanelOpen ? "lg:w-[200px]" : "lg:w-0 lg:overflow-hidden"
         }`}
       >
@@ -706,7 +706,7 @@ export default function AIView() {
       </div>
       {/* Recent chats panel */}
       <div
-        className={`hidden min-h-0 flex-col border-r border-white/10 bg-[#0A0E1A]/80 transition-all duration-200 lg:flex ${
+        className={`hidden min-h-0 flex-col border-r border-white/10 bg-[var(--app-bg)]/80 transition-all duration-200 lg:flex ${
           recentPanelOpen ? "lg:w-[200px]" : "lg:w-0 lg:overflow-hidden"
         }`}
       >
@@ -907,7 +907,7 @@ export default function AIView() {
           {/* Reopen panels: just under "AI Assistant" header (desktop only) */}
           {(!leftPanelOpen || !recentPanelOpen) && (
             <div
-              className="absolute left-0 top-full z-20 hidden flex-col gap-0.5 rounded-br border-b border-r border-white/10 bg-[#0A0E1A] py-1.5 pl-1 pr-1.5 shadow-md lg:flex"
+              className="absolute left-0 top-full z-20 hidden flex-col gap-0.5 rounded-br border-b border-r border-white/10 bg-[var(--app-bg)] py-1.5 pl-1 pr-1.5 shadow-md lg:flex"
               aria-label="Open panels"
             >
               {!leftPanelOpen && (
@@ -1000,13 +1000,13 @@ export default function AIView() {
                     <>
                       <div
                         className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full"
-                        style={{ backgroundColor: "#0F1520" }}
+                        style={{ backgroundColor: "var(--app-card)" }}
                       >
                         <QuantivTradeLogoImage size={32} />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div
-                          className="rounded-2xl rounded-tl-sm bg-[#0F1520] px-4 py-3 text-sm text-zinc-100"
+                          className="rounded-2xl rounded-tl-sm bg-[var(--app-card)] px-4 py-3 text-sm text-zinc-100"
                         >
                           <AiMarkdown content={m.content} />
                         </div>
@@ -1050,11 +1050,11 @@ export default function AIView() {
                 <div className="flex gap-3 animate-[fadeIn_0.2s_ease-out]">
                   <div
                     className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full"
-                    style={{ backgroundColor: "#0F1520" }}
+                    style={{ backgroundColor: "var(--app-card)" }}
                   >
                     <QuantivTradeLogoImage size={32} />
                   </div>
-                  <div className="flex items-center gap-1 rounded-2xl rounded-tl-sm bg-[#0F1520] px-4 py-3">
+                  <div className="flex items-center gap-1 rounded-2xl rounded-tl-sm bg-[var(--app-card)] px-4 py-3">
                     <span className="ai-typing-dot h-2 w-2 rounded-full bg-zinc-500" />
                     <span className="ai-typing-dot h-2 w-2 rounded-full bg-zinc-500" />
                     <span className="ai-typing-dot h-2 w-2 rounded-full bg-zinc-500" />
@@ -1069,7 +1069,7 @@ export default function AIView() {
         {/* Input area */}
         <div className="flex-shrink-0 border-t border-white/10 bg-[var(--app-bg)] p-4">
           <form onSubmit={handleSubmit} className="mx-auto max-w-2xl">
-            <div className="flex gap-2 rounded-xl border border-white/10 bg-[#0F1520] transition-[box-shadow] focus-within:border-[var(--accent-color)]/40 focus-within:shadow-[0_0_0_2px_color-mix(in_srgb,var(--accent-color)_20%,transparent)]">
+            <div className="flex gap-2 rounded-xl border border-white/10 bg-[var(--app-card)] transition-[box-shadow] focus-within:border-[var(--accent-color)]/40 focus-within:shadow-[0_0_0_2px_color-mix(in_srgb,var(--accent-color)_20%,transparent)]">
               <textarea
                 ref={inputRef}
                 value={inputValue}
@@ -1111,7 +1111,7 @@ export default function AIView() {
           aria-modal="true"
         >
           <div
-            className="w-full max-w-md rounded-xl border border-white/10 bg-[#0F1520] p-4 shadow-xl"
+            className="w-full max-w-md rounded-xl border border-white/10 bg-[var(--app-card)] p-4 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sm font-semibold text-zinc-200">Add my context</h3>
