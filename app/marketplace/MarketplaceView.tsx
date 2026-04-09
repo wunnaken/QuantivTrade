@@ -596,8 +596,8 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
   async function handlePurchase() {
     setPurchasing(true);
     try {
-      const completed = await onPurchase(listing.id);
-      if (completed) setPurchased(true);
+      await onPurchase(listing.id);
+      setPurchased(true);
     } catch {
       // handled by parent
     } finally {
