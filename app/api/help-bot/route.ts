@@ -25,7 +25,7 @@ const SYSTEM = `You are the QuantivTrade Site Guide — a friendly assistant tha
 - /futures — Futures markets across asset classes
 - /crypto — Cryptocurrency prices and market data
 - /market-relations — Market relationship explorer (correlations, sector connections)
-- /market-rates — Building and construction sector market data
+- /building-data — Building and construction sector market data
 - /sentiment — Sentiment Radar: aggregated market sentiment across assets
 - /insider-trades — Insider trading filings and activity tracker
 - /fiscalwatch — Fiscal policy and government spending tracker

@@ -34,7 +34,7 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/futures", label: "Futures" },
   { href: "/crypto", label: "Crypto" },
   { href: "/market-relations", label: "Market Relations" },
-  { href: "/market-rates", label: "Building Data" },
+  { href: "/building-data", label: "Building Data" },
   { href: "/sentiment", label: "Sentiment Radar" },
   { href: "/insider-trades", label: "Insider Trades" },
   { href: "/fiscalwatch", label: "FiscalWatch" },
@@ -55,7 +55,7 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
 
 const SECTIONS: { id: string; label: string; hrefs: string[] }[] = [
   { id: "community", label: "Community", hrefs: ["/social-feed", "/communities", "/messages", "/trade-rooms"] },
-  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/dividends", "/forex", "/futures", "/crypto", "/market-relations", "/market-rates", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
+  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/dividends", "/forex", "/futures", "/crypto", "/market-relations", "/building-data", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
   { id: "analytics", label: "Analytics", hrefs: ["/ceos", "/calendar", "/screener", "/supply-chain", "/datahub", "/backtest"] },
   { id: "personal", label: "Personal", hrefs: ["/journal", "/predict", "/watchlist", "/workspace"] },
 ];
@@ -240,7 +240,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     hidden: [],
     collapsed: true,
     collapsedSections: [],
+    sectionOrder: [],
   }));
+  // drag-and-drop state — type: "item" drags a nav link, "section" drags a whole group
+  const [dragKey, setDragKey] = useState<string | null>(null);
+  const [dragType, setDragType] = useState<"item" | "section" | null>(null);
   const [windowWidth, setWindowWidth] = useState(1024);
 
   useLoginStreakTick();
@@ -258,6 +262,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
+
 
   const hiddenItems = prefs.hidden
     .map((href) => MAIN_NAV.find((i) => i.href === href))
@@ -351,6 +356,57 @@ export function Layout({ children }: { children: React.ReactNode }) {
     saveSidebarPrefs(next);
   }, [prefs]);
 
+  // Resolve current section order (fall back to SECTIONS default)
+  const orderedSections = (() => {
+    const order = prefs.sectionOrder?.length ? prefs.sectionOrder : SECTIONS.map((s) => s.id);
+    return order.map((id) => SECTIONS.find((s) => s.id === id)).filter(Boolean) as typeof SECTIONS;
+  })();
+
+  // Items within a section, sorted by prefs.order
+  const getSectionItems = (section: (typeof SECTIONS)[number]) => {
+    const savedOrder = prefs.order.filter((h) => section.hrefs.includes(h));
+    const extras = section.hrefs.filter((h) => !savedOrder.includes(h));
+    return [...savedOrder, ...extras]
+      .map((h) => MAIN_NAV.find((i) => i.href === h))
+      .filter((item): item is (typeof MAIN_NAV)[number] => item != null && !prefs.hidden.includes(item.href));
+  };
+
+  const dropItem = useCallback((targetHref: string, sectionId: string) => {
+    if (!dragKey || dragType !== "item") return;
+    const section = SECTIONS.find((s) => s.id === sectionId);
+    if (!section) return;
+    const sectionHrefs = new Set(section.hrefs);
+    const currentOrder = prefs.order.filter((h) => sectionHrefs.has(h));
+    const fromIdx = currentOrder.indexOf(dragKey);
+    const toIdx = currentOrder.indexOf(targetHref);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    const reordered = [...currentOrder];
+    reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, dragKey);
+    // Rebuild full order: replace section's hrefs in-place with the reordered list
+    const next = [...prefs.order];
+    let si = 0;
+    for (let i = 0; i < next.length && si < reordered.length; i++) {
+      if (sectionHrefs.has(next[i])) { next[i] = reordered[si++]; }
+    }
+    savePrefs({ ...prefs, order: next });
+    setDragKey(null);
+    setDragType(null);
+  }, [dragKey, dragType, prefs, savePrefs]);
+
+  const dropSection = useCallback((targetId: string) => {
+    if (!dragKey || dragType !== "section") return;
+    const current = prefs.sectionOrder?.length ? [...prefs.sectionOrder] : SECTIONS.map((s) => s.id);
+    const fromIdx = current.indexOf(dragKey);
+    const toIdx = current.indexOf(targetId);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    current.splice(fromIdx, 1);
+    current.splice(toIdx, 0, dragKey);
+    savePrefs({ ...prefs, sectionOrder: current });
+    setDragKey(null);
+    setDragType(null);
+  }, [dragKey, dragType, prefs, savePrefs]);
+
   return (
     <div className="min-h-screen app-page" style={{ paddingLeft: sidebarWidth }}>
       {/* Sidebar */}
@@ -431,45 +487,70 @@ export function Layout({ children }: { children: React.ReactNode }) {
               onClick={() => setSidebarOpen(false)}
             />
           </div>
-          {SECTIONS.map((section, sIdx) => {
-            const sectionItems = section.hrefs
-              .map((h) => MAIN_NAV.find((i) => i.href === h))
-              .filter((item): item is (typeof MAIN_NAV)[number] => item != null && !prefs.hidden.includes(item.href));
+          {orderedSections.map((section, sIdx) => {
+            const sectionItems = getSectionItems(section);
             const isSectionCollapsed = prefs.collapsedSections.includes(section.id);
+            const isDragOverSection = dragKey === section.id && dragType === "section";
             return (
-              <div key={section.id} className={sIdx > 0 ? "mt-3" : ""}>
+              <div
+                key={section.id}
+                className={`${sIdx > 0 ? "mt-3" : ""} ${isDragOverSection ? "opacity-50" : ""}`}
+                onDragOver={customizeMode && dragType === "section" ? (e) => e.preventDefault() : undefined}
+                onDrop={customizeMode && dragType === "section" ? (e) => { e.preventDefault(); dropSection(section.id); } : undefined}
+              >
                 {!narrow && (
-                  <button
-                    type="button"
-                    onClick={() => toggleSection(section.id)}
-                    className="mb-0.5 flex w-full items-center justify-between rounded px-2 py-1 text-left transition-colors hover:bg-white/5"
-                    aria-expanded={!isSectionCollapsed}
+                  <div
+                    className="mb-0.5 flex w-full items-center justify-between rounded px-2 py-1"
+                    draggable={customizeMode}
+                    onDragStart={customizeMode ? (e) => { e.stopPropagation(); setDragKey(section.id); setDragType("section"); e.dataTransfer.effectAllowed = "move"; } : undefined}
+                    onDragEnd={customizeMode ? () => { setDragKey(null); setDragType(null); } : undefined}
                   >
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors">
-                      {section.label}
-                    </span>
-                    <svg
-                      className={`h-3 w-3 text-zinc-600 transition-transform duration-200 ${isSectionCollapsed ? "-rotate-90" : ""}`}
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                    {customizeMode && (
+                      <span className="mr-1 cursor-grab text-zinc-600 select-none" title="Drag to reorder section">
+                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zM7 8a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zM7 14a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4z"/></svg>
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => toggleSection(section.id)}
+                      className="flex min-w-0 flex-1 items-center justify-between text-left transition-colors hover:bg-white/5 rounded px-2 py-1"
+                      aria-expanded={!isSectionCollapsed}
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors">
+                        {section.label}
+                      </span>
+                      <svg
+                        className={`h-3 w-3 text-zinc-600 transition-transform duration-200 ${isSectionCollapsed ? "-rotate-90" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
                 )}
                 {!isSectionCollapsed && sectionItems.filter((item) => !narrow || item.icon).map((item) => (
-                  <NavItem
+                  <div
                     key={item.href}
-                    href={item.href}
-                    label={item.label}
-                    icon={item.icon}
-                    isActive={isActive(item.href)}
-                    collapsed={collapsed}
-                    onClick={() => setSidebarOpen(false)}
-                    customizeMode={customizeMode}
-                    onHide={() => hideTab(item.href)}
-                  />
+                    draggable={customizeMode && !collapsed}
+                    onDragStart={customizeMode && !collapsed ? (e) => { e.stopPropagation(); setDragKey(item.href); setDragType("item"); e.dataTransfer.effectAllowed = "move"; } : undefined}
+                    onDragOver={customizeMode && dragType === "item" ? (e) => e.preventDefault() : undefined}
+                    onDrop={customizeMode && dragType === "item" ? (e) => { e.preventDefault(); dropItem(item.href, section.id); } : undefined}
+                    onDragEnd={customizeMode ? () => { setDragKey(null); setDragType(null); } : undefined}
+                    className={`${customizeMode && !collapsed ? "cursor-grab" : ""} ${dragKey === item.href && dragType === "item" ? "opacity-40" : ""}`}
+                  >
+                    <NavItem
+                      href={item.href}
+                      label={item.label}
+                      icon={item.icon}
+                      isActive={isActive(item.href)}
+                      collapsed={collapsed}
+                      onClick={() => setSidebarOpen(false)}
+                      customizeMode={customizeMode}
+                      onHide={() => hideTab(item.href)}
+                    />
+                  </div>
                 ))}
               </div>
             );
@@ -482,7 +563,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   onClick={() => setCustomizeMode((m) => !m)}
                   className="min-w-0 flex-1 rounded-lg px-3 py-2 text-left text-xs font-medium text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-400"
                 >
-                  {customizeMode ? "Done" : "Hide items"}
+                  {customizeMode ? "Done" : "Customize"}
                 </button>
               )}
               {!isNarrowScreen && (

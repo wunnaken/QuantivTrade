@@ -27,7 +27,7 @@ export async function POST(req: Request) {
   // Fetch listing
   const { data: listing, error: listingErr } = await supabase
     .from("marketplace_listings")
-    .select("id, title, price, price_type, subscription_interval, seller_id")
+    .select("id, title, price, price_type, subscription_interval, seller_id, discount_percent, discount_enabled, discount_expires_at")
     .eq("id", listingId)
     .eq("status", "approved")
     .single();
@@ -58,7 +58,12 @@ export async function POST(req: Request) {
     .eq("user_id", listing.seller_id)
     .single();
 
-  const amountCents = Math.round(listing.price * 100);
+  const discountActive = listing.discount_enabled && listing.discount_percent &&
+    (!listing.discount_expires_at || new Date(listing.discount_expires_at) > new Date());
+  const finalPrice = discountActive
+    ? Math.round(listing.price * (1 - listing.discount_percent / 100) * 100) / 100
+    : listing.price;
+  const amountCents = Math.round(finalPrice * 100);
   const platformFeeCents = Math.round(amountCents * 0.20);
 
   const isSubscription = listing.price_type === "subscription";

@@ -5,6 +5,7 @@ export type SidebarPrefs = {
   hidden: string[];
   collapsed: boolean;
   collapsedSections: string[];
+  sectionOrder: string[];
 };
 
 function getDefaultOrder(allHrefs: string[]): string[] {
@@ -14,15 +15,16 @@ function getDefaultOrder(allHrefs: string[]): string[] {
 export function getSidebarPrefs(allHrefs: string[]): SidebarPrefs {
   const defaultOrder = getDefaultOrder(allHrefs);
   const set = new Set(allHrefs);
-  if (typeof window === "undefined") return { order: defaultOrder, hidden: [], collapsed: true, collapsedSections: [] };
+  if (typeof window === "undefined") return { order: defaultOrder, hidden: [], collapsed: true, collapsedSections: [], sectionOrder: [] };
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { order: defaultOrder, hidden: [], collapsed: true, collapsedSections: [] };
-    const parsed = JSON.parse(raw) as { order?: unknown; hidden?: unknown; collapsed?: boolean; collapsedSections?: unknown };
+    if (!raw) return { order: defaultOrder, hidden: [], collapsed: true, collapsedSections: [], sectionOrder: [] };
+    const parsed = JSON.parse(raw) as { order?: unknown; hidden?: unknown; collapsed?: boolean; collapsedSections?: unknown; sectionOrder?: unknown };
     const order = Array.isArray(parsed?.order) ? (parsed.order as string[]) : defaultOrder;
     const hidden = Array.isArray(parsed?.hidden) ? (parsed.hidden as string[]) : [];
     const collapsed = typeof parsed?.collapsed === "boolean" ? parsed.collapsed : true;
     const collapsedSections = Array.isArray(parsed?.collapsedSections) ? (parsed.collapsedSections as string[]) : [];
+    const sectionOrder = Array.isArray(parsed?.sectionOrder) ? (parsed.sectionOrder as string[]) : [];
     const orderFiltered = order.filter((h) => set.has(h));
     const missing = allHrefs.filter((h) => !orderFiltered.includes(h));
     const hiddenFiltered = hidden.filter((h) => set.has(h) && !missing.includes(h));
@@ -45,9 +47,10 @@ export function getSidebarPrefs(allHrefs: string[]): SidebarPrefs {
       hidden: hiddenFiltered,
       collapsed,
       collapsedSections,
+      sectionOrder,
     };
   } catch {
-    return { order: defaultOrder, hidden: [], collapsed: true, collapsedSections: [] };
+    return { order: defaultOrder, hidden: [], collapsed: true, collapsedSections: [], sectionOrder: [] };
   }
 }
 

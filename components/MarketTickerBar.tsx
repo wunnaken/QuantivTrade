@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useLivePrices } from "../lib/hooks/useLivePrice";
 import { PriceDisplay } from "./PriceDisplay";
@@ -150,6 +150,30 @@ export function MarketTickerBar() {
   );
   const prices = useLivePrices(list.length > 0 ? list : DEFAULT_TICKERS);
 
+  // Hooks must be declared before any early returns
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  // Measure single-copy width once per symbol list change and pin the animation distance.
+  // Also disables animation entirely when all tickers fit without scrolling.
+  // Direct DOM mutation (no state) so re-renders from price updates never restart the animation.
+  useLayoutEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const raf = requestAnimationFrame(() => {
+      if (!el) return;
+      const halfWidth = el.scrollWidth / 2;
+      const containerWidth = el.parentElement?.clientWidth ?? 0;
+      if (halfWidth > 0 && halfWidth > containerWidth) {
+        el.style.animation = "";
+        el.style.setProperty("--ticker-half-width", `-${halfWidth}px`);
+      } else {
+        // All tickers visible at once — no scrolling needed
+        el.style.animation = "none";
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [list]);
+
   if (list.length === 0) {
     return <TickerSkeleton />;
   }
@@ -166,7 +190,7 @@ export function MarketTickerBar() {
       aria-live="polite"
       role="region"
     >
-      <div className="ticker-marquee-track flex gap-8" style={{ width: "max-content" }} key="ticker-track">
+      <div ref={trackRef} className="ticker-marquee-track flex gap-8" style={{ width: "max-content" }}>
         {[...list, ...list].map((symbol, i) => (
           <TickerItem
             key={`${symbol}-${i}`}

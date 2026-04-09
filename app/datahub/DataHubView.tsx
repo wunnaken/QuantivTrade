@@ -11,10 +11,9 @@ const TOOLS: { id: number; name: string; description: string }[] = [
   { id: 1, name: "Options Flow",     description: "Live unusual options activity and large block trades" },
   { id: 2, name: "Sector Rotation",  description: "11 S&P sectors performance heatmap — where is money flowing?" },
   { id: 3, name: "IPO Calendar",     description: "Upcoming IPOs, expected valuations, and post-IPO performance" },
-  { id: 4, name: "Dividend Calendar",description: "Ex-dividend dates, yields, and payment schedules" },
-  { id: 5, name: "Short Interest",   description: "Most shorted stocks, squeeze candidates, and days to cover" },
-  { id: 6, name: "Earnings Whisper", description: "Official estimates vs trader expectations and historical beat rates" },
-  { id: 7, name: "Dark Pool",        description: "Large institutional off-equantivtrade block trades and smart money flow" },
+  { id: 4, name: "Short Interest",   description: "Most shorted stocks, squeeze candidates, and days to cover" },
+  { id: 5, name: "Earnings Whisper", description: "Official estimates vs trader expectations and historical beat rates" },
+  { id: 6, name: "Dark Pool",        description: "Large institutional off-equantivtrade block trades and smart money flow" },
 ];
 
 export default function DataHubView() {
@@ -22,10 +21,10 @@ export default function DataHubView() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
 
   const goPrev = useCallback(() => {
-    setSelectedTool((t) => (t != null && t > 1 ? t - 1 : 7));
+    setSelectedTool((t) => (t != null && t > 1 ? t - 1 : 6));
   }, []);
   const goNext = useCallback(() => {
-    setSelectedTool((t) => (t != null && t < 7 ? t + 1 : 1));
+    setSelectedTool((t) => (t != null && t < 6 ? t + 1 : 1));
   }, []);
 
   if (selectedTool != null) {
@@ -113,10 +112,9 @@ function ExpandedToolView({ toolId }: { toolId: number }) {
     case 1: return <OptionsFlowView />;
     case 2: return <SectorRotationView />;
     case 3: return <IPOCalendarView />;
-    case 4: return <DividendCalendarView />;
-    case 5: return <ShortInterestView />;
-    case 6: return <EarningsWhisperView />;
-    case 7: return <DarkPoolView />;
+    case 4: return <ShortInterestView />;
+    case 5: return <EarningsWhisperView />;
+    case 6: return <DarkPoolView />;
     default: return null;
   }
 }
@@ -372,20 +370,6 @@ function IPOCalendarView() {
 
 // ─── Tools 4–5: Placeholder views ───────────────────────────────────────────
 // TODO: Replace with Dividend Calendar API
-function DividendCalendarView() {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-200">
-        This tool uses sample data. Real ex-dividend dates require a dividend calendar data source.
-      </div>
-      <p className="text-zinc-400">Ex-dividend calendar — sample data.</p>
-      <div className="rounded-lg border border-white/10 p-4">
-        <p className="text-sm text-zinc-500">12 companies going ex-dividend this week paying total $2.40 per share</p>
-      </div>
-    </div>
-  );
-}
-
 function ShortInterestView() {
   return (
     <div className="space-y-4">

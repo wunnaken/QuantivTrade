@@ -162,17 +162,13 @@ body {
   flex-shrink: 0;
   animation: ticker-scroll 45s linear infinite;
   will-change: transform;
-  contain: layout;
   backface-visibility: hidden;
+  transform-origin: 0 0;
 }
 
 @keyframes ticker-scroll {
-  0% {
-    transform: translate3d(0, 0, 0);
-  }
-  100% {
-    transform: translate3d(-50%, 0, 0);
-  }
+  0%   { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(var(--ticker-half-width, -50%), 0, 0); }
 }
 
 /* Plans tab: subtle grabby ping */

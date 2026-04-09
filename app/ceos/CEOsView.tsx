@@ -1573,7 +1573,7 @@ Ticker: ${ceo.ticker}`;
         <div>
           {assessment ? (
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <p className="text-sm font-semibold text-zinc-200">AI leadership assessment</p>
+              <p className="text-sm font-semibold text-zinc-200">Leadership assessment</p>
               <p className="mt-1 text-xs text-zinc-400">Score: {assessment.leadershipScore}/10 — {assessment.scoreLabel}</p>
               <p className="mt-2 text-xs text-zinc-300">{assessment.summary}</p>
               <p className="mt-2 text-xs font-medium text-zinc-400">Strengths</p>
@@ -1583,7 +1583,7 @@ Ticker: ${ceo.ticker}`;
               <p className="mt-2 text-xs text-zinc-300">{assessment.investorVerdict}</p>
             </div>
           ) : (
-            <button type="button" onClick={runAssessment} disabled={assessLoading} className="w-full rounded-lg bg-[var(--accent-color)] py-2 text-sm font-medium text-[#020308] hover:opacity-90 disabled:opacity-50">Generate AI assessment</button>
+            <button type="button" onClick={runAssessment} disabled={assessLoading} className="w-full rounded-lg bg-[var(--accent-color)] py-2 text-sm font-medium text-[#020308] hover:opacity-90 disabled:opacity-50">Leadership Report</button>
           )}
         </div>
         <button type="button" onClick={handleWatchlist} disabled={watchlistLoading} className="w-full rounded-lg border border-white/20 py-2 text-sm font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-50">

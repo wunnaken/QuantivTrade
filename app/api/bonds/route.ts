@@ -6,7 +6,9 @@ const FRED_BASE = "https://api.stlouisfed.org/fred/series/observations";
 const NEWSDATA_BASE = "https://newsdata.io/api/1/news";
 const ECB_SDW_DE_10Y_URL =
   "https://data-api.ecb.europa.eu/service/data/YC/B.U2.EUR.4F.G_N_A.SV_C_YM.SR_10Y?format=jsondata&lastNObservations=365";
+const ECB_SDW_YC_BASE = "https://data-api.ecb.europa.eu/service/data/YC/B.U2.EUR.4F.G_N_A.SV_C_YM";
 const WORLD_BANK_LEND_BASE = "https://api.worldbank.org/v2/country";
+const MOF_JGB_BASE = "https://www.mof.go.jp/english/policy/jgbs/reference/interest_rate";
 const RSS_FEEDS = [
   { url: "https://feeds.reuters.com/reuters/businessNews", source: "Reuters" },
   { url: "https://www.ft.com/rss/home", source: "Financial Times" },
@@ -493,7 +495,6 @@ const INTL_SPARK_HISTORY_KEY: Record<string, string> = {
   DEAM5Y: "DEAM5Y",
   DEAM10Y: "DEAM10Y",
   DEAM30Y: "DEAM30Y",
-  INTGSBEJPM193N: "INTGSBEJPM193N",
   INTDSRCNM193N: "INTDSRCNM193N",
   INTDSRBRM193N: "INTDSRBRM193N",
   INTDSRINM193N: "INTDSRINM193N",
@@ -517,10 +518,7 @@ const COUNTRY_CONFIG: BondCountryConfig[] = [
     id: "uk",
     label: "UK Gilts",
     maturities: [
-      { label: "2Y", seriesId: "GBAM2Y" },
-      { label: "5Y", seriesId: "GBAM5Y" },
       { label: "10Y", seriesId: "GBAM10Y" },
-      { label: "30Y", seriesId: "GBAM30Y" },
     ],
     tvSymbol: "TVC:GB10Y",
   },
@@ -538,7 +536,13 @@ const COUNTRY_CONFIG: BondCountryConfig[] = [
   {
     id: "jp",
     label: "Japan JGB",
-    maturities: [{ label: "10Y", seriesId: "INTGSBEJPM193N" }],
+    maturities: [
+      { label: "2Y",  seriesId: "MOF_JP_2Y" },
+      { label: "5Y",  seriesId: "MOF_JP_5Y" },
+      { label: "10Y", seriesId: "MOF_JP_10Y" },
+      { label: "20Y", seriesId: "MOF_JP_20Y" },
+      { label: "30Y", seriesId: "MOF_JP_30Y" },
+    ],
     tvSymbol: "TVC:JP10Y",
   },
   {
@@ -979,7 +983,114 @@ async function fetchWorldBankRates(
   }
 }
 
-/** Germany 10Y spot curve from ECB SDW (jsondata). */
+/**
+ * Parse MoF JGB CSV text.
+ * The CSV has a title row (line 0) then a header row containing "Date".
+ * Dates are YYYY/M/D (not zero-padded). Missing values are "-".
+ */
+function parseMofJgbCsv(text: string): Array<{ date: string; yields: Record<string, number> }> {
+  const lines = text.trim().split(/\r?\n/);
+  // Find the header row — the one whose first column is "Date"
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(lines.length, 5); i++) {
+    if (/^Date/i.test(lines[i].trim())) { headerIdx = i; break; }
+  }
+  if (headerIdx === -1) return [];
+  const headers = lines[headerIdx].split(",").map((h) => h.trim().replace(/"/g, ""));
+  const rows: Array<{ date: string; yields: Record<string, number> }> = [];
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const cols = lines[i].split(",").map((c) => c.trim().replace(/"/g, ""));
+    const rawDate = cols[0];
+    if (!rawDate || rawDate === "Date") continue;
+    const parts = rawDate.split("/");
+    if (parts.length !== 3 || parts[0].length !== 4) continue;
+    const date = `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
+    const yields: Record<string, number> = {};
+    for (let j = 1; j < headers.length; j++) {
+      const val = parseFloat(cols[j]);
+      if (Number.isFinite(val)) yields[headers[j]] = val;
+    }
+    rows.push({ date, yields });
+  }
+  return rows;
+}
+
+async function fetchMofJgbHistorical(maturity: string): Promise<Array<{ date: string; value: number }>> {
+  // Fetch full history + current month; deduplicate and return last ~3 years
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 3);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+  const fetchOpts = {
+    next: { revalidate: 3600 } as const,
+    signal: AbortSignal.timeout(25000),
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; QuantivTrade/1.0)" },
+  };
+
+  const [allRes, currentRes] = await Promise.allSettled([
+    fetch(`${MOF_JGB_BASE}/historical/jgbcme_all.csv`, fetchOpts),
+    fetch(`${MOF_JGB_BASE}/jgbcme.csv`, fetchOpts),
+  ]);
+
+  const seen = new Set<string>();
+  const combined: Array<{ date: string; value: number }> = [];
+
+  for (const result of [allRes, currentRes]) {
+    if (result.status !== "fulfilled" || !result.value.ok) {
+      if (result.status === "fulfilled") {
+        console.error(`[bonds] MoF CSV non-OK → ${result.value.status}`);
+      }
+      continue;
+    }
+    const text = await result.value.text();
+    const rows = parseMofJgbCsv(text);
+    for (const row of rows) {
+      if (seen.has(row.date) || row.date < cutoffStr) continue;
+      const value = row.yields[maturity];
+      if (value != null && Number.isFinite(value)) {
+        combined.push({ date: row.date, value });
+        seen.add(row.date);
+      }
+    }
+  }
+
+  combined.sort((a, b) => a.date.localeCompare(b.date));
+  console.log(`[bonds] MoF JGB ${maturity}: ${combined.length} points`);
+  return combined;
+}
+
+async function fetchEcbYieldCurve(maturityCode: string): Promise<Array<{ date: string; value: number }>> {
+  const url = `${ECB_SDW_YC_BASE}.${maturityCode}?format=jsondata&lastNObservations=365`;
+  try {
+    const res = await fetch(url, { next: { revalidate: 3600 }, signal: AbortSignal.timeout(20000) });
+    const text = await res.text();
+    if (!res.ok || text.trimStart().startsWith("<")) {
+      console.error("[bonds] ECB YC non-OK", maturityCode, res.status, text.slice(0, 200));
+      return [];
+    }
+    const data = JSON.parse(text) as EcbSdwJsonData;
+    const seriesMap = data.dataSets?.[0]?.series ?? {};
+    const firstSeries = Object.values(seriesMap)[0];
+    const obs = firstSeries?.observations ?? {};
+    const dimValues = data.structure?.dimensions?.observation?.[0]?.values ?? [];
+    const rows: Array<{ date: string; value: number }> = [];
+    for (const [idxStr, valArr] of Object.entries(obs)) {
+      const idx = Number.parseInt(idxStr, 10);
+      if (!Number.isFinite(idx) || idx < 0) continue;
+      const id = dimValues[idx]?.id;
+      const raw = Array.isArray(valArr) ? valArr[0] : null;
+      const value = toNumber(raw as string | number | null | undefined);
+      if (id == null || value == null || !Number.isFinite(value)) continue;
+      rows.push({ date: id, value });
+    }
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    return rows;
+  } catch (e) {
+    console.error("[bonds] ECB YC error", maturityCode, e);
+    return [];
+  }
+}
+
 async function fetchEcbGermany10YHistorical(): Promise<Array<{ date: string; value: number }>> {
   try {
     const res = await fetch(ECB_SDW_DE_10Y_URL, {
@@ -1034,7 +1145,7 @@ export async function GET() {
     const uniqueSeries = [...new Set([
       ...CURVE_SERIES.map((x) => x.seriesId),
       ...COUNTRY_CONFIG.flatMap((c) => c.maturities.map((m) => m.seriesId)),
-    ])].filter((sid) => !US_TREASURY_DGS_SERIES.has(sid));
+    ])].filter((sid) => !US_TREASURY_DGS_SERIES.has(sid) && !sid.startsWith("MOF_"));
 
     const [
       seriesHistoryEntries,
@@ -1113,8 +1224,15 @@ export async function GET() {
     const usHistoricalEntries = CURVE_SERIES.map((m) => [m.seriesId, treasuryByCurveLabel[m.label as (typeof TREASURY_CURVE_LABELS)[number]] ?? []] as const);
     const intlHistoricalSpec = [
       ["GBAM10Y", () => fetchWorldBankRates("GB", { mrv: 12, perPage: 12 })] as const,
+      ["DEAM2Y",  () => fetchEcbYieldCurve("SR_2Y")] as const,
+      ["DEAM5Y",  () => fetchEcbYieldCurve("SR_5Y")] as const,
       ["DEAM10Y", fetchEcbGermany10YHistorical] as const,
-      ["INTGSBEJPM193N", () => fetchWorldBankRates("JP")] as const,
+      ["DEAM30Y",    () => fetchEcbYieldCurve("SR_30Y")] as const,
+      ["MOF_JP_2Y",  () => fetchMofJgbHistorical("2Y")] as const,
+      ["MOF_JP_5Y",  () => fetchMofJgbHistorical("5Y")] as const,
+      ["MOF_JP_10Y", () => fetchMofJgbHistorical("10Y")] as const,
+      ["MOF_JP_20Y", () => fetchMofJgbHistorical("20Y")] as const,
+      ["MOF_JP_30Y", () => fetchMofJgbHistorical("30Y")] as const,
       ["INTDSRCNM193N", () => fetchWorldBankRates("CN")] as const,
       ["INTDSRBRM193N", () => fetchWorldBankRates("BR")] as const,
       ["INTDSRINM193N", () => fetchWorldBankRates("IN")] as const,
@@ -1138,6 +1256,16 @@ export async function GET() {
     }
 
     const historicalYields = Object.fromEntries([...usHistoricalEntries, ...intlHistoricalEntries]);
+    // Back-fill from FRED for any intl series not covered by spec fetches above
+    for (const country of COUNTRY_CONFIG) {
+      if (country.id === "us") continue;
+      for (const m of country.maturities) {
+        if (!historicalYields[m.seriesId]) {
+          const hist = seriesHistory.get(m.seriesId);
+          if (hist?.length) historicalYields[m.seriesId] = hist;
+        }
+      }
+    }
     console.log("[bonds] historicalYields keys:", Object.keys(historicalYields));
     console.log("[bonds] sample DGS10 points:", historicalYields.DGS10?.length ?? 0);
 
@@ -1159,7 +1287,9 @@ export async function GET() {
             };
           }
           const histKey = INTL_SPARK_HISTORY_KEY[m.seriesId] ?? m.seriesId;
-          const history = historicalYields[histKey] ?? [];
+          const history = (historicalYields[histKey]?.length ? historicalYields[histKey] : null)
+            ?? seriesHistory.get(m.seriesId)
+            ?? [];
           const current = history.at(-1)?.value ?? null;
           const dailyPrev = history.length > 1 ? history.at(-2)?.value ?? null : null;
           const weeklyPrev = history.length > 5 ? history.at(-6)?.value ?? null : null;

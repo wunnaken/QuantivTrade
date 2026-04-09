@@ -47,6 +47,19 @@ export default function FeedbackPage() {
         improve the product.
       </p>
 
+      {/* Founder message */}
+      <div className="mt-6 rounded-2xl border border-[var(--accent-color)]/20 bg-[var(--app-card)] px-5 py-4">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--accent-color)]">A note from the founder</p>
+        <p className="text-sm leading-relaxed text-zinc-300">
+          Dear users of QuantivTrade, thank you for taking the time to submit any feedback you may have.
+          It is just me running and working on this site, and I will try to get to as many concerns as possible.
+          I apologize in advance for any annoying bugs or inconsistencies. By giving me your feedback, this site
+          will get better every day at connecting people and giving them access to market knowledge to further
+          their investments.
+        </p>
+        <p className="mt-3 text-sm font-medium text-zinc-400">— Wunnaken</p>
+      </div>
+
       <div className="mt-8 space-y-4">
         <div>
           <label htmlFor="feedback-message" className="block text-sm font-medium text-zinc-300">

@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   let query = supabase
     .from("marketplace_listings")
     .select(
-      "id, title, category, description, price, price_type, subscription_interval, asset_classes, tags, preview_image_url, preview_images, is_featured, backtest_verified, signal_win_rate, signal_total, view_count, sales_count, avg_rating, review_count, created_at, seller_id",
+      "id, title, category, description, price, price_type, subscription_interval, asset_classes, tags, preview_image_url, preview_images, is_featured, backtest_verified, signal_win_rate, signal_total, view_count, sales_count, avg_rating, review_count, created_at, seller_id, discount_percent, discount_enabled, discount_expires_at",
       { count: "exact" }
     )
     .eq("status", "approved");

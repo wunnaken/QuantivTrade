@@ -59,7 +59,7 @@ type BondsApiResponse = {
   lastUpdated: string;
 };
 
-const TAB_ORDER = ["us", "uk", "de", "jp", "cn", "em"] as const;
+const TAB_ORDER = ["us", "jp", "de", "uk", "cn", "em"] as const;
 const US_TREASURY_SERIES = [
   { label: "2Y", seriesId: "DGS2", color: "#3b82f6" },
   { label: "5Y", seriesId: "DGS5", color: "#22c55e" },
@@ -113,8 +113,19 @@ function BondChartBox({
 
 const NON_US_SERIES: Record<string, Array<{ label: string; seriesId: string; color: string }>> = {
   uk: [{ label: "UK 10Y", seriesId: "GBAM10Y", color: "var(--accent-color)" }],
-  de: [{ label: "Germany 10Y", seriesId: "DEAM10Y", color: "var(--accent-color)" }],
-  jp: [{ label: "Japan 10Y", seriesId: "INTGSBEJPM193N", color: "var(--accent-color)" }],
+  de: [
+    { label: "Germany 2Y",  seriesId: "DEAM2Y",  color: "#3b82f6" },
+    { label: "Germany 5Y",  seriesId: "DEAM5Y",  color: "#22c55e" },
+    { label: "Germany 10Y", seriesId: "DEAM10Y", color: "var(--accent-color)" },
+    { label: "Germany 30Y", seriesId: "DEAM30Y", color: "#f59e0b" },
+  ],
+  jp: [
+    { label: "Japan 2Y",  seriesId: "MOF_JP_2Y",  color: "#3b82f6" },
+    { label: "Japan 5Y",  seriesId: "MOF_JP_5Y",  color: "#22c55e" },
+    { label: "Japan 10Y", seriesId: "MOF_JP_10Y", color: "var(--accent-color)" },
+    { label: "Japan 20Y", seriesId: "MOF_JP_20Y", color: "#a855f7" },
+    { label: "Japan 30Y", seriesId: "MOF_JP_30Y", color: "#f59e0b" },
+  ],
   cn: [{ label: "China 10Y", seriesId: "INTDSRCNM193N", color: "var(--accent-color)" }],
   em: [
     { label: "Brazil 10Y", seriesId: "INTDSRBRM193N", color: "#3b82f6" },

@@ -51,6 +51,9 @@ interface Listing {
   created_at: string;
   seller_id: string;
   seller?: Seller | null;
+  discount_percent?: number | null;
+  discount_enabled?: boolean;
+  discount_expires_at?: string | null;
 }
 
 interface SellerDashboardData {
@@ -76,6 +79,9 @@ interface SellerDashboardData {
     preview_disabled?: boolean;
     created_at: string;
     rejection_reason?: string | null;
+    discount_percent?: number | null;
+    discount_enabled?: boolean;
+    discount_expires_at?: string | null;
   }>;
   totalRevenue: number;
   thisMonthRevenue: number;
@@ -96,6 +102,9 @@ interface CreateForm {
   content_data: string;
   preview_image_url: string;
   preview_disabled: boolean;
+  discount_enabled: boolean;
+  discount_percent: number;
+  discount_expires_at: string;
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -246,21 +255,45 @@ const PRICE_FILTERS = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+function isDiscountActive(listing: { discount_enabled?: boolean; discount_percent?: number | null; discount_expires_at?: string | null }): boolean {
+  if (!listing.discount_enabled || !listing.discount_percent) return false;
+  if (listing.discount_expires_at && new Date(listing.discount_expires_at) < new Date()) return false;
+  return true;
+}
+
+function effectivePrice(listing: { price: number; discount_percent?: number | null; discount_enabled?: boolean; discount_expires_at?: string | null }): number {
+  if (isDiscountActive(listing)) {
+    return Math.round(listing.price * (1 - listing.discount_percent! / 100) * 100) / 100;
+  }
+  return listing.price;
+}
+
 function formatPrice(listing: Listing): React.ReactNode {
   if (listing.price_type === "free" || listing.price === 0) {
     return <span className="font-semibold text-emerald-400">Free</span>;
   }
+  const hasDiscount = isDiscountActive(listing);
+  const final = effectivePrice(listing);
+  const expiryLabel = hasDiscount && listing.discount_expires_at
+    ? `Ends ${new Date(listing.discount_expires_at).toLocaleDateString()}`
+    : null;
   if (listing.price_type === "subscription") {
+    const interval = listing.subscription_interval === "yearly" ? "yr" : "mo";
     return (
       <span className="font-bold text-zinc-50">
-        ${listing.price}
-        <span className="text-xs font-normal text-zinc-400">
-          /{listing.subscription_interval === "yearly" ? "yr" : "mo"}
-        </span>
+        {hasDiscount && <span className="mr-1 text-xs font-normal line-through text-zinc-500">${listing.price}/{interval}</span>}
+        ${final}<span className="text-xs font-normal text-zinc-400">/{interval}</span>
+        {expiryLabel && <span className="ml-1 text-[10px] font-normal text-amber-400">{expiryLabel}</span>}
       </span>
     );
   }
-  return <span className="font-bold text-zinc-50">${listing.price}</span>;
+  return (
+    <span className="font-bold text-zinc-50">
+      {hasDiscount && <span className="mr-1 text-xs font-normal line-through text-zinc-500">${listing.price}</span>}
+      ${final}
+      {expiryLabel && <span className="ml-1 text-[10px] font-normal text-amber-400">{expiryLabel}</span>}
+    </span>
+  );
 }
 
 function StarRating({ rating, count }: { rating: number; count: number }) {
@@ -367,6 +400,11 @@ function ListingCard({ listing, onClick, featured }: { listing: Listing; onClick
         {listing.is_featured && (
           <span className="absolute right-2 top-2 rounded px-2 py-0.5 text-[10px] font-semibold bg-amber-400/20 text-amber-300 border border-amber-400/20 backdrop-blur-sm">
             Featured
+          </span>
+        )}
+        {isDiscountActive(listing) && (
+          <span className="absolute left-2 bottom-2 rounded px-2 py-0.5 text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 backdrop-blur-sm">
+            {listing.discount_percent}% OFF
           </span>
         )}
       </div>
@@ -558,8 +596,8 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
   async function handlePurchase() {
     setPurchasing(true);
     try {
-      await onPurchase(listing.id);
-      setPurchased(true);
+      const completed = await onPurchase(listing.id);
+      if (completed) setPurchased(true);
     } catch {
       // handled by parent
     } finally {
@@ -830,7 +868,7 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
                       disabled={purchasing}
                       className="rounded-xl bg-[var(--accent-color)] px-5 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
                     >
-                      {purchasing ? "Processing…" : listing.price === 0 ? "Get Free Access" : `Unlock for ${listing.price_type === "subscription" ? `$${listing.price}/${listing.subscription_interval === "yearly" ? "yr" : "mo"}` : `$${listing.price}`}`}
+                      {purchasing ? "Processing…" : listing.price === 0 ? "Get Free Access" : `Unlock for ${listing.price_type === "subscription" ? `$${effectivePrice(listing)}/${listing.subscription_interval === "yearly" ? "yr" : "mo"}` : `$${effectivePrice(listing)}`}`}
                     </button>
                   </div>
                 </div>
@@ -846,7 +884,7 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
                 <p className="text-sm font-medium text-zinc-400">Preview disabled by seller</p>
                 <button onClick={handlePurchase} disabled={purchasing}
                   className="mt-3 rounded-xl bg-[var(--accent-color)] px-5 py-2 text-xs font-semibold text-white transition hover:opacity-90 disabled:opacity-50">
-                  {purchasing ? "Processing…" : listing.price === 0 ? "Get Free Access" : `Unlock for $${listing.price}`}
+                  {purchasing ? "Processing…" : listing.price === 0 ? "Get Free Access" : `Unlock for $${effectivePrice(listing)}`}
                 </button>
               </div>
             )}
@@ -1077,11 +1115,11 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
                 disabled={purchasing || purchased}
                 className="w-full rounded-xl bg-[var(--accent-color)] py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
               >
-                {purchased ? "Purchased!" : purchasing ? "Processing…" : listing.price === 0 ? "Get Free" : listing.price_type === "subscription" ? "Subscribe" : "Buy Now"}
+                {purchased ? "Purchased!" : purchasing ? "Processing…" : listing.price === 0 ? "Get Free" : listing.price_type === "subscription" ? `Subscribe — $${effectivePrice(listing)}/${listing.subscription_interval === "yearly" ? "yr" : "mo"}` : `Buy Now — $${effectivePrice(listing)}`}
               </button>
               {listing.price > 0 && (
                 <p className="mt-2 text-center text-[10px] text-zinc-600">
-                  Stripe Connect payments launching in Phase 2
+                  Secure checkout via Stripe
                 </p>
               )}
             </div>
@@ -1602,6 +1640,9 @@ function CreateListingModal({ onClose, onSubmit, initialData, editId }: {
     content_data: initialData?.content_data ?? "",
     preview_image_url: initialData?.preview_image_url ?? "",
     preview_disabled: initialData?.preview_disabled ?? false,
+    discount_enabled: initialData?.discount_enabled ?? false,
+    discount_percent: initialData?.discount_percent ?? 10,
+    discount_expires_at: initialData?.discount_expires_at ?? "",
   });
 
   const set = (k: keyof CreateForm, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
@@ -1782,8 +1823,52 @@ function CreateListingModal({ onClose, onSubmit, initialData, editId }: {
                   )}
                 </>
               )}
+              {form.price_type !== "free" && (
+                <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-3">
+                  <label className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-zinc-200">Discount</p>
+                      <p className="text-xs text-zinc-500">Show a reduced price to buyers</p>
+                    </div>
+                    <div
+                      onClick={() => set("discount_enabled", !form.discount_enabled)}
+                      className={`relative h-5 w-9 cursor-pointer rounded-full transition-colors ${form.discount_enabled ? "bg-[var(--accent-color)]" : "bg-white/10"}`}
+                    >
+                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${form.discount_enabled ? "translate-x-4" : "translate-x-0.5"}`} />
+                    </div>
+                  </label>
+                  {form.discount_enabled && (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <div className="flex flex-1 items-center gap-2">
+                          <input
+                            type="number" min="1" max="99" value={form.discount_percent}
+                            onChange={(e) => set("discount_percent", Math.min(99, Math.max(1, parseInt(e.target.value) || 1)))}
+                            className="w-16 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-center text-sm text-zinc-100 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                          />
+                          <span className="text-sm text-zinc-400">% off</span>
+                        </div>
+                        <span className="text-sm text-zinc-400">→</span>
+                        <span className="font-semibold text-emerald-400">
+                          ${Math.round(form.price * (1 - form.discount_percent / 100) * 100) / 100}
+                          {form.price_type === "subscription" && <span className="text-xs font-normal text-zinc-500">/{form.subscription_interval === "yearly" ? "yr" : "mo"}</span>}
+                        </span>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-zinc-400">Expiry date (optional)</label>
+                        <input
+                          type="datetime-local"
+                          value={form.discount_expires_at}
+                          onChange={(e) => set("discount_expires_at", e.target.value)}
+                          className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-100 focus:border-[var(--accent-color)]/50 focus:outline-none [color-scheme:dark]"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
               <p className="rounded-xl border border-white/5 bg-white/5 p-3 text-xs text-zinc-500">
-                You earn 80% of every sale. Quantiv takes a 20% platform fee. Stripe Connect payouts launching in Phase 2.
+                You earn 80% of every sale. Quantiv takes a 20% platform fee.
               </p>
             </div>
           )}
@@ -1931,6 +2016,7 @@ function SellerDashboard({ data, onClose, onCreate, onEdit }: {
   const [rereviewing, setRereviewing] = useState<string | null>(null);
   const [rerviewMsg, setRerviewMsg] = useState<Record<string, string>>({});
   const [isFounder, setIsFounder] = useState(false);
+  const [discountState, setDiscountState] = useState<Record<string, { enabled: boolean; percent: number; expiresAt: string; saving: boolean }>>({});
 
   useEffect(() => {
     fetch("/api/profile/me")
@@ -1938,6 +2024,35 @@ function SellerDashboard({ data, onClose, onCreate, onEdit }: {
       .then((p) => { if (p?.is_founder) setIsFounder(true); })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!data) return;
+    const initial: Record<string, { enabled: boolean; percent: number; saving: boolean }> = {};
+    for (const l of data.listings) {
+      const raw = l.discount_expires_at ? new Date(l.discount_expires_at).toISOString().slice(0, 16) : "";
+      initial[l.id] = { enabled: l.discount_enabled ?? false, percent: l.discount_percent ?? 10, expiresAt: raw, saving: false };
+    }
+    setDiscountState(initial);
+  }, [data]);
+
+  async function saveDiscount(listingId: string) {
+    const ds = discountState[listingId];
+    if (!ds) return;
+    setDiscountState((prev) => ({ ...prev, [listingId]: { ...prev[listingId], saving: true } }));
+    try {
+      await fetch(`/api/marketplace/listings/${listingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+        discount_enabled: ds.enabled,
+        discount_percent: ds.enabled ? ds.percent : null,
+        discount_expires_at: ds.enabled && ds.expiresAt ? new Date(ds.expiresAt).toISOString() : null,
+      }),
+      });
+    } finally {
+      setDiscountState((prev) => ({ ...prev, [listingId]: { ...prev[listingId], saving: false } }));
+    }
+  }
 
   async function approveOverride(listingId: string) {
     const res = await fetch(`/api/marketplace/listings/${listingId}/approve`, { method: "POST" });
@@ -2069,6 +2184,55 @@ function SellerDashboard({ data, onClose, onCreate, onEdit }: {
                             </td>
                           </tr>
                         )}
+                        {l.status === "approved" && l.price_type !== "free" && l.price > 0 && discountState[l.id] && (() => {
+                          const ds = discountState[l.id];
+                          const final = ds.enabled && ds.percent ? Math.round(l.price * (1 - ds.percent / 100) * 100) / 100 : l.price;
+                          return (
+                            <tr className="border-b border-white/5 bg-white/[0.015]">
+                              <td colSpan={7} className="px-4 py-2.5">
+                                <div className="flex flex-wrap items-center gap-3">
+                                  <span className="text-[10px] font-medium text-zinc-500">Discount</span>
+                                  <button
+                                    onClick={() => setDiscountState((prev) => ({ ...prev, [l.id]: { ...prev[l.id], enabled: !prev[l.id].enabled } }))}
+                                    className={`relative h-5 w-9 rounded-full transition ${ds.enabled ? "bg-[var(--accent-color)]" : "bg-white/10"}`}
+                                  >
+                                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${ds.enabled ? "left-[18px]" : "left-0.5"}`} />
+                                  </button>
+                                  {ds.enabled && (
+                                    <>
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number" min="1" max="99" value={ds.percent}
+                                          onChange={(e) => setDiscountState((prev) => ({ ...prev, [l.id]: { ...prev[l.id], percent: Math.min(99, Math.max(1, parseInt(e.target.value) || 1)) } }))}
+                                          className="w-14 rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 text-center text-xs text-zinc-100 focus:outline-none focus:border-[var(--accent-color)]/50"
+                                        />
+                                        <span className="text-[10px] text-zinc-500">%</span>
+                                      </div>
+                                      <span className="text-[10px] text-zinc-400">
+                                        → <span className="font-medium text-emerald-400">${final}</span>
+                                        {l.price_type === "subscription" && <span className="text-zinc-500">/{l.subscription_interval === "yearly" ? "yr" : "mo"}</span>}
+                                      </span>
+                                      <input
+                                        type="datetime-local"
+                                        value={ds.expiresAt}
+                                        onChange={(e) => setDiscountState((prev) => ({ ...prev, [l.id]: { ...prev[l.id], expiresAt: e.target.value } }))}
+                                        title="Expiry date (optional)"
+                                        className="rounded-lg border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300 focus:outline-none focus:border-[var(--accent-color)]/50 [color-scheme:dark]"
+                                      />
+                                    </>
+                                  )}
+                                  <button
+                                    onClick={() => saveDiscount(l.id)}
+                                    disabled={ds.saving}
+                                    className="rounded-lg border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-2.5 py-0.5 text-[10px] font-medium text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20 disabled:opacity-50"
+                                  >
+                                    {ds.saving ? "Saving…" : "Save"}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })()}
                       </React.Fragment>
                     ))}
                   </tbody>
@@ -2115,6 +2279,9 @@ export default function MarketplaceView() {
   const [sort, setSort] = useState("popular");
   const [assetClass, setAssetClass] = useState("All");
   const [priceFilter, setPriceFilter] = useState(0);
+  const [viewMode, setViewMode] = useState<"browse" | "owned">("browse");
+  const [ownedListings, setOwnedListings] = useState<(Listing & { purchased_at: string | null; amount_paid: number | null; is_own?: boolean })[]>([]);
+  const [ownedLoading, setOwnedLoading] = useState(false);
   const [listings, setListings] = useState<Listing[]>([]);
   const [featured, setFeatured] = useState<Listing[]>([]);
   const [total, setTotal] = useState(0);
@@ -2199,6 +2366,18 @@ export default function MarketplaceView() {
     return () => controller.abort();
   }, [fetchListings]);
 
+  async function loadOwned() {
+    setOwnedLoading(true);
+    try {
+      const res = await fetch("/api/marketplace/owned");
+      if (!res.ok) return;
+      const data = await res.json() as { listings: (Listing & { purchased_at: string | null; amount_paid: number | null })[] };
+      setOwnedListings(data.listings);
+    } finally {
+      setOwnedLoading(false);
+    }
+  }
+
   async function loadSellerDashboard() {
     setSellerLoading(true);
     try {
@@ -2212,7 +2391,25 @@ export default function MarketplaceView() {
     }
   }
 
-  async function handlePurchase(listingId: string) {
+  async function handlePurchase(listingId: string): Promise<boolean> {
+    const listing = listings.find((l) => l.id === listingId) ?? featured.find((l) => l.id === listingId);
+    const isPaid = listing && listing.price > 0 && listing.price_type !== "free";
+
+    if (isPaid) {
+      const res = await fetch("/api/stripe/marketplace-checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listingId }),
+      });
+      if (!res.ok) {
+        const err = await res.json() as { error: string };
+        throw new Error(err.error);
+      }
+      const { url } = await res.json() as { url: string };
+      window.location.href = url;
+      return false;
+    }
+
     const res = await fetch("/api/marketplace/purchase", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2222,6 +2419,7 @@ export default function MarketplaceView() {
       const err = await res.json() as { error: string };
       throw new Error(err.error);
     }
+    return true;
   }
 
   async function handleEditSubmit(form: CreateForm) {
@@ -2235,6 +2433,9 @@ export default function MarketplaceView() {
         categories: form.categories,
         tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
         preview_image_url: form.preview_image_url,
+        discount_enabled: form.discount_enabled,
+        discount_percent: form.discount_enabled ? form.discount_percent : null,
+        discount_expires_at: form.discount_enabled && form.discount_expires_at ? new Date(form.discount_expires_at).toISOString() : null,
       }),
     });
     const json = await res.json() as { listing?: SellerDashboardData["listings"][number]; error?: string };
@@ -2418,9 +2619,25 @@ export default function MarketplaceView() {
           <svg className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500" width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
         </div>
 
+        {/* Owned / Browse toggle */}
+        <div className="ml-auto flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-0.5">
+          <button
+            onClick={() => setViewMode("browse")}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${viewMode === "browse" ? "bg-[var(--accent-color)] text-white" : "text-zinc-400 hover:text-zinc-300"}`}
+          >
+            Browse
+          </button>
+          <button
+            onClick={() => { setViewMode("owned"); if (ownedListings.length === 0) loadOwned(); }}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${viewMode === "owned" ? "bg-[var(--accent-color)] text-white" : "text-zinc-400 hover:text-zinc-300"}`}
+          >
+            Owned
+          </button>
+        </div>
+
         {/* Seller dashboard button */}
         <button onClick={loadSellerDashboard} disabled={sellerLoading}
-          className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-xs text-zinc-400 transition hover:border-white/20 hover:text-zinc-300 disabled:opacity-50 ml-auto">
+          className="flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-xs text-zinc-400 transition hover:border-white/20 hover:text-zinc-300 disabled:opacity-50">
           <I.Store />
           {sellerLoading ? "Loading…" : "My Listings"}
         </button>
@@ -2437,8 +2654,43 @@ export default function MarketplaceView() {
         )}
       </div>
 
+      {/* Owned listings view */}
+      {viewMode === "owned" && (
+        <div className="space-y-4">
+          {ownedLoading ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[...Array(6)].map((_, i) => <div key={i} className="animate-pulse rounded-2xl border border-white/10 bg-white/5 h-56" />)}
+            </div>
+          ) : ownedListings.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-[var(--app-card-alt)] py-20 text-center">
+              <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/5 text-zinc-600"><I.Store /></span>
+              <p className="text-base font-semibold text-zinc-300">No purchases yet</p>
+              <p className="mt-1 text-sm text-zinc-600">Listings you purchase will appear here.</p>
+              <button onClick={() => setViewMode("browse")}
+                className="mt-5 rounded-xl bg-[var(--accent-color)]/10 border border-[var(--accent-color)]/30 px-5 py-2.5 text-sm font-medium text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20">
+                Browse Marketplace
+              </button>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs text-zinc-600">{ownedListings.length} owned listing{ownedListings.length !== 1 ? "s" : ""}</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {ownedListings.map((l) => (
+                  <div key={l.id} className="relative">
+                    <ListingCard listing={l} onClick={() => setSelectedListing(l)} />
+                    <span className={`absolute right-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold pointer-events-none border ${l.is_own ? "bg-blue-500/20 border-blue-500/30 text-blue-300" : "bg-emerald-500/20 border-emerald-500/30 text-emerald-300"}`}>
+                      {l.is_own ? "Your Listing" : "Owned"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Featured section */}
-      {featured.length > 0 && (
+      {viewMode === "browse" && featured.length > 0 && (
         <div>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
@@ -2466,14 +2718,14 @@ export default function MarketplaceView() {
       )}
 
       {/* Total count */}
-      {!loading && (
+      {viewMode === "browse" && !loading && (
         <p className="text-xs text-zinc-600">
           {total === 0 ? "No listings found" : `${total} listing${total !== 1 ? "s" : ""}${search ? ` for "${search}"` : ""}`}
         </p>
       )}
 
       {/* Main grid */}
-      {loading && listings.length === 0 ? (
+      {viewMode === "browse" && (loading && listings.length === 0 ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[...Array(9)].map((_, i) => (
             <div key={i} className="animate-pulse rounded-2xl border border-white/10 bg-white/5 h-56" />
@@ -2511,7 +2763,7 @@ export default function MarketplaceView() {
             </div>
           )}
         </>
-      )}
+      ))}
 
       {/* Modals */}
       {selectedListing && (
@@ -2541,6 +2793,9 @@ export default function MarketplaceView() {
             content_data: editListing.content_data ?? "",
             preview_image_url: editListing.preview_image_url ?? "",
             preview_disabled: editListing.preview_disabled ?? false,
+            discount_enabled: editListing.discount_enabled ?? false,
+            discount_percent: editListing.discount_percent ?? 10,
+            discount_expires_at: editListing.discount_expires_at ?? "",
           } : undefined}
         />
       )}

@@ -87,6 +87,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     content_data?: string;
     preview_image_url?: string;
     preview_disabled?: boolean;
+    discount_percent?: number | null;
+    discount_enabled?: boolean;
+    discount_expires_at?: string | null;
   };
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -102,6 +105,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body.backtest_data !== undefined) updates.backtest_data = body.backtest_data;
   if (body.content_data !== undefined)  updates.content_data = body.content_data;
   if (body.preview_image_url !== undefined) updates.preview_image_url = body.preview_image_url;
+  if (body.discount_percent !== undefined)    updates.discount_percent = body.discount_percent;
+  if (body.discount_enabled !== undefined)    updates.discount_enabled = body.discount_enabled;
+  if (body.discount_expires_at !== undefined) updates.discount_expires_at = body.discount_expires_at;
   if (body.preview_disabled !== undefined) updates.preview_disabled = body.preview_disabled;
 
   // Only re-review if content actually differs from what's already saved

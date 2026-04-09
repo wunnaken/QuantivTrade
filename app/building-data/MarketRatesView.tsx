@@ -134,7 +134,7 @@ const TOOLTIP_STYLE = {
 type Tab = "rates" | "materials" | "stocks" | "gas";
 type PpiRange = "1Y" | "3Y" | "5Y";
 type StockRange = "1W" | "1M" | "3M" | "YTD" | "1Y";
-type GasRange = "3M" | "6M" | "1Y" | "4Y";
+type GasRange = "1M" | "3M" | "6M" | "1Y" | "4Y";
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -257,7 +257,7 @@ function StockPerformanceChart() {
   useEffect(() => {
     setLoading(true);
     setFetchError(false);
-    fetch(`/api/market-rates/candles?range=${range}`, { cache: "no-store" })
+    fetch(`/api/building-data/candles?range=${range}`, { cache: "no-store" })
       .then((r) => {
         if (!r.ok) throw new Error("bad response");
         return r.json();
@@ -383,9 +383,12 @@ interface GasData {
 }
 
 function filterGasHistory<T extends { date: string }>(history: T[], range: GasRange): T[] {
-  const months = range === "3M" ? 3 : range === "6M" ? 6 : range === "1Y" ? 12 : 48;
   const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - months);
+  if (range === "1M") cutoff.setMonth(cutoff.getMonth() - 1);
+  else if (range === "3M") cutoff.setMonth(cutoff.getMonth() - 3);
+  else if (range === "6M") cutoff.setMonth(cutoff.getMonth() - 6);
+  else if (range === "1Y") cutoff.setMonth(cutoff.getMonth() - 12);
+  else cutoff.setMonth(cutoff.getMonth() - 48);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
   return history.filter((h) => h.date >= cutoffStr);
 }
@@ -397,7 +400,7 @@ function GasPricesTab() {
   const [range, setRange] = useState<GasRange>("4Y");
 
   useEffect(() => {
-    fetch("/api/market-rates/gas", { cache: "no-store" })
+    fetch("/api/building-data/gas", { cache: "no-store" })
       .then((r) => r.ok ? r.json() : Promise.reject(r.status))
       .then((d: GasData) => setData(d))
       .catch((e) => setError(String(e)))
@@ -531,7 +534,7 @@ function GasPricesTab() {
               </p>
             </div>
             <TimeframeToggle
-              options={["3M", "6M", "1Y", "4Y"] as GasRange[]}
+              options={["1M", "3M", "6M", "1Y", "4Y"] as GasRange[]}
               value={range}
               onChange={setRange}
             />
@@ -628,7 +631,7 @@ export default function MarketRatesView() {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/market-rates", { cache: "no-store" });
+      const res = await fetch("/api/building-data", { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as MarketRatesData;
       setData(json);

@@ -45,7 +45,7 @@ export async function proxy(request: NextRequest) {
   if (
     !isLocal &&
     !request.nextUrl.pathname.startsWith("/maintenance") &&
-    request.nextUrl.pathname !== "/api/stripe/webhook"
+    !request.nextUrl.pathname.startsWith("/api/stripe/webhook")
   ) {
     return NextResponse.redirect(new URL("/maintenance", request.url));
   }

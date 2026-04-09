@@ -2,7 +2,7 @@
 //
 // SETUP INSTRUCTIONS:
 // 1. Go to Stripe Dashboard → Developers → Webhooks
-// 2. Add endpoint: https://xchange-xi.vercel.app/api/stripe/webhook
+// 2. Add endpoint: https://quantiv.trade/api/stripe/webhook
 // 3. Select these events:
 //      checkout.session.completed
 //      customer.subscription.updated

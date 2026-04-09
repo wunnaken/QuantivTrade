@@ -5,7 +5,6 @@ import { AppShell } from "../components/AppShell";
 import { AuthProvider } from "../components/AuthContext";
 import { AccentSync } from "../components/AccentSync";
 import { GlobalSearchShortcut } from "../components/GlobalSearchShortcut";
-import { DevNotes } from "../components/DevNotes";
 import { PlansFloatingTab } from "../components/PlansFloatingTab";
 import { ThemeProvider } from "../components/ThemeContext";
 import { ToastProvider } from "../components/ToastContext";
@@ -30,6 +29,10 @@ const lora = Lora({
 export const metadata: Metadata = {
   title: "QuantivTrade",
   description: "Where the world trades ideas. Real-time market intelligence, social communities, and risk-based investing.",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
@@ -53,7 +56,6 @@ export default function RootLayout({
                 <AccentSync />
               <GlobalSearchShortcut />
               <PlansFloatingTab />
-              <DevNotes />
                 <AppShell>{children}</AppShell>
               </ToastProvider>
             </PriceProvider>
