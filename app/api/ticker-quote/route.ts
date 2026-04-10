@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 30; // 30s cache — WebSocket takes over for live updates
 
 export type TickerQuote = {
   price: number | null;
@@ -18,7 +17,7 @@ async function fetchFinnhubQuote(symbol: string, token: string): Promise<TickerQ
   try {
     const res = await fetch(
       `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${token}`,
-      { next: { revalidate: 0 } }
+      { next: { revalidate: 30 } }
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { c?: number; d?: number; dp?: number; h?: number; l?: number; o?: number; pc?: number; v?: number };
@@ -56,7 +55,7 @@ async function fetchCryptoQuote(ticker: string): Promise<TickerQuote | null> {
   try {
     const res = await fetch(
       `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd&include_24hr_vol=true&include_24hr_change=true`,
-      { next: { revalidate: 0 } }
+      { next: { revalidate: 30 } }
     );
     if (!res.ok) return null;
     const data = await res.json();

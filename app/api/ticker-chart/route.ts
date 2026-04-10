@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 30;
+export const revalidate = 60; // cache route + individual fetches for 60s
 
 export type ChartRange = "10m" | "1h" | "1d" | "1w" | "1m" | "3m" | "6m" | "1y" | "5y";
 
@@ -31,7 +30,7 @@ async function fetchCoinGeckoChart(ticker: string, days: number): Promise<ChartP
   try {
     const res = await fetch(
       `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${days}`,
-      { next: { revalidate: 0 } }
+      { next: { revalidate: 60 } }
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { prices?: [number, number][] };
@@ -66,7 +65,7 @@ async function fetchCoinGeckoPrice(ticker: string): Promise<number | null> {
   try {
     const res = await fetch(
       `https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd`,
-      { next: { revalidate: 0 } }
+      { next: { revalidate: 60 } }
     );
     if (!res.ok) return null;
     const data = (await res.json()) as Record<string, { usd?: number }>;
@@ -123,7 +122,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const url = `${baseUrl}?symbol=${encodeURIComponent(symbol)}&resolution=${rangeConfig.resolution}&from=${from}&to=${to}&token=${token}`;
-    const res = await fetch(url, { next: { revalidate: 0 } });
+    const res = await fetch(url, { next: { revalidate: 60 } });
     if (!res.ok) return fallbackChart(token, symbol, ticker, range);
     const d = (await res.json()) as {
       t?: number[];
@@ -181,7 +180,7 @@ async function fallbackChart(
       ? "https://finnhub.io/api/v1/crypto/candle"
       : "https://finnhub.io/api/v1/stock/candle";
     const retryUrl = `${baseUrl}?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}&token=${token}`;
-    const retry = await fetch(retryUrl, { next: { revalidate: 0 } });
+    const retry = await fetch(retryUrl, { next: { revalidate: 60 } });
     if (retry.ok) {
       const d = (await retry.json()) as { t?: number[]; o?: number[]; h?: number[]; l?: number[]; c?: number[]; v?: number[] };
       const t = d?.t ?? [];
@@ -219,7 +218,7 @@ async function fallbackChart(
       const quoteUrl = symbol.startsWith("BINANCE:")
         ? `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${token}`
         : `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(ticker.toUpperCase())}&token=${token}`;
-      const qRes = await fetch(quoteUrl, { next: { revalidate: 0 } });
+      const qRes = await fetch(quoteUrl, { next: { revalidate: 60 } });
       if (!qRes.ok) return NextResponse.json({ data: [], range });
       const q = (await qRes.json()) as { c?: number; v?: number };
       close = q?.c ?? null;

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 120; // cache full route response for 2 minutes
 
 interface ThematicPortfolio {
   id: string;
@@ -14,7 +14,7 @@ const THEMATIC_PORTFOLIOS: ThematicPortfolio[] = [
   { id: "defense",        name: "War & Defense",       description: "Defense contractors and military technology",       color: "#ef4444", tickers: ["LMT","RTX","NOC","GD","BA","LDOS","HII","CACI"] },
   { id: "nuclear",        name: "Nuclear & Energy",     description: "Nuclear power and uranium mining",                  color: "#f59e0b", tickers: ["CCJ","UEC","VST","CEG","NNE","SMR","OKLO","DNN"] },
   { id: "ai",             name: "AI & Robotics",        description: "Artificial intelligence and automation leaders",    color: "#8b5cf6", tickers: ["NVDA","MSFT","GOOGL","AMD","PLTR","AI","PATH","BBAI"] },
-  { id: "space",          name: "Space Economy",        description: "Commercial space and satellite technology",          color: "#06b6d4", tickers: ["RKLB","ASTS","SPCE","BA","LMT","MNTS","LUNR","RDW"] },
+  { id: "space",          name: "Space Economy",        description: "Commercial space and satellite technology",          color: "#06b6d4", tickers: ["RKLB","ASTS","IRDM","BA","LMT","LUNR","RDW","KTOS"] },
   { id: "biotech",        name: "Biotech & Healthcare", description: "Biotechnology and pharmaceutical innovation",       color: "#10b981", tickers: ["MRNA","PFE","ABBV","UNH","ISRG","REGN","VRTX","GILD"] },
   { id: "banks",          name: "Big Banks",            description: "Major financial institutions and investment banks", color: "#3b82f6", tickers: ["JPM","BAC","GS","MS","WFC","C","BLK","SCHW"] },
   { id: "oil",            name: "Oil & Gas",            description: "Energy majors and exploration companies",           color: "#92400e", tickers: ["XOM","CVX","COP","SLB","EOG","PXD","MPC","VLO"] },
@@ -49,7 +49,7 @@ function toFinnhubQuoteSymbol(ticker: string): string {
   return CRYPTO_QUOTE_MAP[ticker] ?? ticker;
 }
 
-interface FinnhubQuote { c: number; d: number; dp: number; }
+interface FinnhubQuote { c: number; d: number; dp: number; pc: number; }
 
 async function fetchQuote(
   ticker: string,
@@ -59,23 +59,21 @@ async function fetchQuote(
     const symbol = toFinnhubQuoteSymbol(ticker);
     const isCrypto = ticker.endsWith("-USD");
 
-    // Use /crypto/candle for crypto via Binance pairs to get change %
     const url = `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${apiKey}`;
-    const res = await fetch(url, { next: { revalidate: 60 } });
+    const res = await fetch(url, { next: { revalidate: 120 } });
     if (!res.ok) return null;
     const data = (await res.json()) as FinnhubQuote;
 
-    // For crypto via Binance pairs, d/dp may be missing; compute from pc
     const price = data.c;
     if (!price || price === 0) return null;
 
-    // dp = day change %; d = change amount
     let cp = data.dp ?? 0;
     let ch = data.d ?? 0;
 
-    // Crypto Binance pairs often have dp=0; fallback to 0 rather than undefined
-    if (isCrypto && cp === 0 && ch === 0) {
-      // Accept price=0 check already above; just return 0 change
+    // Binance pairs often return dp=0/d=0 — compute from previous close when available
+    if (isCrypto && cp === 0 && data.pc && data.pc > 0) {
+      ch = price - data.pc;
+      cp = Math.round((ch / data.pc) * 10000) / 100;
     }
 
     return { ticker, price, changePercent: cp, change: ch };

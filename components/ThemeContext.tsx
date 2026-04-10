@@ -1,8 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { DEFAULT_ACCENT, getStoredAccent, setStoredAccent } from "../lib/accent-color";
-import { getStoredTheme, setStoredTheme, type Theme } from "../lib/theme";
+import { DEFAULT_ACCENT, getStoredAccent, setStoredAccent, loadAccentFromDB } from "../lib/accent-color";
+import { getStoredTheme, setStoredTheme, loadThemeFromDB, type Theme } from "../lib/theme";
 
 type ThemeContextValue = {
   theme: Theme;
@@ -47,9 +47,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       setThemeState(storedTheme);
       setAccentColorState(storedAccent);
       setMounted(true);
-      // Enable accent-color transitions now that hydration is complete
       document.documentElement.classList.add("accent-ready");
     });
+    // After hydration, sync from DB (updates local if user changed on another device)
+    Promise.all([loadThemeFromDB(), loadAccentFromDB()]).then(([dbTheme]) => {
+      if (dbTheme) {
+        document.documentElement.setAttribute("data-theme", dbTheme);
+        setThemeState(dbTheme);
+      }
+      const dbAccent = getStoredAccent(); // loadAccentFromDB updated localStorage
+      applyAccent(dbAccent);
+      setAccentColorState(dbAccent);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {

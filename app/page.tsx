@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { motion, useInView } from "framer-motion";
 import "./landing.css";
 import { SiteFooter } from "../components/SiteFooter";
+import { NewsletterSignup } from "../components/NewsletterSignup";
 
 const ParticleField = dynamic(() => import("../components/landing/ParticleField"), {
   ssr: false,
@@ -642,7 +643,42 @@ function PricingSection() {
   );
 }
 
-// ─── Section 6: CTA ───────────────────────────────────────────────────────────
+// ─── Section 6: Newsletter ────────────────────────────────────────────────────
+
+function NewsletterSection() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: "-80px" });
+
+  return (
+    <section ref={ref} className="relative py-24 px-6" style={{ background: "var(--app-bg)" }}>
+      <hr className="section-rule mb-24" />
+      <div className="max-w-xl mx-auto text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.55 }}
+        >
+          <p className="overline-label mb-4">Stay in the loop</p>
+          <h2 className="font-black tracking-tight text-white mb-3"
+            style={{ fontSize: "clamp(24px, 3.5vw, 38px)", letterSpacing: "-0.02em" }}>
+            Get notified on new releases
+          </h2>
+          <p className="mb-8" style={{ color: "rgba(255,255,255,0.38)", fontSize: "14px" }}>
+            We ship fast. Subscribe and we&apos;ll email you whenever a new version drops.
+          </p>
+          <div className="max-w-sm mx-auto">
+            <NewsletterSignup />
+          </div>
+          <p className="mt-4 text-xs" style={{ color: "rgba(255,255,255,0.2)" }}>
+            No spam. Unsubscribe anytime.
+          </p>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Section 7: CTA ───────────────────────────────────────────────────────────
 
 function CTASection() {
   const ref = useRef(null);
@@ -724,6 +760,7 @@ export default function Home() {
           <GlobeSection />
           <SocialProofSection />
           <PricingSection />
+          <NewsletterSection />
           <CTASection />
         </>
       )}

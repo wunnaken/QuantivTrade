@@ -202,6 +202,13 @@ export function saveDashboard(dash: SavedDashboard): void {
   } catch {
     // ignore
   }
+  // Sync to Supabase (fire-and-forget)
+  fetch("/api/dashboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ dashboardId: dash.id, name: dash.name, layout: dash.layout, widgets: dash.widgets, theme: dash.theme }),
+  }).catch(() => {});
 }
 
 export function deleteDashboard(id: string): void {
@@ -213,6 +220,49 @@ export function deleteDashboard(id: string): void {
   } catch {
     // ignore
   }
+  // Sync to Supabase (fire-and-forget)
+  fetch(`/api/dashboard?dashboardId=${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    credentials: "include",
+  }).catch(() => {});
+}
+
+/** On login, load dashboards from DB and merge with local (DB wins on conflict). */
+export async function loadDashboardsFromDB(): Promise<void> {
+  try {
+    const res = await fetch("/api/dashboard", { credentials: "include" });
+    if (!res.ok) return;
+    const data = await res.json() as { dashboards?: Array<{ id: string; name: string; layout: LayoutItem[]; widgets: WidgetId[]; theme: DashboardTheme; updatedAt: string | null }> };
+    if (!Array.isArray(data.dashboards) || data.dashboards.length === 0) return;
+
+    for (const dbDash of data.dashboards) {
+      const local = getDashboard(dbDash.id);
+      const dbTime = dbDash.updatedAt ? new Date(dbDash.updatedAt).getTime() : 0;
+      const localTime = local?.updatedAt ? new Date(local.updatedAt).getTime() : 0;
+      if (!local || dbTime > localTime) {
+        const merged: SavedDashboard = {
+          id: dbDash.id,
+          name: dbDash.name,
+          layout: dbDash.layout ?? [],
+          widgets: dbDash.widgets ?? [],
+          theme: dbDash.theme ?? {},
+          updatedAt: dbDash.updatedAt ?? new Date().toISOString(),
+        };
+        window.localStorage.setItem(STORAGE_PREFIX + dbDash.id, JSON.stringify(merged));
+      }
+    }
+
+    // Rebuild list: merge local + DB
+    const existingList = getDashboardList();
+    const combined = [...existingList];
+    for (const dbDash of data.dashboards) {
+      if (!combined.find((d) => d.id === dbDash.id)) {
+        const full = getDashboard(dbDash.id);
+        if (full) combined.push(full);
+      }
+    }
+    window.localStorage.setItem(LIST_KEY, JSON.stringify(combined.slice(0, MAX_DASHBOARDS)));
+  } catch { /* ignore */ }
 }
 
 export function createNewDashboard(name: string, template: "blank" | "morning" | "crypto" | "longterm" | "daytrader"): SavedDashboard {

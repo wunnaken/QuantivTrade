@@ -1,3 +1,5 @@
+import { createClient } from "./supabase/client";
+
 const STORAGE_KEY = "quantivtrade-sidebar-prefs";
 
 export type SidebarPrefs = {
@@ -8,18 +10,15 @@ export type SidebarPrefs = {
   sectionOrder: string[];
 };
 
-function getDefaultOrder(allHrefs: string[]): string[] {
-  return [...allHrefs];
+function getDefaultPrefs(allHrefs: string[]): SidebarPrefs {
+  return { order: [...allHrefs], hidden: [], collapsed: true, collapsedSections: [], sectionOrder: [] };
 }
 
-export function getSidebarPrefs(allHrefs: string[]): SidebarPrefs {
-  const defaultOrder = getDefaultOrder(allHrefs);
+function normalizePrefs(raw: unknown, allHrefs: string[]): SidebarPrefs {
+  const defaultOrder = [...allHrefs];
   const set = new Set(allHrefs);
-  if (typeof window === "undefined") return { order: defaultOrder, hidden: [], collapsed: true, collapsedSections: [], sectionOrder: [] };
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { order: defaultOrder, hidden: [], collapsed: true, collapsedSections: [], sectionOrder: [] };
-    const parsed = JSON.parse(raw) as { order?: unknown; hidden?: unknown; collapsed?: boolean; collapsedSections?: unknown; sectionOrder?: unknown };
+    const parsed = raw as { order?: unknown; hidden?: unknown; collapsed?: boolean; collapsedSections?: unknown; sectionOrder?: unknown };
     const order = Array.isArray(parsed?.order) ? (parsed.order as string[]) : defaultOrder;
     const hidden = Array.isArray(parsed?.hidden) ? (parsed.hidden as string[]) : [];
     const collapsed = typeof parsed?.collapsed === "boolean" ? parsed.collapsed : true;
@@ -28,9 +27,6 @@ export function getSidebarPrefs(allHrefs: string[]): SidebarPrefs {
     const orderFiltered = order.filter((h) => set.has(h));
     const missing = allHrefs.filter((h) => !orderFiltered.includes(h));
     const hiddenFiltered = hidden.filter((h) => set.has(h) && !missing.includes(h));
-
-    // If the app adds a new tab, insert it into a sane place for existing users
-    // instead of dumping it at the very bottom (often off-screen).
     const nextOrder = [...orderFiltered];
     missing.forEach((href) => {
       if (href === "/sentiment") {
@@ -42,23 +38,66 @@ export function getSidebarPrefs(allHrefs: string[]): SidebarPrefs {
         nextOrder.push(href);
       }
     });
-    return {
-      order: nextOrder,
-      hidden: hiddenFiltered,
-      collapsed,
-      collapsedSections,
-      sectionOrder,
-    };
+    return { order: nextOrder, hidden: hiddenFiltered, collapsed, collapsedSections, sectionOrder };
   } catch {
-    return { order: defaultOrder, hidden: [], collapsed: true, collapsedSections: [], sectionOrder: [] };
+    return getDefaultPrefs(allHrefs);
   }
 }
 
-export function saveSidebarPrefs(prefs: SidebarPrefs): void {
+function getLocalPrefs(allHrefs: string[]): SidebarPrefs {
+  if (typeof window === "undefined") return getDefaultPrefs(allHrefs);
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return getDefaultPrefs(allHrefs);
+    return normalizePrefs(JSON.parse(raw), allHrefs);
+  } catch {
+    return getDefaultPrefs(allHrefs);
+  }
+}
+
+function setLocalPrefs(prefs: SidebarPrefs): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
   } catch {
     // ignore
+  }
+}
+
+export async function loadSidebarPrefs(userId: string | null, allHrefs: string[]): Promise<SidebarPrefs> {
+  if (!userId) return getLocalPrefs(allHrefs);
+  try {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("profiles")
+      .select("sidebar_preferences")
+      .eq("user_id", userId)
+      .single();
+    if (data?.sidebar_preferences) {
+      return normalizePrefs(data.sidebar_preferences, allHrefs);
+    }
+    // First login: migrate any existing localStorage prefs into Supabase
+    const local = getLocalPrefs(allHrefs);
+    await supabase
+      .from("profiles")
+      .update({ sidebar_preferences: local })
+      .eq("user_id", userId);
+    return local;
+  } catch {
+    return getLocalPrefs(allHrefs);
+  }
+}
+
+export async function saveSidebarPrefs(userId: string | null, prefs: SidebarPrefs): Promise<void> {
+  setLocalPrefs(prefs); // keep localStorage in sync as offline fallback
+  if (!userId) return;
+  try {
+    const supabase = createClient();
+    await supabase
+      .from("profiles")
+      .update({ sidebar_preferences: prefs })
+      .eq("user_id", userId);
+  } catch {
+    // ignore — localStorage already saved above
   }
 }

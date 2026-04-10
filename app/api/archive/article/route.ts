@@ -29,10 +29,40 @@ interface Article {
   related_terms: string[];
   tags: string[];
   is_prebuilt: boolean;
+  source?: "wikipedia" | "ai";
+  source_url?: string;
   view_count: number;
   created_at: string;
   updated_at: string;
 }
+
+// ── Wikipedia source ────────────────────────────────────────────────────────
+
+interface WikiSummary { title: string; extract: string; content_urls?: { desktop?: { page?: string } } }
+
+async function fetchWikipedia(term: string): Promise<WikiSummary | null> {
+  const candidates = [term, term.replace(/ /g, "_")];
+  for (const q of candidates) {
+    try {
+      const res = await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(q)}`,
+        { next: { revalidate: 86400 } } // cache 24 h
+      );
+      if (!res.ok) continue;
+      const d = (await res.json()) as WikiSummary & { type?: string };
+      if (d.type === "disambiguation" || !d.extract || d.extract.length < 80) continue;
+      // Only accept if the extract mentions finance/trading context
+      const financeWords = ["trading", "investment", "investor", "stock", "market", "financial", "finance",
+        "economic", "bond", "option", "derivative", "hedge", "portfolio", "equity", "asset", "capital",
+        "currency", "price", "return", "risk", "profit", "loss", "dividend", "interest rate", "index"];
+      const lower = d.extract.toLowerCase();
+      if (financeWords.some((w) => lower.includes(w))) return d;
+    } catch { /* ignore */ }
+  }
+  return null;
+}
+
+// ── Claude generation ────────────────────────────────────────────────────────
 
 async function isTradingRelated(term: string, apiKey: string): Promise<boolean> {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -60,7 +90,16 @@ async function isTradingRelated(term: string, apiKey: string): Promise<boolean> 
   return answer.startsWith("Y");
 }
 
-async function generateWithClaude(term: string, category: string, apiKey: string): Promise<Omit<Article, "slug" | "is_prebuilt" | "view_count" | "created_at" | "updated_at">> {
+async function generateWithClaude(
+  term: string,
+  category: string,
+  apiKey: string,
+  wikiContext?: WikiSummary | null,
+): Promise<Omit<Article, "slug" | "is_prebuilt" | "source" | "source_url" | "view_count" | "created_at" | "updated_at">> {
+  const wikiSection = wikiContext
+    ? `\n\nWikipedia source content (use as factual ground truth for the definition):\n"${wikiContext.extract}"\n`
+    : "";
+
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -76,14 +115,14 @@ async function generateWithClaude(term: string, category: string, apiKey: string
         {
           role: "user",
           content: `Write a comprehensive article about: ${term}
-Category: ${category}
+Category: ${category}${wikiSection}
 
 Return ONLY a JSON object with this exact structure:
 {
   "title": "Full title of the term",
   "summary": "2-3 sentence overview for search results",
   "content": {
-    "definition": "Clear 1-2 paragraph definition",
+    "definition": "Clear 1-2 paragraph definition${wikiContext ? " — use the Wikipedia source content above as the factual base" : ""}",
     "howItWorks": "Detailed explanation with mechanics",
     "keyComponents": ["component 1", "component 2", "component 3"],
     "tradingApplication": "How traders actually use this in practice",
@@ -172,7 +211,9 @@ export async function GET(req: Request) {
   }
 
   try {
-    const generated = await generateWithClaude(term, category, apiKey);
+    // Try Wikipedia first — gives Claude real factual grounding
+    const wiki = await fetchWikipedia(term);
+    const generated = await generateWithClaude(term, category, apiKey, wiki);
 
     const article: Omit<Article, "view_count" | "created_at" | "updated_at"> = {
       slug,
@@ -183,6 +224,8 @@ export async function GET(req: Request) {
       related_terms: generated.related_terms ?? [],
       tags: generated.tags ?? prebuilt?.tags ?? [],
       is_prebuilt: !!prebuilt,
+      source: wiki ? "wikipedia" : "ai",
+      source_url: wiki ? (wiki.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(wiki.title)}`) : undefined,
     };
 
     // Save to Supabase

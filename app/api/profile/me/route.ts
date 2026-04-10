@@ -44,16 +44,28 @@ export async function PATCH(request: NextRequest) {
     username?: string;
     bio?: string | null;
     avatar_url?: string | null;
+    accent_color?: string;
+    theme?: string;
+    invite_code?: string;
+    invited_count?: number;
+    is_early_member?: boolean;
+    archive_recent?: string[];
+    /** Generic patch merged into ui_preferences JSONB */
+    ui_prefs_patch?: Record<string, unknown>;
   };
 
   const supabase = createServerClient();
 
-  // Handle profile field updates (name, username, bio, avatar_url)
+  // Handle direct profile column updates
   const profileUpdates: Record<string, unknown> = {};
   if (typeof body.name === "string") profileUpdates.name = body.name;
   if (typeof body.username === "string") profileUpdates.username = body.username;
   if ("bio" in body) profileUpdates.bio = body.bio ?? null;
   if ("avatar_url" in body) profileUpdates.avatar_url = body.avatar_url ?? null;
+  if (typeof body.invite_code === "string") profileUpdates.invite_code = body.invite_code;
+  if (typeof body.invited_count === "number") profileUpdates.invited_count = body.invited_count;
+  if (typeof body.is_early_member === "boolean") profileUpdates.is_early_member = body.is_early_member;
+  if (Array.isArray(body.archive_recent)) profileUpdates.archive_recent = body.archive_recent.slice(0, 10);
 
   if (Object.keys(profileUpdates).length > 0) {
     const { error } = await supabase.from("profiles").update(profileUpdates).eq("user_id", profileId);
@@ -63,8 +75,9 @@ export async function PATCH(request: NextRequest) {
     }
   }
 
-  // Handle ui_preferences updates (bubble_ids, xp_total)
-  if ("bubble_ids" in body || "xp_total" in body) {
+  // Handle ui_preferences JSONB updates (bubble_ids, xp_total, accent_color, theme, ui_prefs_patch)
+  const prefKeys = ["bubble_ids", "xp_total", "accent_color", "theme", "ui_prefs_patch"] as const;
+  if (prefKeys.some((k) => k in body)) {
     const { data: current } = await supabase
       .from("profiles")
       .select("ui_preferences")
@@ -76,6 +89,11 @@ export async function PATCH(request: NextRequest) {
 
     if (Array.isArray(body.bubble_ids)) nextPrefs.bubble_ids = body.bubble_ids;
     if (typeof body.xp_total === "number") nextPrefs.xp_total = body.xp_total;
+    if (typeof body.accent_color === "string") nextPrefs.accent_color = body.accent_color;
+    if (typeof body.theme === "string") nextPrefs.theme = body.theme;
+    if (body.ui_prefs_patch && typeof body.ui_prefs_patch === "object") {
+      Object.assign(nextPrefs, body.ui_prefs_patch);
+    }
 
     await supabase.from("profiles").update({ ui_preferences: nextPrefs }).eq("user_id", profileId);
   }

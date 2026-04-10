@@ -1,6 +1,6 @@
 /**
  * Profile bubbles/badges: selectable tags for trading style and interests.
- * Users can select up to 8 total. Stored in localStorage for now (DB later).
+ * Users can select up to 6. Stored in localStorage + synced to Supabase.
  */
 
 export type BubbleCategory = "trading_style" | "risk_appetite" | "interests" | "experience";
@@ -55,8 +55,7 @@ export function getSelectedBubbleIds(): string[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [];
-    const ids = parsed.filter((x): x is string => typeof x === "string");
-    return ids.slice(0, MAX_SELECTED_BUBBLES);
+    return (parsed as unknown[]).filter((x): x is string => typeof x === "string").slice(0, MAX_SELECTED_BUBBLES);
   } catch {
     return [];
   }
@@ -66,6 +65,29 @@ export function setSelectedBubbleIds(ids: string[]): void {
   if (typeof window === "undefined") return;
   const valid = ids.slice(0, MAX_SELECTED_BUBBLES);
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(valid));
+  // Sync to Supabase
+  fetch("/api/profile/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ bubble_ids: valid }),
+  }).catch(() => {});
+}
+
+/** On login, load bubble IDs from DB and update local cache. */
+export async function loadBubbleIdsFromDB(): Promise<string[]> {
+  try {
+    const res = await fetch("/api/profile/me", { credentials: "include" });
+    if (!res.ok) return getSelectedBubbleIds();
+    const data = await res.json() as { ui_preferences?: { bubble_ids?: unknown } };
+    const ids = data.ui_preferences?.bubble_ids;
+    if (Array.isArray(ids)) {
+      const valid = (ids as unknown[]).filter((x): x is string => typeof x === "string").slice(0, MAX_SELECTED_BUBBLES);
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(valid));
+      return valid;
+    }
+  } catch { /* ignore */ }
+  return getSelectedBubbleIds();
 }
 
 export function getBubblesById(ids: string[]): ProfileBubble[] {

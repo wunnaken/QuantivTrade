@@ -1,10 +1,9 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLivePrices } from "../../lib/hooks/useLivePrice";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  PieChart, Pie, Cell,
 } from "recharts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -68,9 +67,6 @@ interface ChartPoint { t: number; value: number }
 const TIMEFRAMES = ["1D","1W","1M","3M","YTD","1Y"] as const;
 type Timeframe = typeof TIMEFRAMES[number];
 
-function tfToParam(tf: Timeframe): string {
-  return tf.toLowerCase().replace("ytd", "ytd");
-}
 
 const STYLE_COLORS: Record<string, string> = {
   Value: "#3b82f6",
@@ -100,6 +96,21 @@ const THEMATIC_CATEGORIES: Record<string, string[]> = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// Map portfolio crypto tickers to the symbol that useLivePrices / ticker-quote understands
+const CRYPTO_LIVE_MAP: Record<string, string> = {
+  "BTC-USD": "BTC",
+  "ETH-USD": "ETH",
+  "SOL-USD": "SOL",
+  "BNB-USD": "BNB",
+  "XRP-USD": "XRP",
+  "ADA-USD": "ADA",
+  "AVAX-USD": "AVAX",
+  "DOT-USD": "DOT",
+};
+function toLiveSymbol(ticker: string): string {
+  return CRYPTO_LIVE_MAP[ticker] ?? ticker;
+}
 
 function pct(n: number | null, decimals = 2): string {
   if (n == null) return "—";
@@ -133,39 +144,7 @@ function getInitials(name: string): string {
   return name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }
 
-function generateSparkline(changePercent: number | null, seed: number, points = 7): number[] {
-  // Deterministic noise based on seed to avoid hydration mismatch
-  const rand = (i: number) => Math.sin(seed * 9301 + i * 49297 + 233995) * 0.5 + 0.5;
-  const base = 100;
-  const arr = [base];
-  for (let i = 1; i < points; i++) {
-    arr.push(arr[i - 1] + (rand(i) - 0.5) * 2);
-  }
-  if (changePercent != null) {
-    arr[points - 1] = base + (base * changePercent) / 100;
-  }
-  return arr;
-}
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function Sparkline({ values, up }: { values: number[]; up: boolean }) {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const W = 52, H = 20;
-  const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * W;
-    const y = H - ((v - min) / range) * H;
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  const color = up ? "#10b981" : "#ef4444";
-  return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="ml-auto">
-      <polyline points={pts.join(" ")} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.8} />
-    </svg>
-  );
-}
 
 function TimeframePicker({ value, onChange }: { value: Timeframe; onChange: (tf: Timeframe) => void }) {
   return (
@@ -228,169 +207,166 @@ function AIAnalysisCard({
   }
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[var(--accent-color)]/70">AI Analysis</span>
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-zinc-600">Analysis</span>
         {!fetched && !loading && (
           <button
             onClick={load}
-            className="text-[11px] px-2.5 py-1 rounded-md border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-colors"
+            className="text-[10px] px-2 py-0.5 rounded border border-white/10 text-zinc-500 hover:text-white hover:border-white/20 transition-colors"
           >
             Generate
           </button>
         )}
       </div>
       {loading && (
-        <div className="flex items-center gap-2 text-xs text-zinc-500">
-          <div className="h-3 w-3 animate-spin rounded-full border border-zinc-500 border-t-transparent" />
+        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+          <div className="h-2.5 w-2.5 animate-spin rounded-full border border-zinc-500 border-t-transparent" />
           Analyzing...
         </div>
       )}
-      {analysis && <p className="text-xs leading-relaxed text-zinc-300">{analysis}</p>}
+      {analysis && <p className="text-[11px] leading-relaxed text-zinc-400">{analysis}</p>}
       {fetched && !analysis && !loading && (
-        <p className="text-xs text-zinc-500">Analysis unavailable.</p>
+        <p className="text-[11px] text-zinc-600">Unavailable.</p>
       )}
     </div>
   );
 }
 
-// ─── Portfolio Performance Chart ──────────────────────────────────────────────
+// ─── Portfolio Chart (calls /api/portfolios/chart — server batches Finnhub) ───
 
-function PortfolioChart({ portfolioId, color, timeframe, tickersOverride }: { portfolioId: string; color: string; timeframe: Timeframe; tickersOverride?: string }) {
-  const [data, setData] = useState<{ points: ChartPoint[]; benchmark: ChartPoint[] }>({ points: [], benchmark: [] });
+const SKIP_TICKERS_CLIENT = new Set([
+  "BTC-USD","ETH-USD","SOL-USD","BNB-USD","XRP-USD","ADA-USD","AVAX-USD","DOT-USD",
+]);
+
+interface ChartData {
+  points: ChartPoint[];
+  benchmark: ChartPoint[];
+  tickerPerf: Record<string, number>; // ticker → final normalized %
+}
+
+// Module-level cache — persists across component mounts/unmounts on the same page
+const _chartCache = new Map<string, ChartData>();
+
+function usePortfolioChart(tickers: string[], timeframe: Timeframe, cacheKey: string): { data: ChartData | null; loading: boolean } {
+  const [data, setData] = useState<ChartData | null>(null);
   const [loading, setLoading] = useState(true);
-  const cacheRef = useRef<Record<string, typeof data>>({});
+  const tickersKey = tickers.join(",");
 
   useEffect(() => {
-    const key = `${portfolioId}:${timeframe}:${tickersOverride ?? ""}`;
-    if (cacheRef.current[key]) {
-      setData(cacheRef.current[key]);
-      setLoading(false);
-      return;
-    }
+    const tf = timeframe.toLowerCase(); // "YTD" → "ytd", "1D" → "1d", etc.
+    const key = `${cacheKey}:${timeframe}`;
+    if (_chartCache.has(key)) { setData(_chartCache.get(key)!); setLoading(false); return; }
+
     setLoading(true);
-    const params = new URLSearchParams({ id: portfolioId, tf: tfToParam(timeframe) });
-    if (tickersOverride) params.set("tickers", tickersOverride);
-    fetch(`/api/portfolios/chart?${params.toString()}`)
-      .then((r) => r.json())
-      .then((d: { points?: ChartPoint[]; benchmark?: ChartPoint[] }) => {
-        const result = { points: d.points ?? [], benchmark: d.benchmark ?? [] };
-        cacheRef.current[key] = result;
+    const stockTickers = tickers.filter((t) => !SKIP_TICKERS_CLIENT.has(t));
+    const params = new URLSearchParams({ id: cacheKey, tf });
+    if (stockTickers.length) params.set("tickers", stockTickers.join(","));
+
+    fetch(`/api/portfolios/chart?${params}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        const result: ChartData = {
+          points: d?.points ?? [],
+          benchmark: d?.benchmark ?? [],
+          tickerPerf: d?.tickerPerf ?? {},
+        };
+        _chartCache.set(key, result);
         setData(result);
       })
-      .catch(() => setData({ points: [], benchmark: [] }))
+      .catch(() => setData({ points: [], benchmark: [], tickerPerf: {} }))
       .finally(() => setLoading(false));
-  }, [portfolioId, timeframe]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cacheKey, timeframe, tickersKey]);
 
+  return { data, loading };
+}
+
+function PortfolioLineChart({ data, loading, color, timeframe }: { data: ChartData | null; loading: boolean; color: string; timeframe: Timeframe }) {
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex items-center justify-center h-[220px]">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-[var(--accent-color)]" />
       </div>
     );
   }
-
-  if (!data.points.length) {
-    return <div className="flex h-full items-center justify-center text-xs text-zinc-600">No chart data available</div>;
+  if (!data || (!data.points.length && !data.benchmark.length)) {
+    return <div className="flex items-center justify-center h-[220px] text-xs text-zinc-600">No chart data</div>;
   }
 
-  // Merge portfolio + benchmark on same timeline
   const tsMap = new Map<number, { portfolio?: number; spy?: number }>();
   data.points.forEach((p) => { const e = tsMap.get(p.t) ?? {}; tsMap.set(p.t, { ...e, portfolio: p.value }); });
   data.benchmark.forEach((p) => { const e = tsMap.get(p.t) ?? {}; tsMap.set(p.t, { ...e, spy: p.value }); });
-  const chartData = [...tsMap.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([t, v]) => ({ t, portfolio: v.portfolio ?? null, spy: v.spy ?? null }));
-
-  const lastPct = data.points[data.points.length - 1]?.value ?? null;
+  const chartData = [...tsMap.entries()].sort(([a], [b]) => a - b).map(([t, v]) => ({ t, portfolio: v.portfolio ?? null, spy: v.spy ?? null }));
+  const lastPct = data.points.length ? data.points[data.points.length - 1].value : null;
 
   const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: number }) => {
     if (!active || !payload?.length) return null;
     return (
       <div className="rounded-lg border border-white/10 bg-[var(--app-bg)] px-3 py-2 text-xs shadow-xl">
         <p className="text-zinc-500 mb-1">{label ? fmtTs(label, timeframe) : ""}</p>
-        {payload.map((p) => (
-          <p key={p.name} style={{ color: p.color }}>{p.name}: {p.value != null ? pct(p.value) : "—"}</p>
-        ))}
+        {payload.map((p) => <p key={p.name} style={{ color: p.color }}>{p.name}: {pct(p.value)}</p>)}
       </div>
     );
   };
 
   return (
     <div>
-      {lastPct != null && (
-        <p className={`text-lg font-bold tabular-nums mb-1 ${pctColor(lastPct)}`}>{pct(lastPct)}</p>
-      )}
+      {lastPct != null && <p className={`text-lg font-bold tabular-nums mb-1 ${pctColor(lastPct)}`}>{pct(lastPct)}</p>}
       <ResponsiveContainer width="100%" height={200}>
         <LineChart data={chartData} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
-          <XAxis
-            dataKey="t"
-            tickFormatter={(v) => fmtTs(v as number, timeframe)}
-            tick={{ fontSize: 9, fill: "#52525b" }}
-            tickLine={false}
-            axisLine={false}
-            interval="preserveStartEnd"
-          />
-          <YAxis
-            tickFormatter={(v) => `${v > 0 ? "+" : ""}${(v as number).toFixed(1)}%`}
-            tick={{ fontSize: 9, fill: "#52525b" }}
-            tickLine={false}
-            axisLine={false}
-            width={44}
-          />
+          <XAxis dataKey="t" tickFormatter={(v) => fmtTs(v as number, timeframe)} tick={{ fontSize: 9, fill: "#52525b" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+          <YAxis tickFormatter={(v) => `${(v as number) > 0 ? "+" : ""}${(v as number).toFixed(1)}%`} tick={{ fontSize: 9, fill: "#52525b" }} tickLine={false} axisLine={false} width={44} />
           <Tooltip content={<CustomTooltip />} />
           <Line type="monotone" dataKey="portfolio" stroke={color} strokeWidth={2} dot={false} name="Portfolio" connectNulls />
           <Line type="monotone" dataKey="spy" stroke="#52525b" strokeWidth={1.5} dot={false} name="SPY" strokeDasharray="4 3" connectNulls />
-          <Legend
-            iconType="line"
-            iconSize={12}
-            formatter={(value) => <span style={{ fontSize: 9, color: "#71717a" }}>{value}</span>}
-          />
+          <Legend iconType="line" iconSize={12} formatter={(value) => <span style={{ fontSize: 9, color: "#71717a" }}>{value}</span>} />
         </LineChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-// ─── Radar Chart ──────────────────────────────────────────────────────────────
+// ─── Ticker Performance Bars (replaces Radar) ─────────────────────────────────
 
-function HoldingsRadar({ holdings, color }: { holdings: ThematicHolding[]; color: string }) {
-  const subset = holdings.slice(0, 7);
-  const changes = subset.map((h) => h.changePercent ?? 0);
-  const minC = Math.min(...changes);
-  // Normalize so all values >= 0, preserving relative performance shape
-  const radarData = subset.map((h) => ({
-    ticker: h.ticker,
-    value: Math.round(((h.changePercent ?? 0) - minC) * 100) / 100,
-    raw: h.changePercent ?? 0,
-  }));
+function TickerPerfBars({ tickerPerf, color, timeframe, loading }: { tickerPerf: Record<string, number>; color: string; timeframe: Timeframe; loading?: boolean }) {
+  const entries = Object.entries(tickerPerf).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) {
+    return (
+      <div className="flex items-center justify-center py-4">
+        {loading
+          ? <div className="h-4 w-4 animate-spin rounded-full border border-white/20 border-t-zinc-400" />
+          : <p className="text-xs text-zinc-600">No data</p>
+        }
+      </div>
+    );
+  }
+  const maxAbs = Math.max(...entries.map(([, v]) => Math.abs(v)), 0.01);
 
   return (
-    <ResponsiveContainer width="100%" height={180}>
-      <RadarChart data={radarData} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
-        <PolarGrid stroke="rgba(255,255,255,0.06)" />
-        <PolarAngleAxis
-          dataKey="ticker"
-          tick={{ fontSize: 9, fill: "#71717a" }}
-        />
-        <PolarRadiusAxis tick={false} axisLine={false} />
-        <Radar
-          name="Performance"
-          dataKey="value"
-          stroke={color}
-          fill={color}
-          fillOpacity={0.25}
-          strokeWidth={1.5}
-        />
-        <Tooltip
-          contentStyle={{ background: "var(--app-bg)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
-          formatter={(_v, _n, props: { payload?: { raw?: number } }) => [
-            pct(props.payload?.raw ?? 0),
-            "Day Change",
-          ]}
-        />
-      </RadarChart>
-    </ResponsiveContainer>
+    <div className="space-y-1.5 py-1">
+      <p className="text-[9px] text-zinc-600 mb-2 uppercase tracking-wider">{timeframe} return per holding</p>
+      {entries.map(([ticker, perf]) => {
+        const isUp = perf >= 0;
+        const barPct = (Math.abs(perf) / maxAbs) * 50; // 50% = max width per side
+        return (
+          <div key={ticker} className="flex items-center gap-2 text-[10px]">
+            <span className="w-11 text-right font-mono text-zinc-400 shrink-0">{ticker}</span>
+            <div className="flex-1 relative h-3.5 flex items-center">
+              <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-px bg-white/5" />
+              <div className="absolute left-1/2 top-1/2 -translate-y-1/2 w-px h-3 bg-white/15" />
+              {isUp
+                ? <div className="absolute left-1/2 top-1/2 -translate-y-1/2 h-2.5 rounded-r-sm" style={{ width: `${barPct}%`, background: color + "cc" }} />
+                : <div className="absolute right-1/2 top-1/2 -translate-y-1/2 h-2.5 rounded-l-sm bg-red-500/70" style={{ width: `${barPct}%` }} />
+              }
+            </div>
+            <span className={`w-14 tabular-nums ${isUp ? "text-emerald-400" : "text-red-400"}`}>
+              {isUp ? "+" : ""}{perf.toFixed(1)}%
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -400,12 +376,22 @@ function ThematicCard({
   portfolio,
   isExpanded,
   onToggle,
+  livePrices,
 }: {
   portfolio: ThematicPortfolio;
   isExpanded: boolean;
   onToggle: () => void;
+  livePrices: ReturnType<typeof useLivePrices>;
 }) {
   const topHoldings = portfolio.holdings.slice(0, 3);
+
+  // Compute live day change pct average from live prices where available
+  const liveChanges = portfolio.holdings
+    .map((h) => livePrices[toLiveSymbol(h.ticker)]?.changePercent)
+    .filter((v): v is number => v != null);
+  const liveDayChangePct = liveChanges.length > 0
+    ? liveChanges.reduce((s, v) => s + v, 0) / liveChanges.length
+    : portfolio.dayChangePct;
 
   return (
     <button
@@ -420,23 +406,28 @@ function ThematicCard({
             <p className="text-xs text-zinc-500 mt-0.5 line-clamp-1">{portfolio.description}</p>
           </div>
           <div className="text-right shrink-0">
-            <p className={`text-lg font-bold tabular-nums ${pctColor(portfolio.dayChangePct)}`}>
-              {pct(portfolio.dayChangePct)}
+            <p className={`text-lg font-bold tabular-nums ${pctColor(liveDayChangePct)}`}>
+              {pct(liveDayChangePct)}
             </p>
             <p className="text-[10px] text-zinc-600">today</p>
           </div>
         </div>
 
         <div className="flex flex-wrap gap-1.5 mt-3">
-          {topHoldings.map((h) => (
-            <span
-              key={h.ticker}
-              className="inline-flex items-center gap-1 rounded-md bg-white/5 px-2 py-0.5 text-[10px]"
-            >
-              <span className="text-zinc-300 font-medium">{h.ticker}</span>
-              <span className={pctColor(h.changePercent)}>{pct(h.changePercent, 1)}</span>
-            </span>
-          ))}
+          {topHoldings.map((h) => {
+            const sym = toLiveSymbol(h.ticker);
+            const live = livePrices[sym];
+            const cp = (live && !live.isLoading && live.changePercent != null) ? live.changePercent : h.changePercent;
+            return (
+              <span
+                key={h.ticker}
+                className="inline-flex items-center gap-1 rounded-md bg-white/5 px-2 py-0.5 text-[10px]"
+              >
+                <span className="text-zinc-300 font-medium">{h.ticker}</span>
+                <span className={pctColor(cp)}>{pct(cp, 1)}</span>
+              </span>
+            );
+          })}
         </div>
 
         <div className="flex items-center justify-between mt-3">
@@ -460,15 +451,30 @@ function ThematicCard({
 function ThematicDetail({ portfolio }: { portfolio: ThematicPortfolio }) {
   const [tf, setTf] = useState<Timeframe>("YTD");
 
-  // Stable sparklines
-  const sparklines = useMemo(
-    () =>
-      Object.fromEntries(
-        portfolio.holdings.map((h, i) => [h.ticker, generateSparkline(h.changePercent, i + 1)])
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [portfolio.id]
+  // Client-side chart data (used for both SPY line chart and ticker perf bars)
+  const stockTickers = useMemo(
+    () => portfolio.tickers.filter((t) => !SKIP_TICKERS_CLIENT.has(t)),
+    [portfolio.tickers]
   );
+  const { data: chartData, loading: chartLoading } = usePortfolioChart(stockTickers, tf, portfolio.id);
+
+  // Live prices via WebSocket + REST for this portfolio's tickers
+  const liveSymbols = useMemo(
+    () => portfolio.tickers.map(toLiveSymbol),
+    [portfolio.tickers]
+  );
+  const livePrices = useLivePrices(liveSymbols);
+
+  // Merge live data over API data: use live price when available and non-null
+  const holdings = useMemo(() => portfolio.holdings.map((h) => {
+    const sym = toLiveSymbol(h.ticker);
+    const live = livePrices[sym];
+    if (live && !live.isLoading && live.price != null) {
+      return { ...h, price: live.price, changePercent: live.changePercent, change: live.change };
+    }
+    return h;
+  }), [portfolio.holdings, livePrices]);
+
 
   return (
     <div className="col-span-full rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5 space-y-5"
@@ -484,10 +490,12 @@ function ThematicDetail({ portfolio }: { portfolio: ThematicPortfolio }) {
       </div>
 
       {/* Main chart */}
-      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-3">Performance vs SPY</p>
-        <PortfolioChart portfolioId={portfolio.id} color={portfolio.color} timeframe={tf} />
-      </div>
+      {portfolio.id !== "crypto" && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-3">Performance vs SPY</p>
+          <PortfolioLineChart data={chartData} loading={chartLoading} color={portfolio.color} timeframe={tf} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Holdings table */}
@@ -500,25 +508,31 @@ function ThematicDetail({ portfolio }: { portfolio: ThematicPortfolio }) {
                 <th className="pb-2 text-right">Weight</th>
                 <th className="pb-2 text-right">Price</th>
                 <th className="pb-2 text-right">Day %</th>
-                <th className="pb-2 text-right hidden sm:table-cell pl-4">7D</th>
+                <th className="pb-2 text-right hidden sm:table-cell pl-4">Chg $</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/[0.03]">
-              {portfolio.holdings.map((h) => {
-                const isUp = (h.changePercent ?? 0) >= 0;
+              {holdings.map((h) => {
+                const sym = toLiveSymbol(h.ticker);
+                const isLive = livePrices[sym] && !livePrices[sym].isLoading && livePrices[sym].price != null;
                 return (
                   <tr key={h.ticker} className="hover:bg-white/[0.02] transition-colors">
                     <td className="py-2 text-zinc-600">{h.rank}</td>
-                    <td className="py-2 font-medium text-zinc-200">{h.ticker}</td>
+                    <td className="py-2 font-medium text-zinc-200">
+                      {h.ticker}
+                      {isLive && <span className="ml-1.5 inline-block h-1 w-1 rounded-full bg-emerald-500 align-middle" title="Live" />}
+                    </td>
                     <td className="py-2 text-right text-zinc-400">{h.weight}%</td>
-                    <td className="py-2 text-right text-zinc-300">
+                    <td className="py-2 text-right text-zinc-300 tabular-nums">
                       {h.price != null ? `$${h.price < 1 ? h.price.toFixed(4) : h.price.toFixed(2)}` : "—"}
                     </td>
                     <td className={`py-2 text-right font-medium tabular-nums ${pctColor(h.changePercent)}`}>
                       {pct(h.changePercent, 2)}
                     </td>
-                    <td className="py-2 hidden sm:table-cell pl-4">
-                      <Sparkline values={sparklines[h.ticker] ?? [100,100,100,100,100,100,100]} up={isUp} />
+                    <td className={`py-2 hidden sm:table-cell pl-4 text-right tabular-nums text-xs font-medium ${pctColor(h.change)}`}>
+                      {h.change != null
+                        ? `${h.change >= 0 ? "+" : ""}${Math.abs(h.change) < 0.01 ? h.change.toFixed(4) : h.change.toFixed(2)}`
+                        : "—"}
                     </td>
                   </tr>
                 );
@@ -530,14 +544,19 @@ function ThematicDetail({ portfolio }: { portfolio: ThematicPortfolio }) {
         {/* Right: radar + AI */}
         <div className="space-y-4">
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-1">Today&apos;s Performance Shape</p>
-            <HoldingsRadar holdings={portfolio.holdings} color={portfolio.color} />
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-1">Holdings Breakdown</p>
+            <TickerPerfBars
+              tickerPerf={chartData?.tickerPerf ?? {}}
+              color={portfolio.color}
+              timeframe={tf}
+              loading={chartLoading}
+            />
           </div>
           <AIAnalysisCard
             type="thematic"
             name={portfolio.name}
             description={portfolio.description}
-            holdings={portfolio.holdings.map((h) => ({ ticker: h.ticker, changePercent: h.changePercent }))}
+            holdings={holdings.map((h) => ({ ticker: h.ticker, changePercent: h.changePercent }))}
             dayChangePct={portfolio.dayChangePct}
           />
         </div>
@@ -565,6 +584,13 @@ function ThematicTab({ portfolios, loading }: { portfolios: ThematicPortfolio[];
   }, [portfolios, search, categoryIds]);
 
   const expandedPortfolio = expanded ? filtered.find((p) => p.id === expanded) ?? null : null;
+
+  // Subscribe to live prices for all top-3 tickers across visible portfolios
+  const visibleTopTickers = useMemo(
+    () => [...new Set(filtered.flatMap((p) => p.holdings.slice(0, 3).map((h) => toLiveSymbol(h.ticker))))],
+    [filtered]
+  );
+  const livePrices = useLivePrices(visibleTopTickers);
 
   const toggleExpand = useCallback((id: string) => {
     setExpanded((prev) => (prev === id ? null : id));
@@ -607,6 +633,7 @@ function ThematicTab({ portfolios, loading }: { portfolios: ThematicPortfolio[];
               portfolio={portfolio}
               isExpanded={expanded === portfolio.id}
               onToggle={() => toggleExpand(portfolio.id)}
+              livePrices={livePrices}
             />
             {expanded === portfolio.id && expandedPortfolio && (
               <ThematicDetail portfolio={expandedPortfolio} />
@@ -689,23 +716,15 @@ function InvestorDetail({ investor }: { investor: FamousInvestor }) {
   const [tf, setTf] = useState<Timeframe>("YTD");
 
   // Build top ticker list for chart (valid US tickers only)
-  const chartTickers = investor.holdings
-    .filter((h) => h.ticker && h.ticker.length <= 5 && /^[A-Z.]+$/.test(h.ticker))
-    .slice(0, 6)
-    .map((h) => h.ticker)
-    .join(",");
-
-  // Radar data from portfolio allocation %
-  const radarData = investor.holdings.slice(0, 8).map((h) => ({
-    ticker: h.ticker,
-    value: h.portfolioPct,
-    raw: h.changePercent ?? null,
-  }));
-
-  const pieData = investor.holdings.slice(0, 8).map((h) => ({
-    name: h.ticker,
-    value: h.portfolioPct,
-  }));
+  const chartTickerList = useMemo(
+    () => investor.holdings
+      .filter((h) => h.ticker && h.ticker.length <= 5 && /^[A-Z.]+$/.test(h.ticker))
+      .slice(0, 8)
+      .map((h) => h.ticker),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [investor.id]
+  );
+  const { data: chartData, loading: chartLoading } = usePortfolioChart(chartTickerList, tf, investor.id);
 
   return (
     <div className="col-span-full rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5 space-y-5">
@@ -751,13 +770,13 @@ function InvestorDetail({ investor }: { investor: FamousInvestor }) {
       )}
 
       {/* Performance chart */}
-      {chartTickers && (
+      {chartTickerList.length > 0 && (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Portfolio vs SPY</p>
             <TimeframePicker value={tf} onChange={setTf} />
           </div>
-          <PortfolioChart portfolioId={investor.id} color={styleColor} timeframe={tf} tickersOverride={chartTickers} />
+          <PortfolioLineChart data={chartData} loading={chartLoading} color={styleColor} timeframe={tf} />
         </div>
       )}
 
@@ -803,36 +822,16 @@ function InvestorDetail({ investor }: { investor: FamousInvestor }) {
             </table>
           </div>
 
-          {/* Right: radar + AI */}
+          {/* Right: ticker perf bars + Analysis */}
           <div className="space-y-4">
-            {radarData.length > 0 && (
-              <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-1">Allocation Shape</p>
-                <ResponsiveContainer width="100%" height={180}>
-                  <RadarChart data={radarData} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
-                    <PolarGrid stroke="rgba(255,255,255,0.06)" />
-                    <PolarAngleAxis dataKey="ticker" tick={{ fontSize: 9, fill: "#71717a" }} />
-                    <PolarRadiusAxis tick={false} axisLine={false} />
-                    <Radar
-                      name="% of Portfolio"
-                      dataKey="value"
-                      stroke={styleColor}
-                      fill={styleColor}
-                      fillOpacity={0.25}
-                      strokeWidth={1.5}
-                    />
-                    <Tooltip
-                      contentStyle={{ background: "var(--app-bg)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
-                      formatter={(v, _n, props) => {
-                        const raw = (props as { payload?: { raw?: number | null } }).payload?.raw;
-                        return [`${(v as number).toFixed(1)}% portfolio${raw != null ? ` · ${pct(raw, 2)} today` : ""}`, ""];
-                      }}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+              <TickerPerfBars
+                tickerPerf={chartData?.tickerPerf ?? {}}
+                color={styleColor}
+                timeframe={tf}
+                loading={chartLoading}
+              />
+            </div>
             <AIAnalysisCard
               type="famous"
               name={investor.name}
@@ -997,15 +996,23 @@ export default function PortfoliosView() {
   const [famousLoading, setFamousLoading] = useState(true);
   const fetchedRef = useRef({ thematic: false, famous: false });
 
+  function fetchThematic(initial = false) {
+    if (initial) setThematicLoading(true);
+    fetch("/api/portfolios/thematic")
+      .then((r) => r.json())
+      .then((d: { portfolios?: ThematicPortfolio[] }) => setThematicData(d.portfolios ?? []))
+      .catch(() => {})
+      .finally(() => { if (initial) setThematicLoading(false); });
+  }
+
   useEffect(() => {
     if (!fetchedRef.current.thematic) {
       fetchedRef.current.thematic = true;
-      fetch("/api/portfolios/thematic")
-        .then((r) => r.json())
-        .then((d: { portfolios?: ThematicPortfolio[] }) => setThematicData(d.portfolios ?? []))
-        .catch(() => setThematicData([]))
-        .finally(() => setThematicLoading(false));
+      fetchThematic(true);
     }
+    // Refresh card data every 60s
+    const interval = setInterval(() => fetchThematic(false), 60_000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {

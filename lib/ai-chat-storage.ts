@@ -45,6 +45,12 @@ export function deleteConversation(id: string): void {
   if (typeof window === "undefined") return;
   const list = getStoredConversations().filter((c) => c.id !== id);
   window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(list));
+  fetch("/api/profile/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ui_prefs_patch: { ai_conversations: list } }),
+  }).catch(() => {});
 }
 
 export function saveConversation(
@@ -64,6 +70,12 @@ export function saveConversation(
   };
   const next = [entry, ...list.filter((c) => c.id !== id)].slice(0, MAX_CONVERSATIONS);
   window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(next));
+  fetch("/api/profile/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ui_prefs_patch: { ai_conversations: next } }),
+  }).catch(() => {});
 }
 
 export function getPortfolioContext(): string {
@@ -73,5 +85,29 @@ export function getPortfolioContext(): string {
 
 export function setPortfolioContext(context: string): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(PORTFOLIO_CONTEXT_KEY, context.trim());
+  const trimmed = context.trim();
+  window.localStorage.setItem(PORTFOLIO_CONTEXT_KEY, trimmed);
+  fetch("/api/profile/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ui_prefs_patch: { ai_portfolio_context: trimmed } }),
+  }).catch(() => {});
+}
+
+/** On login, sync AI chat state from DB. Call once after authentication. */
+export async function loadAIChatFromDB(): Promise<void> {
+  try {
+    const res = await fetch("/api/profile/me", { credentials: "include" });
+    if (!res.ok) return;
+    const data = await res.json() as { ui_preferences?: Record<string, unknown> };
+    const prefs = data?.ui_preferences ?? {};
+
+    if (typeof prefs.ai_portfolio_context === "string" && prefs.ai_portfolio_context) {
+      window.localStorage.setItem(PORTFOLIO_CONTEXT_KEY, prefs.ai_portfolio_context);
+    }
+    if (Array.isArray(prefs.ai_conversations) && prefs.ai_conversations.length > 0) {
+      window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify((prefs.ai_conversations as StoredConversation[]).slice(0, MAX_CONVERSATIONS)));
+    }
+  } catch { /* ignore */ }
 }

@@ -69,7 +69,19 @@ export default function CommunitiesView() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const dismissed = window.localStorage.getItem(INTRO_DISMISSED_KEY);
-    if (!dismissed) queueMicrotask(() => setShowIntro(true));
+    if (!dismissed) {
+      // Check DB before showing — user may have dismissed on another device
+      fetch("/api/profile/me", { credentials: "include" })
+        .then((r) => r.json())
+        .then((data: { ui_preferences?: Record<string, unknown> }) => {
+          if (data?.ui_preferences?.communities_intro_dismissed) {
+            window.localStorage.setItem(INTRO_DISMISSED_KEY, "1");
+          } else {
+            queueMicrotask(() => setShowIntro(true));
+          }
+        })
+        .catch(() => queueMicrotask(() => setShowIntro(true)));
+    }
   }, []);
 
   useEffect(() => {
@@ -86,6 +98,12 @@ export default function CommunitiesView() {
   const dismissIntro = () => {
     window.localStorage.setItem(INTRO_DISMISSED_KEY, "1");
     setShowIntro(false);
+    fetch("/api/profile/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ui_prefs_patch: { communities_intro_dismissed: true } }),
+    }).catch(() => {});
   };
 
   const introTrapRef = useFocusTrap(showIntro, dismissIntro);

@@ -1,6 +1,6 @@
 /**
  * Daily streaks: login, journal, briefing.
- * Stored in localStorage. One day = calendar day in user's local timezone.
+ * localStorage cache + Supabase sync via /api/engagement.
  */
 
 const STORAGE_KEY = "quantivtrade-streaks";
@@ -11,10 +11,9 @@ export interface StreakData {
   loginStreak: number;
   journalStreak: number;
   briefingStreak: number;
-  lastLogin: string; // YYYY-MM-DD
+  lastLogin: string;
   lastJournal: string;
   lastBriefing: string;
-  /** Last 7 days activity for each type: [today-6, ..., today] */
   loginHistory: boolean[];
   journalHistory: boolean[];
   briefingHistory: boolean[];
@@ -24,28 +23,16 @@ export interface StreakData {
 }
 
 const DEFAULT: StreakData = {
-  loginStreak: 0,
-  journalStreak: 0,
-  briefingStreak: 0,
-  lastLogin: "",
-  lastJournal: "",
-  lastBriefing: "",
+  loginStreak: 0, journalStreak: 0, briefingStreak: 0,
+  lastLogin: "", lastJournal: "", lastBriefing: "",
   loginHistory: [false, false, false, false, false, false, false],
   journalHistory: [false, false, false, false, false, false, false],
   briefingHistory: [false, false, false, false, false, false, false],
-  bestLoginStreak: 0,
-  bestJournalStreak: 0,
-  bestBriefingStreak: 0,
+  bestLoginStreak: 0, bestJournalStreak: 0, bestBriefingStreak: 0,
 };
 
 function todayKey(): string {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function yesterdayKey(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
@@ -56,20 +43,13 @@ function parseDate(key: string): Date | null {
 }
 
 function daysBetween(a: string, b: string): number {
-  const d1 = parseDate(a);
-  const d2 = parseDate(b);
+  const d1 = parseDate(a), d2 = parseDate(b);
   if (!d1 || !d2) return 999;
-  const ms = Math.abs(d2.getTime() - d1.getTime());
-  return Math.floor(ms / (24 * 60 * 60 * 1000));
+  return Math.floor(Math.abs(d2.getTime() - d1.getTime()) / (24 * 60 * 60 * 1000));
 }
 
 function updateHistory(history: boolean[], markedToday: boolean): boolean[] {
-  const today = todayKey();
   const out = [...history];
-  // Shift: we store [day-6, day-5, ..., day0] where day0 is today
-  // When we tick, we don't shift; we just set the last slot to today's activity.
-  // Simpler: keep last 7 days as [today-6 ... today]. When we load, we don't have full history,
-  // so we use the stored array and set index 6 to "did we do it today?"
   out[6] = markedToday;
   return out;
 }
@@ -77,9 +57,9 @@ function updateHistory(history: boolean[], markedToday: boolean): boolean[] {
 function getNextStreak(lastDate: string, currentStreak: number, today: string): number {
   if (!lastDate) return 1;
   const days = daysBetween(lastDate, today);
-  if (days === 0) return currentStreak; // already did today
-  if (days === 1) return currentStreak + 1; // yesterday -> increment
-  return 1; // gap -> reset
+  if (days === 0) return currentStreak;
+  if (days === 1) return currentStreak + 1;
+  return 1;
 }
 
 export function loadStreaks(): StreakData {
@@ -89,8 +69,7 @@ export function loadStreaks(): StreakData {
     if (!raw) return { ...DEFAULT };
     const parsed = JSON.parse(raw) as Partial<StreakData>;
     return {
-      ...DEFAULT,
-      ...parsed,
+      ...DEFAULT, ...parsed,
       loginHistory: Array.isArray(parsed.loginHistory) ? parsed.loginHistory : DEFAULT.loginHistory,
       journalHistory: Array.isArray(parsed.journalHistory) ? parsed.journalHistory : DEFAULT.journalHistory,
       briefingHistory: Array.isArray(parsed.briefingHistory) ? parsed.briefingHistory : DEFAULT.briefingHistory,
@@ -104,67 +83,110 @@ export function saveStreaks(data: StreakData): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // ignore
-  }
+  } catch { /* ignore */ }
+  pushStreaksToDB(data);
 }
 
-/** Call on app load to update login streak. Returns updated data and whether we crossed a milestone (7, 30, 100, 365). */
+function pushStreaksToDB(data: StreakData): void {
+  fetch("/api/engagement", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      login_streak: data.loginStreak,
+      journal_streak: data.journalStreak,
+      briefing_streak: data.briefingStreak,
+      last_login: data.lastLogin,
+      last_journal: data.lastJournal,
+      last_briefing: data.lastBriefing,
+      best_login_streak: data.bestLoginStreak,
+      best_journal_streak: data.bestJournalStreak,
+      best_briefing_streak: data.bestBriefingStreak,
+      login_history: data.loginHistory,
+      journal_history: data.journalHistory,
+      briefing_history: data.briefingHistory,
+    }),
+  }).catch(() => {});
+}
+
 export function tickLoginStreak(): { data: StreakData; milestone: number | null } {
   const today = todayKey();
   const prev = loadStreaks();
-  const newLoginStreak = getNextStreak(prev.lastLogin, prev.loginStreak, today);
-  const alreadyLoggedToday = prev.lastLogin === today;
-
+  const newStreak = getNextStreak(prev.lastLogin, prev.loginStreak, today);
+  const alreadyToday = prev.lastLogin === today;
   const data: StreakData = {
     ...prev,
-    loginStreak: alreadyLoggedToday ? prev.loginStreak : newLoginStreak,
+    loginStreak: alreadyToday ? prev.loginStreak : newStreak,
     lastLogin: today,
     loginHistory: updateHistory(prev.loginHistory, true),
-    bestLoginStreak: Math.max(prev.bestLoginStreak, alreadyLoggedToday ? prev.loginStreak : newLoginStreak),
+    bestLoginStreak: Math.max(prev.bestLoginStreak, alreadyToday ? prev.loginStreak : newStreak),
   };
   saveStreaks(data);
-  const streak = data.loginStreak;
-  const milestone = [7, 30, 100, 365].includes(streak) ? streak : null;
+  const milestone = [7, 30, 100, 365].includes(data.loginStreak) ? data.loginStreak : null;
   return { data, milestone };
 }
 
-/** Call when user logs a trade in journal. */
 export function tickJournalStreak(): { data: StreakData; milestone: number | null } {
   const today = todayKey();
   const prev = loadStreaks();
-  const newJournalStreak = getNextStreak(prev.lastJournal, prev.journalStreak, today);
-  const alreadyDidToday = prev.lastJournal === today;
-
+  const newStreak = getNextStreak(prev.lastJournal, prev.journalStreak, today);
+  const alreadyToday = prev.lastJournal === today;
   const data: StreakData = {
     ...prev,
-    journalStreak: alreadyDidToday ? prev.journalStreak : newJournalStreak,
+    journalStreak: alreadyToday ? prev.journalStreak : newStreak,
     lastJournal: today,
     journalHistory: updateHistory(prev.journalHistory, true),
-    bestJournalStreak: Math.max(prev.bestJournalStreak, alreadyDidToday ? prev.journalStreak : newJournalStreak),
+    bestJournalStreak: Math.max(prev.bestJournalStreak, alreadyToday ? prev.journalStreak : newStreak),
   };
   saveStreaks(data);
-  const streak = data.journalStreak;
-  const milestone = [7, 30, 100, 365].includes(streak) ? streak : null;
+  const milestone = [7, 30, 100, 365].includes(data.journalStreak) ? data.journalStreak : null;
   return { data, milestone };
 }
 
-/** Call when user reads morning briefing. */
 export function tickBriefingStreak(): { data: StreakData; milestone: number | null } {
   const today = todayKey();
   const prev = loadStreaks();
-  const newBriefingStreak = getNextStreak(prev.lastBriefing, prev.briefingStreak, today);
-  const alreadyDidToday = prev.lastBriefing === today;
-
+  const newStreak = getNextStreak(prev.lastBriefing, prev.briefingStreak, today);
+  const alreadyToday = prev.lastBriefing === today;
   const data: StreakData = {
     ...prev,
-    briefingStreak: alreadyDidToday ? prev.briefingStreak : newBriefingStreak,
+    briefingStreak: alreadyToday ? prev.briefingStreak : newStreak,
     lastBriefing: today,
     briefingHistory: updateHistory(prev.briefingHistory, true),
-    bestBriefingStreak: Math.max(prev.bestBriefingStreak, alreadyDidToday ? prev.briefingStreak : newBriefingStreak),
+    bestBriefingStreak: Math.max(prev.bestBriefingStreak, alreadyToday ? prev.briefingStreak : newStreak),
   };
   saveStreaks(data);
-  const streak = data.briefingStreak;
-  const milestone = [7, 30, 100, 365].includes(streak) ? streak : null;
+  const milestone = [7, 30, 100, 365].includes(data.briefingStreak) ? data.briefingStreak : null;
   return { data, milestone };
+}
+
+/** On login, load streaks from DB and update local cache. */
+export async function loadStreaksFromDB(): Promise<StreakData> {
+  try {
+    const res = await fetch("/api/engagement", { credentials: "include" });
+    if (!res.ok) return loadStreaks();
+    const json = (await res.json()) as { engagement?: Record<string, unknown> | null };
+    const e = json.engagement;
+    if (!e) return loadStreaks();
+    const data: StreakData = {
+      loginStreak: (e.login_streak as number) ?? 0,
+      journalStreak: (e.journal_streak as number) ?? 0,
+      briefingStreak: (e.briefing_streak as number) ?? 0,
+      lastLogin: (e.last_login as string) ?? "",
+      lastJournal: (e.last_journal as string) ?? "",
+      lastBriefing: (e.last_briefing as string) ?? "",
+      bestLoginStreak: (e.best_login_streak as number) ?? 0,
+      bestJournalStreak: (e.best_journal_streak as number) ?? 0,
+      bestBriefingStreak: (e.best_briefing_streak as number) ?? 0,
+      loginHistory: Array.isArray(e.login_history) ? (e.login_history as boolean[]) : DEFAULT.loginHistory,
+      journalHistory: Array.isArray(e.journal_history) ? (e.journal_history as boolean[]) : DEFAULT.journalHistory,
+      briefingHistory: Array.isArray(e.briefing_history) ? (e.briefing_history as boolean[]) : DEFAULT.briefingHistory,
+    };
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+    return data;
+  } catch {
+    return loadStreaks();
+  }
 }

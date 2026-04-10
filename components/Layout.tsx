@@ -8,7 +8,7 @@ import { useAuth } from "./AuthContext";
 import { MarketTickerBar } from "./MarketTickerBar";
 import { useTheme } from "./ThemeContext";
 import type { User } from "./AuthContext";
-import { getSidebarPrefs, saveSidebarPrefs, type SidebarPrefs } from "../lib/sidebar-preferences";
+import { loadSidebarPrefs, saveSidebarPrefs, type SidebarPrefs } from "../lib/sidebar-preferences";
 import { hasBeenWelcomed } from "../lib/briefing";
 import { SiteFooter } from "./SiteFooter";
 import { SiteHelpBot } from "./SiteHelpBot";
@@ -205,7 +205,7 @@ function NavItem({
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { user, signOut } = useAuth();
+  const { user, authLoading, signOut } = useAuth();
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -256,12 +256,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  const userId = user?.id ?? null;
+
   useEffect(() => {
-    setPrefs(getSidebarPrefs(MAIN_NAV_HREFS));
-    const onStorage = () => setPrefs(getSidebarPrefs(MAIN_NAV_HREFS));
+    loadSidebarPrefs(userId, MAIN_NAV_HREFS).then(setPrefs);
+    // Re-sync from localStorage when another tab saves (unauthenticated fallback)
+    const onStorage = () => {
+      if (!userId) loadSidebarPrefs(null, MAIN_NAV_HREFS).then(setPrefs);
+    };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  }, [userId]);
 
 
   const hiddenItems = prefs.hidden
@@ -269,9 +274,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     .filter((i): i is (typeof MAIN_NAV)[number] => i != null);
 
   const savePrefs = useCallback((next: SidebarPrefs) => {
-    setPrefs(next);
-    saveSidebarPrefs(next);
-  }, []);
+    setPrefs(next); // optimistic update — no await needed
+    saveSidebarPrefs(userId, next);
+  }, [userId]);
   const [showWelcomeOverlay, setShowWelcomeOverlay] = useState(false);
   const verified = user?.isVerified ?? false;
   const [unreadMessages, setUnreadMessages] = useState(0);
@@ -636,27 +641,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
             const tierLabel: Record<string, string> = { free: "Free", verified: "Verified", starter: "Starter", pro: "Pro", elite: "Elite" };
             const tierColor: Record<string, string> = { free: "text-zinc-500", verified: "text-blue-400", starter: "text-emerald-400", pro: "text-[var(--accent-color)]", elite: "text-amber-400" };
             const tierBg: Record<string, string> = { free: "bg-zinc-700/20", verified: "bg-blue-500/10", starter: "bg-emerald-500/10", pro: "bg-[var(--accent-color)]/10", elite: "bg-amber-500/10" };
-            if (!user) return null;
+            if (!user || collapsed) return null;
             return (
-              <div className={`mb-1 flex items-center justify-between rounded-lg px-3 py-2 ${tierBg[tier] ?? "bg-zinc-700/20"} ${collapsed ? "justify-center" : ""}`}>
-                {!collapsed && (
-                  <>
-                    <div className="min-w-0">
-                      <p className="text-[9px] uppercase tracking-wider text-zinc-600">Current Plan</p>
-                      <p className={`text-[11px] font-bold ${tierColor[tier] ?? "text-zinc-400"}`}>{tierLabel[tier] ?? "Free"}</p>
-                    </div>
-                    {tier !== "elite" && (
-                      <Link href="/pricing" onClick={() => setSidebarOpen(false)}
-                        className="shrink-0 rounded-lg bg-[var(--accent-color)]/10 px-2 py-1 text-[10px] font-semibold text-[var(--accent-color)] hover:bg-[var(--accent-color)]/20 transition">
-                        Upgrade
-                      </Link>
-                    )}
-                  </>
-                )}
-                {collapsed && (
-                  <Link href="/pricing" title={`Plan: ${tierLabel[tier] ?? "Free"}`}
-                    className={`text-[10px] font-black ${tierColor[tier] ?? "text-zinc-400"}`}>
-                    {(tierLabel[tier] ?? "F")[0]}
+              <div className={`mb-1 flex items-center justify-between rounded-lg px-3 py-2 ${tierBg[tier] ?? "bg-zinc-700/20"}`}>
+                <div className="min-w-0">
+                  <p className="text-[9px] uppercase tracking-wider text-zinc-600">Current Plan</p>
+                  <p className={`text-[11px] font-bold ${tierColor[tier] ?? "text-zinc-400"}`}>{tierLabel[tier] ?? "Free"}</p>
+                </div>
+                {tier !== "elite" && (
+                  <Link href="/pricing" onClick={() => setSidebarOpen(false)}
+                    className="shrink-0 rounded-lg bg-[var(--accent-color)]/10 px-2 py-1 text-[10px] font-semibold text-[var(--accent-color)] hover:bg-[var(--accent-color)]/20 transition">
+                    Upgrade
                   </Link>
                 )}
               </div>
@@ -966,9 +961,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <div className="my-2 h-px bg-white/10" />
                     <button
                       type="button"
-                      onClick={async () => {
+                      onClick={() => {
                         setProfileOpen(false);
-                        await signOut();
+                        signOut().catch(() => {});
                         window.location.href = "/";
                       }}
                       className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-red-400"
@@ -982,6 +977,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </div>
                 )}
               </>
+            ) : authLoading ? (
+              <div className="h-9 w-9 animate-pulse rounded-full bg-white/5" />
             ) : (
               <Link
                 href="/auth/sign-in"

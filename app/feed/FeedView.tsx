@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef, createContext, useContext } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { SiteFooter } from "../../components/SiteFooter";
 import { useAuth } from "../../components/AuthContext";
 import { getCachedBriefing, getBriefingDate, setBriefingSeen } from "../../lib/briefing";
 import { MorningBriefing } from "../../components/MorningBriefing";
@@ -11,6 +12,11 @@ import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area,
 } from "recharts";
+
+// ── Contexts ──────────────────────────────────────────────────────────────────
+
+const CustomizeModeContext = createContext(false);
+const CardSizeContext = createContext<"normal" | "large">("normal");
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -109,24 +115,32 @@ function BentoCard({ href, title, icon, children, loading=false, delay=0, classN
   children: React.ReactNode; loading?: boolean; delay?: number; className?: string;
 }) {
   const router = useRouter();
+  const customizeMode = useContext(CustomizeModeContext);
   const [hovered, setHovered] = useState(false);
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.35, ease: "easeOut" }}
-      whileHover={{ scale: 1.012, transition: { duration: 0.15 } }}
+      whileHover={customizeMode ? undefined : { scale: 1.012, transition: { duration: 0.15 } }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={() => router.push(href)}
-      style={{ boxShadow: hovered ? "0 0 16px color-mix(in srgb, var(--accent-color) 12%, transparent)" : "none", transition: "box-shadow 0.15s ease" }}
-      className={`cursor-pointer overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card-alt)] ${className}`}
+      onClick={customizeMode ? undefined : () => router.push(href)}
+      style={{ boxShadow: hovered && !customizeMode ? "0 0 16px color-mix(in srgb, var(--accent-color) 12%, transparent)" : "none", transition: "box-shadow 0.15s ease" }}
+      className={`h-full overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card-alt)] ${customizeMode ? "" : "cursor-pointer"} ${className}`}
     >
       <div className="flex items-center justify-between px-4 pt-3 pb-1.5">
         <div className="flex items-center gap-2">
+          {customizeMode && (
+            <span className="text-zinc-600">
+              <svg viewBox="0 0 16 16" fill="currentColor" className="h-3 w-3"><circle cx="4" cy="4" r="1.5"/><circle cx="12" cy="4" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="12" cy="8" r="1.5"/><circle cx="4" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/></svg>
+            </span>
+          )}
           <span className="flex h-4 w-4 items-center justify-center text-zinc-600">{icon}</span>
           <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{title}</span>
         </div>
-        <Link href={href} onClick={e => e.stopPropagation()} className="text-xs text-zinc-700 hover:text-[var(--accent-color)]">→</Link>
+        {!customizeMode && (
+          <Link href={href} onClick={e => e.stopPropagation()} className="text-xs text-zinc-700 hover:text-[var(--accent-color)]">→</Link>
+        )}
       </div>
       <div className="px-4 pb-4">
         {loading ? (
@@ -141,6 +155,362 @@ function BentoCard({ href, title, icon, children, loading=false, delay=0, classN
 
 function Skel({ n=3 }:{n?:number}) {
   return <div className="space-y-2 pt-1">{Array.from({length:n}).map((_,i)=><div key={i} className="h-3 animate-pulse rounded bg-white/5" style={{width:`${88-i*10}%`}}/>)}</div>;
+}
+
+// ── Card registry + layout types ─────────────────────────────────────────────
+
+type ColId = "left" | "center" | "right";
+type FeedCard = { id: string; col: ColId; order: number; size: "normal" | "large"; hidden?: boolean };
+
+const CARD_REGISTRY: { id: string; name: string; h: number }[] = [
+  { id: "bond-yield-curve",   name: "Bond Yield Curve",    h: 360 },
+  { id: "globe",              name: "Globe / Markets",     h: 320 },
+  { id: "forex",              name: "Forex",               h: 260 },
+  { id: "futures",            name: "Futures",             h: 230 },
+  { id: "ceo-alerts",         name: "CEO Alerts",          h: 230 },
+  { id: "messages",           name: "Messages",            h: 210 },
+  { id: "price-alerts",       name: "Price Alerts",        h: 210 },
+  { id: "journal",            name: "Trade Journal",       h: 210 },
+  { id: "trade-rooms",        name: "Trade Rooms",         h: 210 },
+  { id: "communities",        name: "Communities",         h: 210 },
+  { id: "social-feed",        name: "Social Feed",         h: 460 },
+  { id: "live-chart",         name: "Live Chart",          h: 360 },
+  { id: "insider-trades",     name: "Insider Trades",      h: 260 },
+  { id: "fiscal-watch",       name: "Fiscal Watch",        h: 260 },
+  { id: "crypto",             name: "Crypto",              h: 250 },
+  { id: "data-hub",           name: "Data Hub",            h: 210 },
+  { id: "supply-chain",       name: "Supply Chain",        h: 210 },
+  { id: "workspace",          name: "AI Workspace",        h: 190 },
+  { id: "archive",            name: "Archive",             h: 210 },
+  { id: "backtest",           name: "Backtest",            h: 210 },
+  { id: "market-news",        name: "Market News",         h: 360 },
+  { id: "watchlist",          name: "Watchlist",           h: 260 },
+  { id: "portfolios",         name: "Portfolios",          h: 260 },
+  { id: "top-movers",         name: "Top Movers",          h: 230 },
+  { id: "market-rates",       name: "Market Rates",        h: 230 },
+  { id: "screener",           name: "Screener",            h: 260 },
+  { id: "economic-calendar",  name: "Economic Calendar",   h: 290 },
+  { id: "sentiment-radar",    name: "Sentiment Radar",     h: 290 },
+  { id: "prediction-markets", name: "Prediction Markets",  h: 260 },
+  { id: "market-relations",   name: "Market Relations",    h: 230 },
+];
+
+// Height-balanced default: greedy bin-packing assigns each card to shortest column,
+// keeping thematic groupings (left=tools, center=main, right=market data).
+// Result: left≈2450px, center≈2620px, right≈2670px — max variance 130px.
+const DEFAULT_LAYOUT: FeedCard[] = [
+  // ── Left column ──
+  { id: "bond-yield-curve",   col: "left",   order: 0,  size: "normal" },
+  { id: "globe",              col: "left",   order: 1,  size: "normal" },
+  { id: "forex",              col: "left",   order: 2,  size: "normal" },
+  { id: "futures",            col: "left",   order: 3,  size: "normal" },
+  { id: "ceo-alerts",         col: "left",   order: 4,  size: "normal" },
+  { id: "messages",           col: "left",   order: 5,  size: "normal" },
+  { id: "price-alerts",       col: "left",   order: 6,  size: "normal" },
+  { id: "journal",            col: "left",   order: 7,  size: "normal" },
+  { id: "trade-rooms",        col: "left",   order: 8,  size: "normal" },
+  { id: "communities",        col: "left",   order: 9,  size: "normal" },
+  { id: "backtest",           col: "left",   order: 10, size: "normal" },
+  // ── Center column ──
+  { id: "social-feed",        col: "center", order: 0,  size: "normal" },
+  { id: "live-chart",         col: "center", order: 1,  size: "normal" },
+  { id: "insider-trades",     col: "center", order: 2,  size: "normal" },
+  { id: "fiscal-watch",       col: "center", order: 3,  size: "normal" },
+  { id: "crypto",             col: "center", order: 4,  size: "normal" },
+  { id: "data-hub",           col: "center", order: 5,  size: "normal" },
+  { id: "supply-chain",       col: "center", order: 6,  size: "normal" },
+  { id: "workspace",          col: "center", order: 7,  size: "normal" },
+  { id: "archive",            col: "center", order: 8,  size: "normal" },
+  // ── Right column ──
+  { id: "market-news",        col: "right",  order: 0,  size: "normal" },
+  { id: "watchlist",          col: "right",  order: 1,  size: "normal" },
+  { id: "portfolios",         col: "right",  order: 2,  size: "normal" },
+  { id: "top-movers",         col: "right",  order: 3,  size: "normal" },
+  { id: "market-rates",       col: "right",  order: 4,  size: "normal" },
+  { id: "screener",           col: "right",  order: 5,  size: "normal" },
+  { id: "economic-calendar",  col: "right",  order: 6,  size: "normal" },
+  { id: "sentiment-radar",    col: "right",  order: 7,  size: "normal" },
+  { id: "prediction-markets", col: "right",  order: 8,  size: "normal" },
+  { id: "market-relations",   col: "right",  order: 9,  size: "normal" },
+];
+
+function useFeedLayout() {
+  const [cards, setCards] = useState<FeedCard[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_LAYOUT;
+    try {
+      const raw = localStorage.getItem("feed_layout_v2");
+      if (!raw) return DEFAULT_LAYOUT;
+      const saved = JSON.parse(raw) as FeedCard[];
+      const savedIds = new Set(saved.map((c) => c.id));
+      const merged = [...saved];
+      for (const def of DEFAULT_LAYOUT) {
+        if (!savedIds.has(def.id)) merged.push({ ...def });
+      }
+      return merged;
+    } catch { return DEFAULT_LAYOUT; }
+  });
+
+  useEffect(() => {
+    fetch("/api/profile/me", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data: { ui_preferences?: Record<string, unknown> }) => {
+        const db = data?.ui_preferences?.feed_layout_v2;
+        if (Array.isArray(db) && db.length > 0) {
+          const parsed = db as FeedCard[];
+          const savedIds = new Set(parsed.map((c) => c.id));
+          const merged = [...parsed];
+          for (const def of DEFAULT_LAYOUT) {
+            if (!savedIds.has(def.id)) merged.push({ ...def });
+          }
+          setCards(merged);
+          try { localStorage.setItem("feed_layout_v2", JSON.stringify(merged)); } catch { /* ignore */ }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const persist = useCallback((next: FeedCard[]) => {
+    try { localStorage.setItem("feed_layout_v2", JSON.stringify(next)); } catch { /* ignore */ }
+    fetch("/api/profile/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ui_prefs_patch: { feed_layout_v2: next } }),
+    }).catch(() => {});
+  }, []);
+
+  const moveCard = useCallback((cardId: string, toCol: ColId, afterCardId: string | null) => {
+    setCards((prev) => {
+      const next = prev.map((c) => ({ ...c }));
+      const card = next.find((c) => c.id === cardId);
+      if (!card) return prev;
+      card.col = toCol;
+      const colCards = next
+        .filter((c) => c.col === toCol && c.id !== cardId)
+        .sort((a, b) => a.order - b.order);
+      if (afterCardId === null) {
+        card.order = -1;
+      } else {
+        const afterIdx = colCards.findIndex((c) => c.id === afterCardId);
+        card.order = afterIdx >= 0 ? colCards[afterIdx].order + 0.5 : colCards.length;
+      }
+      next.filter((c) => c.col === toCol).sort((a, b) => a.order - b.order).forEach((c, i) => { c.order = i; });
+      try { localStorage.setItem("feed_layout_v2", JSON.stringify(next)); } catch { /* ignore */ }
+      fetch("/api/profile/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ui_prefs_patch: { feed_layout_v2: next } }),
+      }).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const toggleHidden = useCallback((cardId: string) => {
+    setCards((prev) => {
+      const next = prev.map((c) => c.id === cardId ? { ...c, hidden: !c.hidden } : c);
+      persist(next);
+      return next;
+    });
+  }, [persist]);
+
+  const toggleSize = useCallback((cardId: string) => {
+    setCards((prev) => {
+      const next = prev.map((c) => c.id === cardId ? { ...c, size: c.size === "large" ? "normal" as const : "large" as const } : c);
+      persist(next);
+      return next;
+    });
+  }, [persist]);
+
+  const reset = useCallback(() => { const next = [...DEFAULT_LAYOUT]; setCards(next); persist(next); }, [persist]);
+
+  const clearAll = useCallback(() => {
+    setCards((prev) => {
+      const next = prev.map((c) => ({ ...c, hidden: true }));
+      persist(next);
+      return next;
+    });
+  }, [persist]);
+
+  return { cards, moveCard, toggleHidden, toggleSize, reset, clearAll };
+}
+
+function DropZone({ onDrop, customizeMode, anyDragging }: { onDrop: () => void; customizeMode: boolean; anyDragging: boolean }) {
+  const [over, setOver] = useState(false);
+  if (!customizeMode) return null;
+  return (
+    <div
+      className={`transition-all duration-150 rounded-xl ${
+        over
+          ? "h-14 border-2 border-dashed border-[var(--accent-color)]/60 bg-[var(--accent-color)]/8"
+          : anyDragging
+            ? "h-10 border border-dashed border-white/15"
+            : "h-2"
+      }`}
+      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver(true); }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setOver(false); onDrop(); }}
+    />
+  );
+}
+
+function CustomizePanel({ cards, onToggleHidden, onToggleSize, onMoveCard, onReset, onClearAll, onClose }: {
+  cards: FeedCard[];
+  onToggleHidden: (id: string) => void;
+  onToggleSize: (id: string) => void;
+  onMoveCard: (cardId: string, toCol: ColId, afterCardId: string | null) => void;
+  onReset: () => void;
+  onClearAll: () => void;
+  onClose: () => void;
+}) {
+  const cols: ColId[] = ["left", "center", "right"];
+  const colLabels: Record<ColId, string> = { left: "Left", center: "Center", right: "Right" };
+  const [panelDragId, setPanelDragId] = useState<string | null>(null);
+  // { id: card being hovered, after: true = insert below it, false = insert above it }
+  const [panelOver, setPanelOver] = useState<{ id: string; after: boolean } | null>(null);
+
+  const commitDrop = (toCol: ColId, afterCardId: string | null) => {
+    if (!panelDragId) return;
+    onMoveCard(panelDragId, toCol, afterCardId);
+    setPanelDragId(null);
+    setPanelOver(null);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.18 }}
+      className="mb-5 rounded-2xl border border-white/10 bg-[var(--app-card)] p-5"
+    >
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-200">Customize Dashboard</h2>
+          <p className="mt-0.5 text-[11px] text-zinc-500">
+            Drag to reorder · <span className="text-zinc-400">●</span> = visible, <span className="text-zinc-600">●</span> = hidden · <span className="text-zinc-400">S/T</span> = standard/tall height
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onClearAll}
+            title="Hide all cards for a blank dashboard"
+            className="rounded-lg px-3 py-1.5 text-xs text-zinc-500 hover:bg-white/5 hover:text-zinc-300 border border-white/5"
+          >
+            Blank
+          </button>
+          <button
+            onClick={onReset}
+            className="rounded-lg px-3 py-1.5 text-xs text-zinc-500 hover:bg-white/5 hover:text-zinc-300 border border-white/5"
+          >
+            Reset
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-lg px-3 py-1.5 text-xs text-zinc-200 bg-white/5 hover:bg-white/10"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {cols.map((col) => {
+          const colCards = cards
+            .filter((c) => c.col === col)
+            .sort((a, b) => a.order - b.order);
+          return (
+            <div
+              key={col}
+              // fallback: drag over empty space in column → append to end
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (panelDragId && !panelOver) {
+                  const lastId = cards
+                    .filter((c) => c.col === col && c.id !== panelDragId)
+                    .sort((a, b) => a.order - b.order)
+                    .at(-1)?.id ?? null;
+                  commitDrop(col, lastId);
+                }
+              }}
+              className="rounded-xl p-2"
+            >
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{colLabels[col]}</p>
+              <div className="flex flex-col">
+                {colCards.map((card, idx) => {
+                  const reg = CARD_REGISTRY.find((r) => r.id === card.id);
+                  const isDragging = panelDragId === card.id;
+                  const isOverTop = panelOver?.id === card.id && !panelOver.after;
+                  const isOverBottom = panelOver?.id === card.id && panelOver.after;
+                  const prevCard = idx > 0 ? colCards[idx - 1] : null;
+                  return (
+                    <div
+                      key={card.id}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+                        const after = e.clientY > rect.top + rect.height / 2;
+                        setPanelOver({ id: card.id, after });
+                      }}
+                      onDragLeave={(e) => {
+                        if (!e.currentTarget.contains(e.relatedTarget as Node)) setPanelOver(null);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!panelDragId) return;
+                        const over = panelOver;
+                        if (!over || over.id !== card.id) return;
+                        const afterId = over.after ? card.id : (prevCard?.id ?? null);
+                        commitDrop(col, afterId);
+                      }}
+                      onClick={() => onToggleHidden(card.id)}
+                      className={`relative flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-xs transition-all select-none ${
+                        isDragging ? "opacity-30" : card.hidden ? "opacity-40 hover:opacity-60" : "bg-white/[0.04] hover:bg-white/[0.09]"
+                      } ${isOverTop ? "border-t-2 border-[var(--accent-color)]" : "border-t-2 border-transparent"} ${isOverBottom ? "border-b-2 border-[var(--accent-color)]" : "border-b-2 border-transparent"}`}
+                    >
+                      {/* Drag handle — only this element is draggable */}
+                      <div
+                        draggable
+                        onDragStart={(e) => { e.stopPropagation(); setPanelDragId(card.id); e.dataTransfer.effectAllowed = "move"; }}
+                        onDragEnd={() => { setPanelDragId(null); setPanelOver(null); }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="shrink-0 cursor-grab active:cursor-grabbing p-0.5"
+                      >
+                        <svg className="h-3 w-3 text-zinc-600" fill="currentColor" viewBox="0 0 16 16">
+                          <circle cx="5" cy="4" r="1.2"/><circle cx="11" cy="4" r="1.2"/>
+                          <circle cx="5" cy="8" r="1.2"/><circle cx="11" cy="8" r="1.2"/>
+                          <circle cx="5" cy="12" r="1.2"/><circle cx="11" cy="12" r="1.2"/>
+                        </svg>
+                      </div>
+                      <span className={`flex-1 truncate ${card.hidden ? "text-zinc-600 line-through" : "text-zinc-300"}`}>
+                        {reg?.name ?? card.id}
+                      </span>
+                      {/* Height toggle */}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onToggleSize(card.id); }}
+                        title={card.size === "large" ? "Tall — click for standard height" : "Standard — click for tall height"}
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
+                          card.size === "large"
+                            ? "bg-[var(--accent-color)]/20 text-[var(--accent-color)]"
+                            : "text-zinc-600 hover:text-zinc-400"
+                        }`}
+                      >
+                        {card.size === "large" ? "Tall" : "Standard"}
+                      </button>
+                    </div>
+                  );
+                })}
+                {colCards.length === 0 && (
+                  <p className="px-2 py-3 text-center text-[10px] text-zinc-700">Drop a card here</p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </motion.div>
+  );
 }
 
 // ── Ambient / overlay components ──────────────────────────────────────────────
@@ -228,7 +598,7 @@ function MarketOpenFlash() {
 
 // ── Dashboard Header ──────────────────────────────────────────────────────────
 
-function DashboardHeader() {
+function DashboardHeader({ onCustomize }: { onCustomize: () => void }) {
   const { user } = useAuth();
   const [now, setNow] = useState(new Date());
   const [showBriefing, setShowBriefing] = useState(false);
@@ -257,12 +627,22 @@ function DashboardHeader() {
             {now.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})} · {now.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"})}
           </p>
         </div>
-        <button
-          onClick={() => setShowBriefing(true)}
-          className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-[var(--app-card)] px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)]"
-        >
-          Morning Briefing
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onCustomize}
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)]"
+            title="Customize dashboard"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 1 1-3 0m3 0a1.5 1.5 0 1 0-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m-9.75 0h9.75" /></svg>
+            Customize
+          </button>
+          <button
+            onClick={() => setShowBriefing(true)}
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-[var(--app-card)] px-4 py-2.5 text-sm font-medium text-zinc-200 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/5 hover:text-[var(--accent-color)]"
+          >
+            Morning Briefing
+          </button>
+        </div>
       </motion.div>
     </>
   );
@@ -298,8 +678,10 @@ function BondYieldCurveCard({delay}:{delay:number}) {
     });
   },[history]);
 
+  const cardSize = useContext(CardSizeContext);
+  const chartH = cardSize === "large" ? 460 : 285;
   return (
-    <BentoCard href="/bonds" title="Treasury Yields · 30 Days" icon={I.trendingUp} delay={delay} loading={loading} className="h-[380px]">
+    <BentoCard href="/bonds" title="Treasury Yields · 30 Days" icon={I.trendingUp} delay={delay} loading={loading} className={cardSize === "large" ? "" : "h-[380px]"}>
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${inverted?"bg-red-500/20 text-red-400":"bg-emerald-500/20 text-emerald-400"}`}>{inverted?"Inverted":"Normal"}</span>
         {spread!=null&&<span className="text-[10px] text-zinc-500">2s10s: <span className={spread<0?"text-red-400":"text-zinc-300"}>{spread>=0?"+":""}{spread.toFixed(2)}%</span></span>}
@@ -313,7 +695,7 @@ function BondYieldCurveCard({delay}:{delay:number}) {
         </div>
       </div>
       {chartData.length>0?(
-        <ResponsiveContainer width="100%" height={285}>
+        <ResponsiveContainer width="100%" height={chartH}>
           <LineChart data={chartData} margin={{top:4,right:4,bottom:0,left:-22}}>
             <XAxis dataKey="date" tick={{fill:"#52525b",fontSize:8,dy:6}} axisLine={false} tickLine={false} tickFormatter={v=>String(v).slice(5)} interval="preserveStartEnd"/>
             <YAxis tick={{fill:"#52525b",fontSize:9}} axisLine={false} tickLine={false} domain={["auto","auto"]}/>
@@ -325,7 +707,7 @@ function BondYieldCurveCard({delay}:{delay:number}) {
           </LineChart>
         </ResponsiveContainer>
       ):(
-        <div className="flex h-[285px] items-center justify-center text-xs text-zinc-600">Yield history unavailable</div>
+        <div className="flex items-center justify-center text-xs text-zinc-600" style={{height:chartH}}>Yield history unavailable</div>
       )}
     </BentoCard>
   );
@@ -336,10 +718,11 @@ function BondYieldCurveCard({delay}:{delay:number}) {
 function CEOAlertsCard({delay}:{delay:number}) {
   const [alerts,setAlerts] = useState<any[]>([]);
   const [loading,setLoading] = useState(true);
+  const cardSize = useContext(CardSizeContext);
   useEffect(()=>{
     const load=()=>fetch("/api/ceo-alerts").then(r=>r.json()).then(d=>{
       const items=Array.isArray(d)?d:d?.alerts??[];
-      setAlerts(items.slice(0,5));
+      setAlerts(items.slice(0,10));
     }).catch(()=>{});
     load();setLoading(false);
     const id=setInterval(load,5*60*1000);return()=>clearInterval(id);
@@ -348,7 +731,7 @@ function CEOAlertsCard({delay}:{delay:number}) {
     <BentoCard href="/ceos" title="CEO Alerts" icon={I.building} delay={delay} loading={loading} className="min-h-[260px]">
       {alerts.length===0?<p className="pt-1 text-xs text-zinc-600">No recent CEO alerts</p>:(
         <ul className="space-y-2.5 pt-1">
-          {alerts.map((a,i)=>(
+          {alerts.slice(0, cardSize === "large" ? 10 : 5).map((a,i)=>(
             <li key={i} className="border-b border-white/5 pb-2 last:border-0 last:pb-0">
               <p className="line-clamp-2 text-xs font-medium leading-snug text-zinc-300">{a.title}</p>
               <div className="mt-0.5 flex items-center gap-2 text-[10px] text-zinc-600">
@@ -712,6 +1095,7 @@ function InsiderTradesCard({delay}:{delay:number}) {
   const [trades,setTrades] = useState<any[]>([]);
   const [todayCount,setTodayCount] = useState(0);
   const [loading,setLoading] = useState(true);
+  const cardSize = useContext(CardSizeContext);
 
   useEffect(()=>{
     fetch("/api/insider-trades/congress").then(r=>r.json()).then(d=>{
@@ -719,7 +1103,7 @@ function InsiderTradesCard({delay}:{delay:number}) {
       const items:any[]=Array.isArray(d)?d:d?.trades??[];
       const today=new Date().toISOString().slice(0,10);
       setTodayCount(items.filter((t:any)=>(t.tradeDate??"").startsWith(today)).length);
-      setTrades(items.slice(0,5));
+      setTrades(items.slice(0,10));
     }).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
 
@@ -733,7 +1117,7 @@ function InsiderTradesCard({delay}:{delay:number}) {
       )}
       {trades.length===0?<Skel n={5}/>:(
         <ul className="space-y-2 pt-1">
-          {trades.map((t:any,i:number)=>{
+          {trades.slice(0, cardSize === "large" ? 10 : 5).map((t:any,i:number)=>{
             const buy=(t.transaction??"").toLowerCase().includes("purchase")||(t.transaction??"").toLowerCase().includes("buy");
             const gl:number|null=t.priceChange??null;
             const glUp=gl!=null&&gl>=0;
@@ -813,11 +1197,12 @@ function MarketNewsCard({delay}:{delay:number}) {
   const [news,setNews] = useState<NewsItem[]>([]);
   const [loading,setLoading] = useState(true);
   const [geo,setGeo] = useState(false);
+  const cardSize = useContext(CardSizeContext);
   const load=useCallback((isGeo:boolean)=>{
     setLoading(true);
     fetch(`/api/news?category=${isGeo?"geopolitical":"all"}`).then(r=>r.json()).then(d=>{
       const items=Array.isArray(d)?d:d?.articles??d?.news??[];
-      setNews(items.slice(0,7));
+      setNews(items.slice(0,14));
     }).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
   useEffect(()=>{load(geo);const id=setInterval(()=>load(geo),5*60*1000);return()=>clearInterval(id);},[geo,load]);
@@ -833,7 +1218,7 @@ function MarketNewsCard({delay}:{delay:number}) {
       </div>
       {news.length===0?<Skel n={6}/>:(
         <ul className="space-y-3">
-          {news.map((n,i)=>(
+          {news.slice(0, cardSize === "large" ? 14 : 7).map((n,i)=>(
             <li key={i} className="border-b border-white/5 pb-3 last:border-0 last:pb-0">
               <a href={n.url} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} className="block">
                 <p className="line-clamp-2 text-xs font-medium leading-snug text-zinc-300 hover:text-[var(--accent-color)] transition-colors">{n.title}</p>
@@ -854,12 +1239,13 @@ function WatchlistCard({delay}:{delay:number}) {
   const [items,setItems] = useState<WatchItem[]>([]);
   const [loading,setLoading] = useState(true);
 
+  const cardSize = useContext(CardSizeContext);
   const load=useCallback(async()=>{
     if(!user){setLoading(false);return;}
     try{
       const {fetchWatchlistWithStatus}=await import("../../lib/watchlist-api");
       const {items:wl}=await fetchWatchlistWithStatus();
-      const tickers=wl.slice(0,6).map((w:any)=>w.ticker);
+      const tickers=wl.slice(0,12).map((w:any)=>w.ticker);
       const out:Record<string,Q>={};
       await Promise.allSettled(tickers.map(async(sym:string)=>{
         const r=await fetch(`/api/ticker-quote?ticker=${encodeURIComponent(sym)}`);
@@ -876,7 +1262,7 @@ function WatchlistCard({delay}:{delay:number}) {
     <BentoCard href="/watchlist" title="My Watchlist" icon={I.star} delay={delay} loading={loading} className="min-h-[260px]">
       {items.length===0?<p className="pt-1 text-xs text-zinc-600">{user?"Add tickers to your watchlist":"Sign in to see watchlist"}</p>:(
         <ul className="space-y-1 pt-1">
-          {items.map(item=>{const up=(item.changePercent??0)>=0;return(
+          {items.slice(0, cardSize === "large" ? 12 : 6).map(item=>{const up=(item.changePercent??0)>=0;return(
             <li key={item.ticker} onClick={e=>{e.stopPropagation();window.location.assign(`/search/${encodeURIComponent(item.ticker)}`);}}
               className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-white/5 cursor-pointer">
               <span className="text-sm font-bold text-zinc-200">{item.ticker}</span>
@@ -932,16 +1318,17 @@ function EconomicCalendarCard({delay}:{delay:number}) {
       const items:EconEvent[]=Array.isArray(d)?d:d?.economic??d?.events??[];
       const todayStr=today.toISOString().slice(0,10);
       // Prefer upcoming, fall back to most recent past events if none upcoming
-      const upcoming=items.filter((e:any)=>e?.date&&e.date>=todayStr).slice(0,5);
-      setEvents(upcoming.length>0?upcoming:items.slice(-4));
+      const upcoming=items.filter((e:any)=>e?.date&&e.date>=todayStr).slice(0,10);
+      setEvents(upcoming.length>0?upcoming:items.slice(-8));
     }).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
+  const cardSize = useContext(CardSizeContext);
   const dot=(impact:string)=>impact==="HIGH"?"bg-red-500":impact==="MEDIUM"?"bg-amber-500":"bg-emerald-500";
   return (
     <BentoCard href="/calendar" title="Economic Calendar" icon={I.calendar} delay={delay} loading={loading} className="min-h-[200px]">
       {events.length===0?<p className="pt-1 text-xs text-zinc-600">No events · check back soon</p>:(
         <ul className="space-y-2.5 pt-1">
-          {events.map(ev=>(
+          {events.slice(0, cardSize === "large" ? 10 : 5).map(ev=>(
             <li key={ev.id} className="flex items-start gap-2.5">
               <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot(ev.impact)}`}/>
               <div className="min-w-0">
@@ -1602,36 +1989,6 @@ function ArchiveCard({delay}:{delay:number}) {
   );
 }
 
-// ── Standalone: Marketplace ───────────────────────────────────────────────────
-
-function MarketplaceCard({delay}:{delay:number}) {
-  const [listings,setListings] = useState<{id:string;title:string;price:number;price_type:string;seller?:{username:string}|null}[]>([]);
-  const [loading,setLoading] = useState(true);
-  useEffect(()=>{
-    fetch("/api/marketplace/listings?sort=popular&limit=4").then(r=>r.ok?r.json():null).then(d=>{
-      setListings((d?.listings??[]).slice(0,4));
-    }).catch(()=>{}).finally(()=>setLoading(false));
-  },[]);
-  return (
-    <BentoCard href="/marketplace" title="Marketplace" icon={I.dollarSign} delay={delay} loading={loading} className="min-h-[180px]">
-      {listings.length===0?<p className="pt-1 text-xs text-zinc-600">No listings yet</p>:(
-        <ul className="space-y-2 pt-1">
-          {listings.map((l,i)=>(
-            <li key={l.id??i} className="flex items-center justify-between gap-2 border-b border-white/5 pb-2 last:border-0 last:pb-0">
-              <div className="min-w-0">
-                <p className="truncate text-xs font-medium text-zinc-300">{l.title}</p>
-                <p className="text-[10px] text-zinc-600">@{l.seller?.username??"Seller"}</p>
-              </div>
-              <span className="shrink-0 text-[10px] font-bold text-[var(--accent-color)]">
-                {l.price_type==="free"||l.price===0?"Free":`$${l.price}`}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </BentoCard>
-  );
-}
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
@@ -1639,62 +1996,152 @@ export default function BentoDashboardView() {
   const { scrollY } = useScroll();
   const leftY  = useTransform(scrollY, [0,1000], [0,-40]);
   const rightY = useTransform(scrollY, [0,1000], [0, 40]);
+  const { cards, moveCard, toggleHidden, toggleSize, reset, clearAll } = useFeedLayout();
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [dragCardId, setDragCardId] = useState<string | null>(null);
+
+  const colCards = useCallback((col: ColId) =>
+    cards.filter((c) => c.col === col && !c.hidden).sort((a, b) => a.order - b.order),
+  [cards]);
+
+  const handleDrop = useCallback((toCol: ColId, afterCardId: string | null) => {
+    if (!dragCardId) return;
+    // no-op guard: skip if card is already immediately after afterCardId in toCol
+    const col = colCards(toCol);
+    const dragIdx = col.findIndex((c) => c.id === dragCardId);
+    const afterIdx = afterCardId ? col.findIndex((c) => c.id === afterCardId) : -1;
+    const alreadyInPlace =
+      dragIdx !== -1 &&
+      (afterCardId === null ? dragIdx === col.length - 1 : afterIdx === dragIdx - 1);
+    if (alreadyInPlace) { setDragCardId(null); return; }
+    moveCard(dragCardId, toCol, afterCardId);
+    setDragCardId(null);
+  }, [dragCardId, colCards, moveCard]);
+
+  const renderCol = (col: ColId) => {
+    const visible = colCards(col);
+    const nodes: React.ReactNode[] = [];
+    visible.forEach((card, idx) => {
+      const cardDelay = idx * 0.03;
+      const prevId = idx > 0 ? visible[idx - 1].id : null;
+      const tall = card.size === "large";
+
+      const inner = (() => {
+        switch (card.id) {
+          case "bond-yield-curve":   return <BondYieldCurveCard delay={cardDelay} />;
+          case "globe":              return <GlobeCard delay={cardDelay} />;
+          case "forex":              return <ForexCard delay={cardDelay} />;
+          case "futures":            return <FuturesCard delay={cardDelay} />;
+          case "ceo-alerts":         return <CEOAlertsCard delay={cardDelay} />;
+          case "messages":           return <MessagesCard delay={cardDelay} />;
+          case "price-alerts":       return <PriceAlertsCard delay={cardDelay} />;
+          case "journal":            return <JournalCard delay={cardDelay} />;
+          case "trade-rooms":        return <TradeRoomsCard delay={cardDelay} />;
+          case "communities":        return <CommunitiesCard delay={cardDelay} />;
+          case "backtest":           return <BacktestCard delay={cardDelay} />;
+          case "social-feed":        return <SocialFeedCard delay={cardDelay} />;
+          case "live-chart":         return <LiveChartCard delay={cardDelay} />;
+          case "insider-trades":     return <InsiderTradesCard delay={cardDelay} />;
+          case "fiscal-watch":       return <FiscalWatchCard delay={cardDelay} />;
+          case "crypto":             return <CryptoCard delay={cardDelay} />;
+          case "data-hub":           return <DataHubCard delay={cardDelay} />;
+          case "supply-chain":       return <SupplyChainCard delay={cardDelay} />;
+          case "workspace":          return <WorkspaceCard delay={cardDelay} />;
+          case "archive":            return <ArchiveCard delay={cardDelay} />;
+          case "market-news":        return <MarketNewsCard delay={cardDelay} />;
+          case "watchlist":          return <WatchlistCard delay={cardDelay} />;
+          case "portfolios":         return <PortfoliosCard delay={cardDelay} />;
+          case "top-movers":         return <TopMoversCard delay={cardDelay} />;
+          case "market-rates":       return <MarketRatesCard delay={cardDelay} />;
+          case "screener":           return <ScreenerPreviewCard delay={cardDelay} />;
+          case "economic-calendar":  return <EconomicCalendarCard delay={cardDelay} />;
+          case "sentiment-radar":    return <SentimentRadarCard delay={cardDelay} />;
+          case "prediction-markets": return <PredictionMarketsCard delay={cardDelay} />;
+          case "market-relations":   return <MarketRelationsCard delay={cardDelay} />;
+          default: return null;
+        }
+      })();
+
+      if (!inner) return;
+
+      // DropZone is a direct flex sibling — same level as the card, uniform gap-1 spacing
+      nodes.push(
+        <DropZone key={`dz-${card.id}`} onDrop={() => handleDrop(col, prevId)} customizeMode={customizeOpen} anyDragging={!!dragCardId} />
+      );
+      nodes.push(
+        <div
+          key={card.id}
+          draggable={customizeOpen}
+          onDragStart={customizeOpen ? (e) => { setDragCardId(card.id); e.dataTransfer.effectAllowed = "move"; } : undefined}
+          onDragEnd={() => setDragCardId(null)}
+          className={`${tall ? "flex flex-col min-h-[480px]" : ""} ${customizeOpen ? "cursor-grab active:cursor-grabbing" : ""} ${dragCardId === card.id ? "opacity-40" : ""} transition-opacity`}
+        >
+          <CardSizeContext.Provider value={card.size}>
+            {inner}
+          </CardSizeContext.Provider>
+        </div>
+      );
+    });
+    return nodes;
+  };
 
   return (
-    <div className="relative overflow-x-hidden p-4 pb-16 md:p-6 md:pb-20" style={{ backgroundColor: "#070B14" }}>
+    <div className="relative overflow-x-hidden" style={{ backgroundColor: "#070B14" }}>
       <ParallaxGrid />
       <AmbientParticles />
-      <div className="relative z-[1]">
-      <DashboardHeader />
-      <MarketOpenFlash />
+      <div className="relative z-[1] p-4 pb-8 md:p-6 md:pb-10">
+        <DashboardHeader onCustomize={() => setCustomizeOpen((v) => !v)} />
+        <MarketOpenFlash />
+        {customizeOpen && (
+          <CustomizePanel
+            cards={cards}
+            onToggleHidden={toggleHidden}
+            onToggleSize={toggleSize}
+            onMoveCard={moveCard}
+            onReset={reset}
+            onClearAll={clearAll}
+            onClose={() => setCustomizeOpen(false)}
+          />
+        )}
 
-      <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,28%)_minmax(0,1fr)_minmax(0,28%)]">
+        <CustomizeModeContext.Provider value={customizeOpen}>
+          <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,28%)_minmax(0,1fr)_minmax(0,28%)]">
 
-        {/* ── LEFT COLUMN ── */}
-        <motion.div className="flex min-w-0 flex-col gap-4" style={{ y: leftY }} initial={{x:-10}} animate={{x:0}} transition={{duration:0.55,ease:"easeOut"}}>
-          <BondYieldCurveCard delay={0.05} />
-          <GlobeCard          delay={0.08} />
-          <ForexCard          delay={0.10} />
-          <FuturesCard        delay={0.12} />
-          <CEOAlertsCard      delay={0.14} />
-          <MessagesCard       delay={0.17} />
-          <PriceAlertsCard    delay={0.20} />
-          <JournalCard        delay={0.22} />
-          <TradeRoomsCard     delay={0.25} />
-          <CommunitiesCard    delay={0.27} />
-          <DataHubCard        delay={0.29} />
-          <SupplyChainCard    delay={0.31} />
-          <WorkspaceCard      delay={0.33} />
-          <ArchiveCard        delay={0.35} />
-          <MarketplaceCard    delay={0.37} />
-        </motion.div>
+            {/* ── LEFT COLUMN ── */}
+            <motion.div
+              className="flex min-w-0 flex-col gap-1 overflow-hidden"
+              style={{ y: customizeOpen ? 0 : leftY }}
+              initial={{x:-10}} animate={{x:0}} transition={{duration:0.55,ease:"easeOut"}}
+              onDragOver={(e) => e.preventDefault()}
+            >
+              {renderCol("left")}
+              <DropZone onDrop={() => handleDrop("left", colCards("left").at(-1)?.id ?? null)} customizeMode={customizeOpen} anyDragging={!!dragCardId} />
+            </motion.div>
 
-        {/* ── CENTER COLUMN ── */}
-        <div className="flex min-w-0 flex-col gap-4">
-          <SocialFeedCard    delay={0.00} />
-          <LiveChartCard     delay={0.08} />
-          <InsiderTradesCard delay={0.14} />
-          <FiscalWatchCard   delay={0.20} />
-          <CryptoCard        delay={0.28} />
-        </div>
+            {/* ── CENTER COLUMN ── */}
+            <div
+              className="flex min-w-0 flex-col gap-1 overflow-hidden"
+              onDragOver={(e) => e.preventDefault()}
+            >
+              {renderCol("center")}
+              <DropZone onDrop={() => handleDrop("center", colCards("center").at(-1)?.id ?? null)} customizeMode={customizeOpen} anyDragging={!!dragCardId} />
+            </div>
 
-        {/* ── RIGHT COLUMN ── */}
-        <motion.div className="flex min-w-0 flex-col gap-4" style={{ y: rightY }} initial={{x:10}} animate={{x:0}} transition={{duration:0.55,ease:"easeOut"}}>
-          <MarketNewsCard        delay={0.05} />
-          <WatchlistCard         delay={0.10} />
-          <PortfoliosCard        delay={0.13} />
-          <TopMoversCard         delay={0.14} />
-          <MarketRatesCard       delay={0.17} />
-          <ScreenerPreviewCard   delay={0.20} />
-          <EconomicCalendarCard  delay={0.23} />
-          <SentimentRadarCard    delay={0.26} />
-          <PredictionMarketsCard delay={0.29} />
-          <BacktestCard              delay={0.32} />
-          <MarketRelationsCard       delay={0.35} />
-        </motion.div>
+            {/* ── RIGHT COLUMN ── */}
+            <motion.div
+              className="flex min-w-0 flex-col gap-1 overflow-hidden"
+              style={{ y: customizeOpen ? 0 : rightY }}
+              initial={{x:10}} animate={{x:0}} transition={{duration:0.55,ease:"easeOut"}}
+              onDragOver={(e) => e.preventDefault()}
+            >
+              {renderCol("right")}
+              <DropZone onDrop={() => handleDrop("right", colCards("right").at(-1)?.id ?? null)} customizeMode={customizeOpen} anyDragging={!!dragCardId} />
+            </motion.div>
 
+          </div>
+        </CustomizeModeContext.Provider>
       </div>
-      </div>
+      <SiteFooter />
     </div>
   );
 }

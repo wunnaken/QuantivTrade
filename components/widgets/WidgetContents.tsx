@@ -495,17 +495,39 @@ export function PredictionMarketsWidget() {
 
 export function CustomNoteWidget({ widgetId }: WidgetContentProps) {
   const key = `quantivtrade-dashboard-note-${widgetId}`;
+  const prefKey = `dashboard_note_${widgetId}`;
   const [text, setText] = useState("");
   useEffect(() => {
     if (typeof window === "undefined") return;
     setText(localStorage.getItem(key) ?? "");
-  }, [key]);
-  const save = () => { if (typeof window !== "undefined") localStorage.setItem(key, text); };
+    // Sync from DB (DB wins)
+    fetch("/api/profile/me", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data: { ui_preferences?: Record<string, unknown> }) => {
+        const dbText = data?.ui_preferences?.[prefKey];
+        if (typeof dbText === "string") {
+          localStorage.setItem(key, dbText);
+          setText(dbText);
+        }
+      })
+      .catch(() => {});
+  }, [key, prefKey]);
+  const save = (value: string) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(key, value);
+      fetch("/api/profile/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ui_prefs_patch: { [prefKey]: value } }),
+      }).catch(() => {});
+    }
+  };
   return (
     <textarea
       value={text}
       onChange={(e) => setText(e.target.value)}
-      onBlur={save}
+      onBlur={(e) => save(e.target.value)}
       placeholder="Trading notes, reminders..."
       className="h-full w-full resize-none rounded bg-transparent p-2 text-xs text-zinc-300 placeholder:text-zinc-600 focus:outline-none"
       rows={4}
@@ -731,6 +753,12 @@ function loadLiveChartTickers(): string[] {
 function saveLiveChartTickers(tickers: string[]): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(LIVE_CHART_TICKERS_KEY, JSON.stringify(tickers));
+  fetch("/api/profile/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ui_prefs_patch: { live_chart_tickers: tickers } }),
+  }).catch(() => {});
 }
 
 function filterSuggestions(query: string, existing: string[]): string[] {
@@ -752,6 +780,18 @@ export function LiveChartWidget({ onLoaded }: WidgetContentProps) {
   useEffect(() => {
     const loaded = loadLiveChartTickers();
     if (loaded.length > 0 && JSON.stringify(loaded) !== JSON.stringify(tickers)) setTickers(loaded);
+    // Sync from DB (DB wins)
+    fetch("/api/profile/me", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data: { ui_preferences?: Record<string, unknown> }) => {
+        const dbTickers = data?.ui_preferences?.live_chart_tickers;
+        if (Array.isArray(dbTickers) && dbTickers.length > 0) {
+          const filtered = (dbTickers as unknown[]).filter((x): x is string => typeof x === "string");
+          window.localStorage.setItem(LIVE_CHART_TICKERS_KEY, JSON.stringify(filtered));
+          setTickers(filtered);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

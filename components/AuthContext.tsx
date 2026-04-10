@@ -2,7 +2,14 @@
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { setEarlyMember } from "../lib/engagement/invite";
+import { setEarlyMember, loadInviteFromDB } from "../lib/engagement/invite";
+import { loadXPFromDB } from "../lib/engagement/xp";
+import { loadStreaksFromDB } from "../lib/engagement/streaks";
+import { loadBubbleIdsFromDB } from "../lib/profile-bubbles";
+import { loadBoardsFromDB } from "../lib/whiteboard-storage";
+import { loadPredictFromDB } from "../lib/predict";
+import { loadDashboardsFromDB } from "../lib/dashboard";
+import { loadAIChatFromDB } from "../lib/ai-chat-storage";
 import type { User } from "../types";
 
 export type { User };
@@ -80,6 +87,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .eq("user_id", authUser.id)
           .single();
         setUser(buildUser(authUser.id, authUser.email ?? "", profile as ProfileRow | null));
+        // On login/session restore, sync all user data from DB (fire-and-forget)
+        if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+          Promise.all([
+            loadXPFromDB(),
+            loadStreaksFromDB(),
+            loadInviteFromDB(),
+            loadBubbleIdsFromDB(),
+            loadBoardsFromDB(),
+            loadPredictFromDB(),
+            loadDashboardsFromDB(),
+            loadAIChatFromDB(),
+          ]).catch(() => {});
+        }
       } finally {
         setAuthLoading(false);
         clearTimeout(fallback);

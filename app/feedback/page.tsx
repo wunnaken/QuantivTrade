@@ -2,6 +2,19 @@
 
 import { useState } from "react";
 
+const COOLDOWN_MS = 2 * 60 * 1000; // 2 minutes between submissions
+const LS_KEY = "feedback_last_sent";
+
+function getCooldownRemaining(): number {
+  try {
+    const last = parseInt(localStorage.getItem(LS_KEY) ?? "0", 10);
+    const remaining = COOLDOWN_MS - (Date.now() - last);
+    return remaining > 0 ? remaining : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export default function FeedbackPage() {
   const [message, setMessage] = useState("");
   const [replyEmail, setReplyEmail] = useState("");
@@ -12,6 +25,14 @@ export default function FeedbackPage() {
   const handleSend = async () => {
     const trimmed = message.trim();
     if (!trimmed) return;
+
+    const remaining = getCooldownRemaining();
+    if (remaining > 0) {
+      const secs = Math.ceil(remaining / 1000);
+      setError(`Please wait ${secs}s before sending another message.`);
+      return;
+    }
+
     setError(null);
     setSending(true);
     try {
@@ -21,8 +42,10 @@ export default function FeedbackPage() {
         body: JSON.stringify({
           message: trimmed,
           replyEmail: replyEmail.trim() || undefined,
+          _trap: undefined, // honeypot — always undefined from real users
         }),
       });
+      try { localStorage.setItem(LS_KEY, String(Date.now())); } catch { /* private browsing */ }
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
         setError(data.error || "Something went wrong.");
@@ -61,6 +84,15 @@ export default function FeedbackPage() {
       </div>
 
       <div className="mt-8 space-y-4">
+        {/* Honeypot — hidden from humans, bots fill it */}
+        <input
+          aria-hidden="true"
+          tabIndex={-1}
+          autoComplete="off"
+          name="_trap"
+          style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", opacity: 0 }}
+          defaultValue=""
+        />
         <div>
           <label htmlFor="feedback-message" className="block text-sm font-medium text-zinc-300">
             Your message

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"; // always re-run so we don't cache empty Finnhub responses
+// Individual Finnhub fetches use { next: { revalidate: 300 } } — each stock's candles are cached 5 min
 
 // Mirror the working pattern from /api/ticker-chart: always resolution=D, use days offset
 const TF_DAYS: Record<string, number> = {
@@ -78,7 +79,7 @@ const THEMATIC_TICKERS: Record<string, string[]> = {
   defense:        ["LMT","RTX","NOC","GD","BA","LDOS","HII","CACI"],
   nuclear:        ["CCJ","UEC","VST","CEG","NNE","SMR","OKLO","DNN"],
   ai:             ["NVDA","MSFT","GOOGL","AMD","PLTR","AI","PATH","BBAI"],
-  space:          ["RKLB","ASTS","BA","LMT","MNTS","LUNR"],
+  space:          ["RKLB","ASTS","IRDM","BA","LMT","LUNR","RDW","KTOS"],
   biotech:        ["MRNA","PFE","ABBV","UNH","ISRG","REGN","VRTX","GILD"],
   banks:          ["JPM","BAC","GS","MS","WFC","C","BLK","SCHW"],
   oil:            ["XOM","CVX","COP","SLB","EOG","PXD","MPC","VLO"],
@@ -124,24 +125,36 @@ export async function GET(req: NextRequest) {
     days = TF_DAYS[tf] ?? 370;
   }
 
-  // Fetch candles for all holdings + SPY in parallel
-  const [candleResults, spyCandles] = await Promise.all([
-    Promise.all(tickers.map((t) => fetchCandles(t, days, apiKey))),
-    fetchCandles("SPY", days, apiKey),
-  ]);
+  // Fetch candles in batches of 2 to stay well under Finnhub's 60 req/min limit.
+  // SPY fetched first so the most important series isn't delayed.
+  const spyCandles = await fetchCandles("SPY", days, apiKey);
+  const candleResults: Array<{ t: number[]; c: number[] } | null> = [];
+  for (let i = 0; i < tickers.length; i += 2) {
+    const batch = tickers.slice(i, i + 2);
+    const batchResults = await Promise.all(batch.map((t) => fetchCandles(t, days, apiKey)));
+    candleResults.push(...batchResults);
+  }
+
+  // Compute per-ticker normalized % return (last point relative to first)
+  const tickerPerf: Record<string, number> = {};
+  for (let i = 0; i < tickers.length; i++) {
+    const series = candleResults[i];
+    if (series) {
+      const norm = normalizePercent(series.c);
+      if (norm.length) tickerPerf[tickers[i]] = norm[norm.length - 1];
+    }
+  }
 
   const validSeries = candleResults.filter((c): c is { t: number[]; c: number[] } => c !== null);
 
-  if (!validSeries.length) {
-    // Fallback: return SPY-only as benchmark with empty portfolio
-    const benchmark = spyCandles ? normalizePercent(spyCandles.c).map((v, i) => ({ t: spyCandles!.t[i], value: v })) : [];
-    return NextResponse.json({ points: [], benchmark, tickers, tf });
-  }
-
-  const points = mergeAndAverage(validSeries);
   const benchmark = spyCandles
     ? normalizePercent(spyCandles.c).map((v, i) => ({ t: spyCandles!.t[i], value: v }))
     : [];
 
-  return NextResponse.json({ points, benchmark, tickers, tf });
+  if (!validSeries.length) {
+    return NextResponse.json({ points: [], benchmark, tickers, tf, tickerPerf });
+  }
+
+  const points = mergeAndAverage(validSeries);
+  return NextResponse.json({ points, benchmark, tickers, tf, tickerPerf });
 }

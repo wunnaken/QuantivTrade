@@ -7,11 +7,12 @@ import { useTheme } from "../../components/ThemeContext";
 import { createClient } from "../../lib/supabase/client";
 import { getBrokerConnection, disconnectBroker, BROKER_TEAL } from "../../lib/broker-connection";
 import { ConnectBrokerModal } from "../../components/ConnectBrokerModal";
+import { NewsletterSignup } from "../../components/NewsletterSignup";
 import { BriefingPreferencesForm } from "../../components/BriefingPreferencesForm";
 import { fetchBriefingPreferences, type BriefingPreferences } from "../../lib/briefing-preferences";
 
 export default function SettingsPage() {
-  const { user, deleteAccount, signInWithGoogle, signInWithApple } = useAuth();
+  const { user, authLoading, deleteAccount, signInWithGoogle, signInWithApple } = useAuth();
   const { theme, setTheme } = useTheme();
   const [brokerState, setBrokerState] = useState(getBrokerConnection());
   const [connectModalOpen, setConnectModalOpen] = useState(false);
@@ -56,6 +57,14 @@ export default function SettingsPage() {
     }
   }, [user]);
 
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-white/10 border-t-[var(--accent-color)]" />
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-8">
@@ -91,58 +100,65 @@ export default function SettingsPage() {
           </p>
         </header>
 
-        {/* Appearance */}
+        {/* Security */}
         <section
           className="rounded-2xl border p-5 transition-colors duration-300"
           style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
         >
-          <h2 className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--app-text)" }}>
-            <span aria-hidden>
-              {theme === "dark" ? (
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-                </svg>
-              ) : (
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
-                  />
-                </svg>
-              )}
-            </span>
-            Appearance
-          </h2>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>Security</h2>
           <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>
-            Choose how QuantivTrade looks. Dark is easier on the eyes in low light.
+            Protect your account with two-factor authentication.
           </p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => setTheme("dark")}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)] ${
-                theme === "dark"
-                  ? "border-[var(--accent-color)]/50 bg-[var(--accent-color)]/10 text-[var(--accent-color)]"
-                  : "border-transparent opacity-70 hover:opacity-100"
-              }`}
-              style={theme !== "dark" ? { borderColor: "var(--app-border)", color: "var(--app-text)" } : undefined}
+
+          {/* Recommendation banner — shown only when 2FA is off */}
+          {mfaEnabled === false && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-400/30 bg-amber-400/8 px-3 py-2.5">
+              <svg className="mt-px h-3.5 w-3.5 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
+                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+              <p className="text-[11px] leading-relaxed text-amber-300">
+                <span className="font-semibold">QuantivTrade recommends enabling 2FA.</span>{" "}
+                Two-factor authentication adds a second layer of protection to your account and trades.
+              </p>
+            </div>
+          )}
+
+          <div className="mt-4 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              {mfaEnabled === null ? (
+                <span className="text-[11px] text-zinc-500">Loading…</span>
+              ) : mfaEnabled ? (
+                <>
+                  <span className="flex h-2 w-2 rounded-full bg-emerald-400" />
+                  <span className="text-xs text-zinc-300">2FA enabled</span>
+                </>
+              ) : (
+                <>
+                  <span className="flex h-2 w-2 rounded-full bg-amber-400" />
+                  <span className="text-xs text-zinc-400">2FA not enabled</span>
+                </>
+              )}
+            </div>
+            <Link
+              href="/auth/setup-2fa"
+              className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-300 transition hover:bg-white/10"
             >
-              Dark Mode
-            </button>
-            <button
-              type="button"
-              onClick={() => setTheme("light")}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)] ${
-                theme === "light"
-                  ? "border-[var(--accent-color)]/50 bg-[var(--accent-color)]/10 text-[var(--accent-color)]"
-                  : "border-transparent opacity-70 hover:opacity-100"
-              }`}
-              style={theme !== "light" ? { borderColor: "var(--app-border)", color: "var(--app-text)" } : undefined}
-            >
-              Light Mode
-            </button>
+              {mfaEnabled ? "Manage 2FA" : "Enable 2FA"}
+            </Link>
+          </div>
+        </section>
+
+        {/* Newsletter */}
+        <section
+          className="rounded-2xl border p-5 transition-colors duration-300"
+          style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
+        >
+          <h2 className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>Product Updates</h2>
+          <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>
+            Get notified by email when a new version of QuantivTrade is released.
+          </p>
+          <div className="mt-4 max-w-sm">
+            <NewsletterSignup compact />
           </div>
         </section>
 
@@ -241,6 +257,61 @@ export default function SettingsPage() {
         </section>
 
 
+        {/* Appearance */}
+        <section
+          className="rounded-2xl border p-5 transition-colors duration-300"
+          style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
+        >
+          <h2 className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--app-text)" }}>
+            <span aria-hidden>
+              {theme === "dark" ? (
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                  />
+                </svg>
+              )}
+            </span>
+            Appearance
+          </h2>
+          <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>
+            Choose how QuantivTrade looks. Dark is easier on the eyes in low light.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setTheme("dark")}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)] ${
+                theme === "dark"
+                  ? "border-[var(--accent-color)]/50 bg-[var(--accent-color)]/10 text-[var(--accent-color)]"
+                  : "border-transparent opacity-70 hover:opacity-100"
+              }`}
+              style={theme !== "dark" ? { borderColor: "var(--app-border)", color: "var(--app-text)" } : undefined}
+            >
+              Dark Mode
+            </button>
+            <button
+              type="button"
+              onClick={() => setTheme("light")}
+              className={`rounded-full border px-4 py-2 text-sm font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)] ${
+                theme === "light"
+                  ? "border-[var(--accent-color)]/50 bg-[var(--accent-color)]/10 text-[var(--accent-color)]"
+                  : "border-transparent opacity-70 hover:opacity-100"
+              }`}
+              style={theme !== "light" ? { borderColor: "var(--app-border)", color: "var(--app-text)" } : undefined}
+            >
+              Light Mode
+            </button>
+          </div>
+        </section>
+
         {/* Morning Briefing Preferences — premium users only */}
         {user.isVerified && (
           <section
@@ -274,54 +345,6 @@ export default function SettingsPage() {
             </div>
           </section>
         )}
-
-        {/* Security */}
-        <section
-          className="rounded-2xl border p-5 transition-colors duration-300"
-          style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
-        >
-          <h2 className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>Security</h2>
-          <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>
-            Protect your account with two-factor authentication.
-          </p>
-
-          {/* Recommendation banner — shown only when 2FA is off */}
-          {mfaEnabled === false && (
-            <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-400/30 bg-amber-400/8 px-3 py-2.5">
-              <svg className="mt-px h-3.5 w-3.5 shrink-0 text-amber-400" fill="currentColor" viewBox="0 0 20 20" aria-hidden>
-                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-              </svg>
-              <p className="text-[11px] leading-relaxed text-amber-300">
-                <span className="font-semibold">QuantivTrade recommends enabling 2FA.</span>{" "}
-                Two-factor authentication adds a second layer of protection to your account and trades.
-              </p>
-            </div>
-          )}
-
-          <div className="mt-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              {mfaEnabled === null ? (
-                <span className="text-[11px] text-zinc-500">Loading…</span>
-              ) : mfaEnabled ? (
-                <>
-                  <span className="flex h-2 w-2 rounded-full bg-emerald-400" />
-                  <span className="text-xs text-zinc-300">2FA enabled</span>
-                </>
-              ) : (
-                <>
-                  <span className="flex h-2 w-2 rounded-full bg-amber-400" />
-                  <span className="text-xs text-zinc-400">2FA not enabled</span>
-                </>
-              )}
-            </div>
-            <Link
-              href="/auth/setup-2fa"
-              className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-zinc-300 transition hover:bg-white/10"
-            >
-              {mfaEnabled ? "Manage 2FA" : "Enable 2FA"}
-            </Link>
-          </div>
-        </section>
 
         {/* Account */}
         <section className="rounded-2xl border border-red-500/30 bg-red-500/5 p-5 transition-colors duration-300">

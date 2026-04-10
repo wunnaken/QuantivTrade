@@ -41,7 +41,7 @@ export async function GET() {
     const prebuiltCount = PREBUILT_TERMS.filter((t) => t.category === cat.id).length;
     return {
       category: cat.id,
-      emoji: cat.emoji,
+      icon: cat.icon,
       color: cat.color,
       total: prebuiltCount,
       generated: dbCategoryCounts[cat.id] ?? 0,

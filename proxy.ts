@@ -39,13 +39,19 @@ function isProtectedPath(pathname: string): boolean {
 }
 
 export async function proxy(request: NextRequest) {
-  // Block public access — remove this block when ready to launch
   const host = request.headers.get("host") ?? "";
   const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  const pathname = request.nextUrl.pathname;
+  const accessCookie = request.cookies.get("xch_access")?.value;
+  const validCode = process.env.ACCESS_CODE;
+  const hasAccess = !validCode || accessCookie === validCode;
+
   if (
     !isLocal &&
-    !request.nextUrl.pathname.startsWith("/maintenance") &&
-    !request.nextUrl.pathname.startsWith("/api/stripe/webhook")
+    !hasAccess &&
+    !pathname.startsWith("/maintenance") &&
+    !pathname.startsWith("/api/access") &&
+    !pathname.startsWith("/api/stripe/webhook")
   ) {
     return NextResponse.redirect(new URL("/maintenance", request.url));
   }
@@ -74,7 +80,6 @@ export async function proxy(request: NextRequest) {
 
   // Refresh session and get user
   const { data: { user } } = await supabase.auth.getUser();
-  const pathname = request.nextUrl.pathname;
 
   if (isProtectedPath(pathname) && !user) {
     const signInUrl = new URL("/auth/sign-in", request.url);

@@ -278,6 +278,18 @@ export default function ProfileView() {
   const [verifiedSubmitted, setVerifiedSubmitted] = useState(
     typeof window !== "undefined" && window.localStorage.getItem("quantivtrade-verified-applied") === "true"
   );
+  useEffect(() => {
+    // Sync verified-applied flag from DB so it persists across devices
+    fetch("/api/profile/me", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data: { ui_preferences?: Record<string, unknown> }) => {
+        if (data?.ui_preferences?.verified_applied) {
+          window.localStorage.setItem("quantivtrade-verified-applied", "true");
+          setVerifiedSubmitted(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
   const [connectBrokerModalOpen, setConnectBrokerModalOpen] = useState(false);
   const [brokerConnectionState, setBrokerConnectionState] = useState<ReturnType<typeof getBrokerConnection>>({ connected: false });
 
@@ -661,6 +673,12 @@ export default function ProfileView() {
                               }
                               try { window.localStorage.setItem("quantivtrade-verified-applied", "true"); } catch {}
                               setVerifiedSubmitted(true);
+                              fetch("/api/profile/me", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                credentials: "include",
+                                body: JSON.stringify({ ui_prefs_patch: { verified_applied: true } }),
+                              }).catch(() => {});
                             } catch {
                               setVerifiedSubmitError("Could not send. Try again.");
                             } finally {

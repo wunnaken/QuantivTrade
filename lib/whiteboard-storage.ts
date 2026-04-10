@@ -1,5 +1,5 @@
 /**
- * localStorage for Trading Whiteboard: saved boards (max 5), collaboration banner dismissed.
+ * Whiteboard boards: localStorage cache + Supabase sync via /api/whiteboard.
  */
 
 const BOARDS_KEY = "quantivtrade-whiteboard-boards";
@@ -9,7 +9,6 @@ export const MAX_BOARDS = 5;
 export type SavedBoard = {
   id: string;
   name: string;
-  /** Excalidraw scene: elements, appState, files (stored as serializable) */
   scene: {
     elements: unknown[];
     appState: Record<string, unknown>;
@@ -36,36 +35,60 @@ function getBoards(): SavedBoard[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
     return Array.isArray(parsed) ? (parsed as SavedBoard[]).slice(0, MAX_BOARDS) : [];
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
 
 export function getSavedBoards(): SavedBoard[] {
   return getBoards().sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 }
 
-export function saveBoard(
-  id: string,
-  name: string,
-  scene: SavedBoard["scene"]
-): void {
+export function saveBoard(id: string, name: string, scene: SavedBoard["scene"]): void {
   if (typeof window === "undefined") return;
   const list = getBoards().filter((b) => b.id !== id);
   const safeScene = toJsonSafe(scene);
-  list.unshift({
-    id,
-    name,
-    scene: safeScene,
-    updatedAt: Date.now(),
-  });
+  list.unshift({ id, name, scene: safeScene, updatedAt: Date.now() });
   window.localStorage.setItem(BOARDS_KEY, JSON.stringify(list.slice(0, MAX_BOARDS)));
+  // Sync to Supabase (boardId must be numeric for the existing API)
+  const boardIdForApi = id.startsWith("board-") ? id.slice("board-".length) : id;
+  fetch("/api/whiteboard", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ boardId: boardIdForApi, name, scene: safeScene }),
+  }).catch(() => {});
 }
 
 export function deleteBoard(id: string): void {
   if (typeof window === "undefined") return;
   const list = getBoards().filter((b) => b.id !== id);
   window.localStorage.setItem(BOARDS_KEY, JSON.stringify(list));
+  const boardIdForApi = id.startsWith("board-") ? id.slice("board-".length) : id;
+  fetch(`/api/whiteboard?boardId=${encodeURIComponent(boardIdForApi)}`, {
+    method: "DELETE",
+    credentials: "include",
+  }).catch(() => {});
+}
+
+/** On login, load boards from DB and merge with local (DB wins on conflict). */
+export async function loadBoardsFromDB(): Promise<void> {
+  try {
+    const res = await fetch("/api/whiteboard", { credentials: "include" });
+    if (!res.ok) return;
+    const data = await res.json() as { boards?: Array<{ id: string; name: string; scene?: SavedBoard["scene"]; updated_at?: string }> };
+    if (!Array.isArray(data.boards) || data.boards.length === 0) return;
+    const local = getBoards();
+    const merged: SavedBoard[] = [...local];
+    for (const dbBoard of data.boards) {
+      const idx = merged.findIndex((b) => b.id === dbBoard.id || b.id === `board-${dbBoard.id}`);
+      const updatedAt = dbBoard.updated_at ? new Date(dbBoard.updated_at).getTime() : 0;
+      if (idx === -1) {
+        merged.push({ id: dbBoard.id, name: dbBoard.name, scene: dbBoard.scene ?? { elements: [], appState: {} }, updatedAt });
+      } else if (updatedAt > merged[idx].updatedAt) {
+        merged[idx] = { ...merged[idx], name: dbBoard.name, scene: dbBoard.scene ?? merged[idx].scene, updatedAt };
+      }
+    }
+    window.localStorage.setItem(BOARDS_KEY, JSON.stringify(merged.slice(0, MAX_BOARDS)));
+  } catch { /* ignore */ }
 }
 
 export function getCollaborationBannerDismissed(): boolean {

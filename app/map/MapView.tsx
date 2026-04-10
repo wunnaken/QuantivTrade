@@ -16,7 +16,7 @@ import {
 import { CountryDetailPanel } from "./CountryDetailPanel";
 import { prepareWorldAtlasForLeaflet } from "../../lib/prepare-world-atlas-leaflet";
 
-const GEO_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+const GEO_URL = "/world-110m.json";
 
 const LEAFLET_STYLE = `
 .globe-view-root { position: relative; width: 100%; height: 100%; }
@@ -1051,7 +1051,7 @@ export default function MapView() {
     const gPoly = g as GlobeInstance & { polygonsTransitionDuration?: (n: number) => GlobeInstance };
     gPoly.polygonsTransitionDuration?.(0);
     g.polygonCapColor((d: object) => hexWithAlpha(getColorForCountry((d as CountryPoly).name), 0.5));
-  }, [mapMode, countryPolys.length, getColorForCountry]);
+  }, [mapMode, countryPolys.length, getColorForCountry, globeReadyTick]);
 
   useLayoutEffect(() => {
     const g = globeRef.current;

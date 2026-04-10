@@ -1,6 +1,6 @@
 /**
- * Accent color theme: stored in localStorage, applied via CSS var --accent-color.
- * Only available to logged-in users; default is QuantivTrade Green.
+ * Accent color theme: stored in localStorage (instant read) + synced to Supabase.
+ * Apply via CSS var --accent-color.
  */
 
 export const ACCENT_STORAGE_KEY = "quantivtrade-accent-color";
@@ -25,12 +25,31 @@ export function getStoredAccent(): string {
   if (typeof window === "undefined") return DEFAULT_ACCENT;
   const raw = window.localStorage.getItem(ACCENT_STORAGE_KEY);
   if (!raw || !raw.startsWith("#")) return DEFAULT_ACCENT;
-  // Migrate users who had the old default blue to the new salmon default
-  if (raw.toLowerCase() === "#4f9cf9") return DEFAULT_ACCENT;
+  if (raw.toLowerCase() === "#4f9cf9") return DEFAULT_ACCENT; // migrate old default
   return raw;
 }
 
 export function setStoredAccent(hex: string): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(ACCENT_STORAGE_KEY, hex);
+  // Sync to Supabase (fire and forget)
+  fetch("/api/profile/me", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ accent_color: hex }),
+  }).catch(() => {});
+}
+
+/** On login, load accent from DB and apply if different from local. */
+export async function loadAccentFromDB(): Promise<void> {
+  try {
+    const res = await fetch("/api/profile/me", { credentials: "include" });
+    if (!res.ok) return;
+    const data = await res.json() as { ui_preferences?: { accent_color?: string } };
+    const dbAccent = data.ui_preferences?.accent_color;
+    if (dbAccent && /^#[0-9a-f]{6}$/i.test(dbAccent)) {
+      window.localStorage.setItem(ACCENT_STORAGE_KEY, dbAccent);
+    }
+  } catch { /* ignore */ }
 }

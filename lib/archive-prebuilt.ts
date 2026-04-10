@@ -6,16 +6,16 @@ export interface PrebuiltTerm {
 }
 
 export const ARCHIVE_CATEGORIES = [
-  { id: "Technical Analysis", emoji: "📈", color: "#6366f1" },
-  { id: "Trading Strategies", emoji: "🎯", color: "#8b5cf6" },
-  { id: "Fundamental Analysis", emoji: "💰", color: "#22c55e" },
-  { id: "Brokers", emoji: "🏦", color: "#3b82f6" },
-  { id: "Order Types", emoji: "📋", color: "#06b6d4" },
-  { id: "Options", emoji: "🎲", color: "#f59e0b" },
-  { id: "Crypto/DeFi", emoji: "🪙", color: "#f97316" },
-  { id: "Economic Indicators", emoji: "📊", color: "#ec4899" },
-  { id: "Risk Management", emoji: "🛡️", color: "#14b8a6" },
-  { id: "Regulatory", emoji: "⚖️", color: "#a78bfa" },
+  { id: "Technical Analysis",   icon: "trending-up",   color: "#6366f1" },
+  { id: "Trading Strategies",   icon: "activity",      color: "#8b5cf6" },
+  { id: "Fundamental Analysis", icon: "dollar-sign",   color: "#22c55e" },
+  { id: "Brokers",              icon: "landmark",      color: "#3b82f6" },
+  { id: "Order Types",          icon: "list",          color: "#06b6d4" },
+  { id: "Options",              icon: "layers",        color: "#f59e0b" },
+  { id: "Crypto/DeFi",          icon: "circle-dollar", color: "#f97316" },
+  { id: "Economic Indicators",  icon: "bar-chart-2",   color: "#ec4899" },
+  { id: "Risk Management",      icon: "shield",        color: "#14b8a6" },
+  { id: "Regulatory",           icon: "scale",         color: "#a78bfa" },
 ] as const;
 
 export const PREBUILT_TERMS: PrebuiltTerm[] = [

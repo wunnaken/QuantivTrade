@@ -289,27 +289,8 @@ export default function SocialFeedView() {
           setFollowedProfiles(data.profiles);
           return;
         }
-        try {
-          const raw = typeof window !== "undefined" && window.localStorage.getItem("quantivtrade-follows");
-          if (raw) {
-            const parsed = JSON.parse(raw) as Array<{ id: string; name: string; username: string }>;
-            if (Array.isArray(parsed) && parsed.length > 0) setFollowedProfiles(parsed);
-          }
-        } catch {
-          // ignore
-        }
       })
-      .catch(() => {
-        if (!cancelled) {
-          try {
-            const raw = typeof window !== "undefined" && window.localStorage.getItem("quantivtrade-follows");
-            if (raw) {
-              const parsed = JSON.parse(raw) as Array<{ id: string; name: string; username: string }>;
-              if (Array.isArray(parsed)) setFollowedProfiles(parsed);
-            }
-          } catch {}
-        }
-      });
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [pathname]);
 

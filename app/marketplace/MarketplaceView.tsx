@@ -495,6 +495,13 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
   const [discDismissed, setDiscDismissed] = useState(() =>
     typeof window !== "undefined" && !!localStorage.getItem("mp_disc_dismissed")
   );
+  useEffect(() => {
+    fetch("/api/marketplace/user-state", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((s: { discDismissed?: boolean } | null) => {
+        if (s?.discDismissed) { localStorage.setItem("mp_disc_dismissed", "1"); setDiscDismissed(true); }
+      }).catch(() => {});
+  }, []);
 
   const isSeller = !!currentUserId && currentUserId === listing.seller_id;
 
@@ -518,23 +525,41 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
           setContentUpdatedAt(d.content_updated_at);
           const updatedAt = new Date(d.content_updated_at).getTime();
           const purchasedAt = new Date(d.purchased_at).getTime();
-          const ackAt = (() => { const v = localStorage.getItem(`mp_ack_${listing.id}`); return v ? new Date(v).getTime() : 0; })();
-          const deferredAt = (() => { const v = localStorage.getItem(`mp_defer_${listing.id}`); return v ? new Date(v).getTime() : 0; })();
-          if (updatedAt > purchasedAt && updatedAt > ackAt) {
-            if (updatedAt > deferredAt) {
-              // New update not yet seen at all — show banner
-              setShowUpdateBanner(true);
-            } else {
-              // Previously deferred but not accepted — show small indicator
-              setUpdateDeferred(true);
-            }
-          } else {
-            // No pending update — save baseline title snapshot if not yet stored
-            if (!localStorage.getItem(`mp_titles_${listing.id}`) && d.content_data) {
-              const slides = deserializeCourse(d.content_data);
-              localStorage.setItem(`mp_titles_${listing.id}`, JSON.stringify(slides.map((s) => ({ title: s.title, type: s.type }))));
-            }
-          }
+          // Load ack/defer from DB (falls back to localStorage for offline)
+          fetch(`/api/marketplace/user-state`, { credentials: "include" })
+            .then((r) => r.ok ? r.json() : null)
+            .then((state: { byListing?: Record<string, { ack_at: string | null; defer_at: string | null; titles: { title: string; type?: string }[] }> } | null) => {
+              const ls = state?.byListing?.[String(listing.id)];
+              const ackAt = ls?.ack_at ? new Date(ls.ack_at).getTime()
+                : (() => { const v = localStorage.getItem(`mp_ack_${listing.id}`); return v ? new Date(v).getTime() : 0; })();
+              const deferredAt = ls?.defer_at ? new Date(ls.defer_at).getTime()
+                : (() => { const v = localStorage.getItem(`mp_defer_${listing.id}`); return v ? new Date(v).getTime() : 0; })();
+              // Sync DB titles snapshot to localStorage for the diff view
+              if (ls?.titles && ls.titles.length > 0) {
+                localStorage.setItem(`mp_titles_${listing.id}`, JSON.stringify(ls.titles));
+              }
+              if (updatedAt > purchasedAt && updatedAt > ackAt) {
+                if (updatedAt > deferredAt) {
+                  setShowUpdateBanner(true);
+                } else {
+                  setUpdateDeferred(true);
+                }
+              } else {
+                if (!localStorage.getItem(`mp_titles_${listing.id}`) && d.content_data) {
+                  const slides = deserializeCourse(d.content_data);
+                  localStorage.setItem(`mp_titles_${listing.id}`, JSON.stringify(slides.map((s) => ({ title: s.title, type: s.type }))));
+                }
+              }
+            })
+            .catch(() => {
+              // Offline fallback: use localStorage
+              const ackAt = (() => { const v = localStorage.getItem(`mp_ack_${listing.id}`); return v ? new Date(v).getTime() : 0; })();
+              const deferredAt = (() => { const v = localStorage.getItem(`mp_defer_${listing.id}`); return v ? new Date(v).getTime() : 0; })();
+              if (updatedAt > purchasedAt && updatedAt > ackAt) {
+                if (updatedAt > deferredAt) setShowUpdateBanner(true);
+                else setUpdateDeferred(true);
+              }
+            });
         }
       })
       .catch(() => {});
@@ -962,12 +987,20 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
                   <button
                     onClick={() => {
                       const slides = deserializeCourse(contentData);
-                      localStorage.setItem(`mp_titles_${listing.id}`, JSON.stringify(slides.map((s) => ({ title: s.title, type: s.type }))));
-                      localStorage.setItem(`mp_ack_${listing.id}`, contentUpdatedAt ?? new Date().toISOString());
+                      const titles = slides.map((s) => ({ title: s.title, type: s.type }));
+                      const ackAt = contentUpdatedAt ?? new Date().toISOString();
+                      localStorage.setItem(`mp_titles_${listing.id}`, JSON.stringify(titles));
+                      localStorage.setItem(`mp_ack_${listing.id}`, ackAt);
                       localStorage.removeItem(`mp_defer_${listing.id}`);
                       setShowUpdateBanner(false);
                       setShowChangesDiff(false);
                       setUpdateDeferred(false);
+                      fetch("/api/marketplace/user-state", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({ listing_id: String(listing.id), ack_at: ackAt, defer_at: null, titles }),
+                      }).catch(() => {});
                     }}
                     className="rounded-lg bg-[var(--accent-color)] px-4 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
                   >
@@ -975,10 +1008,17 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
                   </button>
                   <button
                     onClick={() => {
-                      localStorage.setItem(`mp_defer_${listing.id}`, contentUpdatedAt ?? new Date().toISOString());
+                      const deferAt = contentUpdatedAt ?? new Date().toISOString();
+                      localStorage.setItem(`mp_defer_${listing.id}`, deferAt);
                       setShowUpdateBanner(false);
                       setShowChangesDiff(false);
                       setUpdateDeferred(true);
+                      fetch("/api/marketplace/user-state", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({ listing_id: String(listing.id), defer_at: deferAt }),
+                      }).catch(() => {});
                     }}
                     className="rounded-lg border border-white/10 px-4 py-1.5 text-xs font-semibold text-zinc-400 transition hover:border-white/20 hover:text-zinc-200"
                   >
@@ -1128,7 +1168,16 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
             {!discDismissed && (
               <div className="relative rounded-2xl border border-amber-400/20 bg-amber-400/5 p-3">
                 <button
-                  onClick={() => { localStorage.setItem("mp_disc_dismissed", "1"); setDiscDismissed(true); }}
+                  onClick={() => {
+                    localStorage.setItem("mp_disc_dismissed", "1");
+                    setDiscDismissed(true);
+                    fetch("/api/marketplace/user-state", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "include",
+                      body: JSON.stringify({ disc_dismissed: true }),
+                    }).catch(() => {});
+                  }}
                   className="absolute right-2.5 top-2.5 text-zinc-600 hover:text-zinc-400"
                   aria-label="Dismiss"
                   style={{ lineHeight: 1 }}
@@ -2303,7 +2352,7 @@ export default function MarketplaceView() {
   const [isVerified, setIsVerified] = useState(false);
   const featuredRef = useRef<HTMLDivElement>(null);
 
-  // Fetch current user for watermarking + verification check
+  // Fetch current user + disc dismissed state from DB
   useEffect(() => {
     fetch("/api/profile/me")
       .then((r) => r.ok ? r.json() : null)
@@ -2313,6 +2362,11 @@ export default function MarketplaceView() {
         if (p?.is_verified) setIsVerified(true);
       })
       .catch(() => {});
+    fetch("/api/marketplace/user-state", { credentials: "include" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((s: { discDismissed?: boolean } | null) => {
+        if (s?.discDismissed) { localStorage.setItem("mp_disc_dismissed", "1"); setWarnDismissed(true); }
+      }).catch(() => {});
   }, []);
 
   // Debounce search
@@ -2527,7 +2581,16 @@ export default function MarketplaceView() {
       {!warnDismissed && (
         <div className="relative rounded-2xl border border-amber-400/30 bg-amber-400/5 p-4">
           <button
-            onClick={() => { localStorage.setItem("mp_disc_dismissed", "1"); setWarnDismissed(true); }}
+            onClick={() => {
+              localStorage.setItem("mp_disc_dismissed", "1");
+              setWarnDismissed(true);
+              fetch("/api/marketplace/user-state", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({ disc_dismissed: true }),
+              }).catch(() => {});
+            }}
             className="absolute right-3 top-3 text-zinc-600 hover:text-zinc-400"
             aria-label="Dismiss"
           >

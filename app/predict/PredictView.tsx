@@ -134,11 +134,29 @@ function useTracked() {
       const saved = localStorage.getItem("predict_tracked");
       if (saved) setTracked(JSON.parse(saved));
     } catch { /* ignore */ }
+    // Sync from DB (DB wins)
+    fetch("/api/profile/me", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data: { ui_preferences?: Record<string, unknown> }) => {
+        const db = data?.ui_preferences?.predict_tracked;
+        if (Array.isArray(db)) {
+          const ids = (db as unknown[]).filter((x): x is string => typeof x === "string");
+          try { localStorage.setItem("predict_tracked", JSON.stringify(ids)); } catch { /* ignore */ }
+          setTracked(ids);
+        }
+      })
+      .catch(() => {});
   }, []);
   const toggle = useCallback((id: string) => {
     setTracked((prev) => {
       const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
       try { localStorage.setItem("predict_tracked", JSON.stringify(next)); } catch { /* ignore */ }
+      fetch("/api/profile/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ui_prefs_patch: { predict_tracked: next } }),
+      }).catch(() => {});
       return next;
     });
   }, []);
