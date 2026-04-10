@@ -40,10 +40,11 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!user) return;
     const supabase = createClient();
-    supabase.auth.mfa.listFactors().then(({ data }) => {
+    supabase.auth.mfa.listFactors().then(({ data, error }) => {
+      if (error) { setMfaEnabled(false); return; }
       const hasVerified = (data?.totp ?? []).some((f) => f.status === "verified");
       setMfaEnabled(hasVerified);
-    });
+    }).catch(() => setMfaEnabled(false));
     // Load stripe_onboarded status
     supabase.from("profiles").select("stripe_onboarded").eq("user_id", user.id).single()
       .then(({ data }) => { if (data?.stripe_onboarded) setStripeOnboarded(true); });

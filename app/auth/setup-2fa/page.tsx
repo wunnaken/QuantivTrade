@@ -81,14 +81,18 @@ export default function SetupTwoFactorPage() {
     if (code.length !== 6) { setError("Enter the 6-digit code from your authenticator app."); return; }
     setError(null);
     setBusy(true);
+    const factorId = phase.factorId;
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.mfa.challengeAndVerify({
-        factorId: phase.factorId,
+      const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
+      if (challengeError) throw new Error(challengeError.message);
+      const { error: verifyError } = await supabase.auth.mfa.verify({
+        factorId,
+        challengeId: challengeData.id,
         code,
       });
-      if (error) throw new Error(error.message);
-      setPhase({ id: "enabled", factorId: phase.factorId });
+      if (verifyError) throw new Error("Incorrect code. Please try again.");
+      setPhase({ id: "enabled", factorId });
       setCode("");
     } catch (err) {
       if (err instanceof Error) setError(err.message);
@@ -103,27 +107,24 @@ export default function SetupTwoFactorPage() {
     if (code.length !== 6) { setError("Enter the 6-digit code to confirm."); return; }
     setError(null);
     setBusy(true);
+    const factorId = phase.factorId;
     try {
       const supabase = createClient();
-      // Verify first to ensure aal2 before unenrolling
-      const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({
-        factorId: phase.factorId,
+      // Step 1: create a challenge
+      const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
+      if (challengeError) throw new Error(challengeError.message);
+      // Step 2: verify the code against the challenge
+      const { error: verifyError } = await supabase.auth.mfa.verify({
+        factorId,
+        challengeId: challengeData.id,
         code,
       });
-      if (verifyError) throw new Error(verifyError.message);
-
-      // Refresh session so the AAL2 claim is present before unenrolling
-      await supabase.auth.refreshSession();
-
-      const { error: unenrollError } = await supabase.auth.mfa.unenroll({
-        factorId: phase.factorId,
-      });
+      if (verifyError) throw new Error("Incorrect code. Try again.");
+      // Step 3: unenroll — session is now proven AAL2
+      const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId });
       if (unenrollError) throw new Error(unenrollError.message);
-
-      // Refresh session again so future requests no longer carry MFA factor
-      await supabase.auth.refreshSession();
-      setPhase({ id: "disabled" });
       setCode("");
+      await loadFactors();
     } catch (err) {
       if (err instanceof Error) setError(err.message);
       else setError("Failed to disable 2FA. Please try again.");
@@ -136,6 +137,15 @@ export default function SetupTwoFactorPage() {
     setError(null);
     setCode("");
     setPhase({ id: "disabled" });
+  }
+
+  function cancelDisable() {
+    setBusy(false);
+    setError(null);
+    setCode("");
+    if (phase.id === "disabling") {
+      setPhase({ id: "enabled", factorId: phase.factorId });
+    }
   }
 
   return (
@@ -325,15 +335,14 @@ export default function SetupTwoFactorPage() {
               <div className="flex gap-2">
                 <button
                   type="button"
-                  disabled={busy}
-                  onClick={() => { setError(null); setCode(""); setPhase({ id: "enabled", factorId: phase.factorId }); }}
-                  className="flex-1 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-medium text-zinc-300 transition hover:bg-white/10 disabled:opacity-60"
+                  onClick={cancelDisable}
+                  className="flex-1 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-medium text-zinc-300 transition hover:bg-white/10"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  disabled={busy || code.length !== 6}
+                  disabled={busy}
                   onClick={confirmDisable}
                   className="flex-1 rounded-full border border-red-500/40 px-4 py-2 text-xs font-medium text-red-400 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
