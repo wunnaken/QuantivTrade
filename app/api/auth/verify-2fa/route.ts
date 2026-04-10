@@ -32,7 +32,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 401 });
   }
 
-  const response = NextResponse.json({ success: true });
+  const { data: { session } } = await supabase.auth.getSession();
+  const response = NextResponse.json({
+    success: true,
+    accessToken: session?.access_token ?? null,
+    refreshToken: session?.refresh_token ?? null,
+  });
 
   for (const { name, value, options } of pendingCookies) {
     response.cookies.set(name, value, options ?? {});

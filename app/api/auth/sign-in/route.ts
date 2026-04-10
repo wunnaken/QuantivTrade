@@ -52,7 +52,13 @@ export async function POST(request: NextRequest) {
     hasUsername = !!profile?.username;
   }
 
-  const response = NextResponse.json({ mfaRequired, factorId, hasUsername });
+  const response = NextResponse.json({
+    mfaRequired,
+    factorId,
+    hasUsername,
+    accessToken: data.session?.access_token ?? null,
+    refreshToken: data.session?.refresh_token ?? null,
+  });
 
   // Attach session cookies to the response so the browser stores them
   for (const { name, value, options } of pendingCookies) {

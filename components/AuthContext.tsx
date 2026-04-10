@@ -68,27 +68,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
 
   useEffect(() => {
-    // Safety net: never leave authLoading stuck indefinitely
-    const fallback = setTimeout(() => setAuthLoading(false), 4000);
-
-    // onAuthStateChange fires INITIAL_SESSION immediately on mount
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!session?.user) {
-        setUser(null);
-        setAuthLoading(false);
-        clearTimeout(fallback);
-        return;
-      }
-      const authUser = session.user;
-      try {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("name, username, bio, avatar_url, created_at, is_verified, is_founder, subscription_tier, subscription_status, stripe_customer_id")
-          .eq("user_id", authUser.id)
-          .single();
-        setUser(buildUser(authUser.id, authUser.email ?? "", profile as ProfileRow | null));
-        // On login/session restore, sync all user data from DB (fire-and-forget)
-        if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
+    // Use server-side /api/auth/me to initialize user — browser Supabase client
+    // calls can hang, so we read the session from cookies via the server.
+    fetch("/api/auth/me")
+      .then((res) => res.json())
+      .then(({ user: serverUser }) => {
+        if (serverUser) {
+          setUser(serverUser as User);
           Promise.all([
             loadXPFromDB(),
             loadStreaksFromDB(),
@@ -100,13 +86,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             loadAIChatFromDB(),
           ]).catch(() => {});
         }
-      } finally {
-        setAuthLoading(false);
-        clearTimeout(fallback);
+      })
+      .catch(() => {})
+      .finally(() => setAuthLoading(false));
+
+    // Still listen for sign-out events from the browser client
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        setUser(null);
       }
     });
 
-    return () => { subscription.unsubscribe(); clearTimeout(fallback); };
+    return () => { subscription.unsubscribe(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
