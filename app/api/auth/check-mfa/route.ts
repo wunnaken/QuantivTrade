@@ -13,7 +13,7 @@ export async function GET() {
     {
       cookies: {
         getAll() { return cookieStore.getAll(); },
-        setAll(cookiesToSet) { pendingCookies.push(...cookiesToSet); },
+        setAll(cookiesToSet: Array<{ name: string; value: string; options?: Partial<ResponseCookie> }>) { pendingCookies.push(...cookiesToSet); },
       },
     }
   );
