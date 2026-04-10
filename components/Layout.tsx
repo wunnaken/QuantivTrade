@@ -358,8 +358,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const toggleSidebarCollapsed = useCallback(() => {
     const next = { ...prefs, collapsed: !prefs.collapsed };
     setPrefs(next);
-    saveSidebarPrefs(next);
-  }, [prefs]);
+    saveSidebarPrefs(userId, next);
+  }, [prefs, userId]);
 
   // Resolve current section order (fall back to SECTIONS default)
   const orderedSections = (() => {
