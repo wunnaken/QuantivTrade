@@ -112,10 +112,16 @@ export default function SetupTwoFactorPage() {
       });
       if (verifyError) throw new Error(verifyError.message);
 
+      // Refresh session so the AAL2 claim is present before unenrolling
+      await supabase.auth.refreshSession();
+
       const { error: unenrollError } = await supabase.auth.mfa.unenroll({
         factorId: phase.factorId,
       });
       if (unenrollError) throw new Error(unenrollError.message);
+
+      // Refresh session again so future requests no longer carry MFA factor
+      await supabase.auth.refreshSession();
       setPhase({ id: "disabled" });
       setCode("");
     } catch (err) {
