@@ -71,11 +71,11 @@ export async function POST(req: Request) {
     name: code.trim().toUpperCase(),
   });
 
-  const promoParams: Stripe.PromotionCodeCreateParams = {
+  const promoParams = {
     coupon: coupon.id,
     code: code.trim().toUpperCase(),
     max_redemptions,
-  };
+  } as Stripe.PromotionCodeCreateParams;
   if (expires_at) promoParams.expires_at = expires_at;
 
   const promoCode = await stripe.promotionCodes.create(promoParams);
