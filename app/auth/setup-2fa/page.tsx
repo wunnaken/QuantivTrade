@@ -81,18 +81,15 @@ export default function SetupTwoFactorPage() {
     if (code.length !== 6) { setError("Enter the 6-digit code from your authenticator app."); return; }
     setError(null);
     setBusy(true);
-    const factorId = phase.factorId;
     try {
-      const supabase = createClient();
-      const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
-      if (challengeError) throw new Error(challengeError.message);
-      const { error: verifyError } = await supabase.auth.mfa.verify({
-        factorId,
-        challengeId: challengeData.id,
-        code,
+      const res = await fetch("/api/auth/verify-2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ factorId: phase.factorId, code }),
       });
-      if (verifyError) throw new Error("Incorrect code. Please try again.");
-      setPhase({ id: "enabled", factorId });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Incorrect code. Please try again.");
+      setPhase({ id: "enabled", factorId: phase.factorId });
       setCode("");
     } catch (err) {
       if (err instanceof Error) setError(err.message);
@@ -107,22 +104,14 @@ export default function SetupTwoFactorPage() {
     if (code.length !== 6) { setError("Enter the 6-digit code to confirm."); return; }
     setError(null);
     setBusy(true);
-    const factorId = phase.factorId;
     try {
-      const supabase = createClient();
-      // Step 1: create a challenge
-      const { data: challengeData, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
-      if (challengeError) throw new Error(challengeError.message);
-      // Step 2: verify the code against the challenge
-      const { error: verifyError } = await supabase.auth.mfa.verify({
-        factorId,
-        challengeId: challengeData.id,
-        code,
+      const res = await fetch("/api/auth/disable-2fa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ factorId: phase.factorId, code }),
       });
-      if (verifyError) throw new Error("Incorrect code. Try again.");
-      // Step 3: unenroll — session is now proven AAL2
-      const { error: unenrollError } = await supabase.auth.mfa.unenroll({ factorId });
-      if (unenrollError) throw new Error(unenrollError.message);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to disable 2FA.");
       setCode("");
       await loadFactors();
     } catch (err) {
