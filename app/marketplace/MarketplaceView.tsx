@@ -467,7 +467,7 @@ function ListingCard({ listing, onClick, featured }: { listing: Listing; onClick
 function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, currentUserId }: {
   listing: Listing;
   onClose: () => void;
-  onPurchase: (id: string) => Promise<void>;
+  onPurchase: (id: string) => Promise<boolean>;
   currentUsername: string;
   currentUserId: string;
 }) {
