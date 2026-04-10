@@ -2076,7 +2076,7 @@ function SellerDashboard({ data, onClose, onCreate, onEdit }: {
 
   useEffect(() => {
     if (!data) return;
-    const initial: Record<string, { enabled: boolean; percent: number; saving: boolean }> = {};
+    const initial: Record<string, { enabled: boolean; percent: number; expiresAt: string; saving: boolean }> = {};
     for (const l of data.listings) {
       const raw = l.discount_expires_at ? new Date(l.discount_expires_at).toISOString().slice(0, 16) : "";
       initial[l.id] = { enabled: l.discount_enabled ?? false, percent: l.discount_percent ?? 10, expiresAt: raw, saving: false };
