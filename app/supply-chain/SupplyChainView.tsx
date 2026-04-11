@@ -1344,7 +1344,7 @@ function MacroTab() {
 
   const { joblessClaims, cpi, ppiFinal, ppiAll, yieldCurve, unemployment } = data!;
 
-  const macroSections: { key: keyof typeof data; color: string; gradId: string; refLine?: number; refLabel?: string }[] = [
+  const macroSections: { key: "joblessClaims" | "unemployment" | "cpi" | "ppiFinal" | "ppiAll" | "yieldCurve"; color: string; gradId: string; refLine?: number; refLabel?: string }[] = [
     { key: "joblessClaims", color: CHART_THEME.red, gradId: "icsakGrad" },
     { key: "unemployment", color: CHART_THEME.amber, gradId: "unrateGrad", refLine: 4, refLabel: "4%" },
     { key: "cpi", color: CHART_THEME.accent, gradId: "cpiGrad" },
