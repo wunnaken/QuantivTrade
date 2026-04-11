@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "../../../components/AuthContext";
 
@@ -11,7 +11,7 @@ type BoardPreview = {
   memberCount: number;
 };
 
-export default function JoinBoardPage() {
+function JoinBoardInner() {
   const { user, authLoading } = useAuth();
   const router = useRouter();
   const params = useSearchParams();
@@ -149,5 +149,17 @@ export default function JoinBoardPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function JoinBoardPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-[var(--app-bg)]">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-[var(--accent-color)]" />
+      </div>
+    }>
+      <JoinBoardInner />
+    </Suspense>
   );
 }
