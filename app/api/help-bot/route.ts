@@ -36,7 +36,7 @@ const SYSTEM = `You are the QuantivTrade Site Guide — a friendly assistant tha
 - /calendar — Economic calendar: upcoming events, earnings, central bank decisions
 - /screener — Stock screener with filters
 - /supply-chain — Supply chain risk and dependency analysis
-- /datahub — Raw economic and market datasets
+
 - /backtest — Strategy backtesting tool
 
 **Personal**

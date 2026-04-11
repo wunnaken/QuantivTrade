@@ -5,8 +5,11 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SiteFooter } from "../../components/SiteFooter";
+import { useSearchHistory } from "../../hooks/useSearchHistory";
 import { useAuth } from "../../components/AuthContext";
 import { getCachedBriefing, getBriefingDate, setBriefingSeen } from "../../lib/briefing";
+import { isLikelyTicker } from "../../lib/isLikelyTicker";
+import { getFuzzyTickerSuggestions, type TickerSuggestion } from "../../lib/ticker-suggestions";
 import { MorningBriefing } from "../../components/MorningBriefing";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -178,7 +181,7 @@ const CARD_REGISTRY: { id: string; name: string; h: number }[] = [
   { id: "insider-trades",     name: "Insider Trades",      h: 260 },
   { id: "fiscal-watch",       name: "Fiscal Watch",        h: 260 },
   { id: "crypto",             name: "Crypto",              h: 250 },
-  { id: "data-hub",           name: "Data Hub",            h: 210 },
+
   { id: "supply-chain",       name: "Supply Chain",        h: 210 },
   { id: "workspace",          name: "AI Workspace",        h: 190 },
   { id: "archive",            name: "Archive",             h: 210 },
@@ -217,7 +220,7 @@ const DEFAULT_LAYOUT: FeedCard[] = [
   { id: "insider-trades",     col: "center", order: 2,  size: "normal" },
   { id: "fiscal-watch",       col: "center", order: 3,  size: "normal" },
   { id: "crypto",             col: "center", order: 4,  size: "normal" },
-  { id: "data-hub",           col: "center", order: 5,  size: "normal" },
+
   { id: "supply-chain",       col: "center", order: 6,  size: "normal" },
   { id: "workspace",          col: "center", order: 7,  size: "normal" },
   { id: "archive",            col: "center", order: 8,  size: "normal" },
@@ -644,13 +647,256 @@ function DashboardHeader({ onCustomize }: { onCustomize: () => void }) {
           </button>
         </div>
       </motion.div>
+      <DashboardSearch />
     </>
+  );
+}
+
+type GlobalSearchResult = {
+  people: { user_id: string; name: string; username: string; is_verified?: boolean }[];
+  rooms: { id: number; name: string; description: string | null; slug: string; is_live: boolean }[];
+};
+
+function DashboardSearch() {
+  const router = useRouter();
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<GlobalSearchResult | null>(null);
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const { recent, save, remove } = useSearchHistory();
+
+  // Debounced global search
+  useEffect(() => {
+    if (q.length < 2) { setResults(null); return; }
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/global-search?q=${encodeURIComponent(q)}`);
+        const data = await res.json() as GlobalSearchResult;
+        setResults(data);
+        setOpen(true);
+      } catch { /* ignore */ }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const t = q.trim();
+    if (t && isLikelyTicker(t)) { save(t); setOpen(false); router.push(`/search/${encodeURIComponent(t.toUpperCase())}`); }
+  };
+
+  const go = (path: string, query?: string) => {
+    if (query) save(query);
+    setOpen(false);
+    setQ("");
+    router.push(path);
+  };
+
+  const hasResults = results && (results.people.length > 0 || results.rooms.length > 0);
+  // Always run fuzzy suggestions; filter out when user typed the exact symbol already
+  const tickerSuggestions = useMemo(() => {
+    if (q.length < 2) return [];
+    const up = q.trim().toUpperCase();
+    return getFuzzyTickerSuggestions(q).filter((t) => t.symbol.toUpperCase() !== up);
+  }, [q]);
+
+  return (
+    <div ref={wrapperRef} className="relative mb-5">
+      <form onSubmit={handleSubmit}>
+        <div className="relative flex items-center">
+          <svg className="pointer-events-none absolute left-3.5 h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={q}
+            onChange={(e) => { setQ(e.target.value); if (e.target.value.length >= 2) setOpen(true); }}
+            onFocus={() => setOpen(true)}
+            placeholder="Search stocks, crypto, people, communities..."
+            className="w-full rounded-xl border border-white/10 bg-[var(--app-card)] py-2.5 pl-10 pr-4 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors focus:border-[var(--accent-color)]/50"
+          />
+        </div>
+      </form>
+
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 overflow-hidden rounded-xl border border-white/10 bg-[var(--app-card)] shadow-2xl">
+
+          {/* Recent searches — shown when input is empty */}
+          {q.length < 2 && recent.length > 0 && (
+            <div>
+              <p className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Recent</p>
+              {recent.map((r) => {
+                const isUser = r.startsWith("@");
+                const isTicker = !isUser && isLikelyTicker(r);
+                const initials = isUser ? r.slice(1, 3).toUpperCase() : "";
+                return (
+                  <div
+                    key={r}
+                    className="group flex cursor-pointer items-center gap-2.5 px-3 py-2 transition hover:bg-white/5"
+                    onClick={async () => {
+                      save(r);
+                      setOpen(false);
+                      if (isUser) {
+                        const username = r.slice(1);
+                        try {
+                          const res = await fetch(`/api/profiles/search?q=${encodeURIComponent(username)}`);
+                          const data = await res.json() as { profiles?: { user_id: string; username: string }[] };
+                          const match = data.profiles?.find((p) => p.username === username);
+                          if (match) router.push(`/u/${match.user_id}`);
+                        } catch { /* ignore */ }
+                      } else {
+                        router.push(`/search/${encodeURIComponent(r)}`);
+                      }
+                    }}
+                  >
+                    {isUser ? (
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-semibold text-[var(--accent-color)]">
+                        {initials}
+                      </span>
+                    ) : isTicker ? (
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--accent-color)]/10">
+                        <svg className="h-3.5 w-3.5 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                        </svg>
+                      </span>
+                    ) : (
+                      <svg className="h-3.5 w-3.5 shrink-0 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    )}
+                    <span className="text-sm text-zinc-300">{r}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); remove(r); }}
+                      className="ml-0.5 rounded p-0.5 text-zinc-600 opacity-0 transition hover:text-zinc-300 group-hover:opacity-100"
+                      aria-label={`Remove ${r}`}
+                    >
+                      <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Live results — shown when typing */}
+          {q.length >= 2 && (
+            <>
+              {/* People */}
+              {results && results.people.length > 0 && (
+                <div>
+                  <p className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">People</p>
+                  {results.people.map((p) => (
+                    <button
+                      key={p.user_id}
+                      type="button"
+                      onClick={() => go(`/u/${p.user_id}`, `@${p.username}`)}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-white/5"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-semibold text-[var(--accent-color)]">
+                        {p.name.slice(0, 2).toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-zinc-100">{p.name}</p>
+                        <p className="text-xs text-zinc-500">@{p.username}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Rooms */}
+              {results && results.rooms.length > 0 && (
+                <div>
+                  <p className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Communities & Trade Rooms</p>
+                  {results.rooms.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => go(`/trade-rooms/${r.id}`, r.name)}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-white/5"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10">
+                        <svg className="h-3.5 w-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0" />
+                        </svg>
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <p className="truncate text-sm text-zinc-100">{r.name}</p>
+                          {r.is_live && <span className="shrink-0 rounded-full bg-red-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-red-400">LIVE</span>}
+                        </div>
+                        {r.description && <p className="truncate text-xs text-zinc-500">{r.description}</p>}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {!hasResults && results && tickerSuggestions.length === 0 && !isLikelyTicker(q) && (
+                <p className="px-3 py-3 text-sm text-zinc-500">No people or rooms matched &ldquo;{q}&rdquo;</p>
+              )}
+
+              {/* Fuzzy ticker suggestions */}
+              {tickerSuggestions.length > 0 && (
+                <div className={hasResults ? "border-t border-white/8" : ""}>
+                  <p className="px-3 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Suggested Tickers</p>
+                  {tickerSuggestions.map((t: TickerSuggestion) => (
+                    <button
+                      key={t.symbol}
+                      type="button"
+                      onClick={() => { save(t.symbol); go(`/search/${encodeURIComponent(t.symbol)}`); }}
+                      className="flex w-full items-center gap-2.5 px-3 py-2 text-left transition hover:bg-white/5"
+                    >
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--accent-color)]/10">
+                        <svg className="h-3.5 w-3.5 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                        </svg>
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-zinc-100">{t.name}</p>
+                        <p className="text-xs text-zinc-500">{t.symbol}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Market data footer — only shown for valid ticker format */}
+              {isLikelyTicker(q) && (
+                <button
+                  type="button"
+                  onClick={() => { save(q.toUpperCase()); go(`/search/${encodeURIComponent(q.toUpperCase())}`); }}
+                  className="flex w-full items-center gap-2.5 border-t border-white/8 px-3 py-2.5 text-left transition hover:bg-white/5"
+                >
+                  <svg className="h-4 w-4 shrink-0 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                  </svg>
+                  <p className="text-sm text-zinc-300">Search market data for <span className="font-medium text-[var(--accent-color)]">&ldquo;{q.toUpperCase()}&rdquo;</span></p>
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
 // ── LEFT: Bond Yield Curve (30-day multi-line history) ────────────────────────
 
-const YIELD_COLORS: Record<string,string> = { "2Y":"#60a5fa", "5Y":"#34d399", "10Y":"#f59e0b", "30Y":"#f87171" };
+const YIELD_COLORS: Record<string,string> = { "30Y":"#f87171", "10Y":"#f59e0b", "5Y":"#34d399", "2Y":"#60a5fa" };
 
 function BondYieldCurveCard({delay}:{delay:number}) {
   const [history,setHistory] = useState<{label:string;data:{date:string;value:number}[]}[]>([]);
@@ -699,8 +945,22 @@ function BondYieldCurveCard({delay}:{delay:number}) {
           <LineChart data={chartData} margin={{top:4,right:4,bottom:0,left:-22}}>
             <XAxis dataKey="date" tick={{fill:"#52525b",fontSize:8,dy:6}} axisLine={false} tickLine={false} tickFormatter={v=>String(v).slice(5)} interval="preserveStartEnd"/>
             <YAxis tick={{fill:"#52525b",fontSize:9}} axisLine={false} tickLine={false} domain={["auto","auto"]}/>
-            <Tooltip contentStyle={{backgroundColor:"var(--app-card)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,fontSize:11}} labelStyle={{color:"#a1a1aa"}}
-              formatter={(v:any,name:any)=>[`${Number(v).toFixed(2)}%`,name]} cursor={{stroke:"rgba(255,255,255,0.08)"}}/>
+            <Tooltip
+              cursor={{stroke:"rgba(255,255,255,0.08)"}}
+              content={({active,payload,label}:any)=>{
+                if(!active||!payload?.length) return null;
+                const ORDER=["30Y","10Y","5Y","2Y"];
+                const sorted=ORDER.map((k:string)=>payload.find((p:any)=>p.dataKey===k)).filter(Boolean);
+                return(
+                  <div style={{backgroundColor:"var(--app-card)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,fontSize:11,padding:"8px 10px"}}>
+                    <p style={{color:"#a1a1aa",marginBottom:4}}>{String(label).slice(5)}</p>
+                    {sorted.map((p:any)=>(
+                      <p key={p.dataKey} style={{color:p.color,margin:"2px 0"}}>{p.dataKey}: {Number(p.value).toFixed(2)}%</p>
+                    ))}
+                  </div>
+                );
+              }}
+            />
             {Object.entries(YIELD_COLORS).map(([lbl,col])=>(
               <Line key={lbl} type="monotone" dataKey={lbl} stroke={col} strokeWidth={1.5} dot={false} activeDot={{r:3}} connectNulls/>
             ))}
@@ -1484,27 +1744,6 @@ function GlobeCard({delay}:{delay:number}) {
   );
 }
 
-// ── RIGHT: DataHub ────────────────────────────────────────────────────────────
-
-const DATA_SOURCES = [
-  {name:"Earnings Calendar",tag:"earnings"},{name:"Global Trade Flows",tag:"trade"},
-  {name:"Macro Indicators",tag:"macro"},{name:"Sector Heatmap",tag:"sectors"},
-];
-
-function DataHubCard({delay}:{delay:number}) {
-  return (
-    <BentoCard href="/datahub" title="DataHub" icon={I.database} delay={delay} className="min-h-[160px]">
-      <ul className="space-y-1.5 pt-1">
-        {DATA_SOURCES.map(d=>(
-          <li key={d.tag} className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5 text-xs text-zinc-400">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent-color)]/60"/>
-            {d.name}
-          </li>
-        ))}
-      </ul>
-    </BentoCard>
-  );
-}
 
 // ── RIGHT: Backtest ───────────────────────────────────────────────────────────
 
@@ -2044,7 +2283,7 @@ export default function BentoDashboardView() {
           case "insider-trades":     return <InsiderTradesCard delay={cardDelay} />;
           case "fiscal-watch":       return <FiscalWatchCard delay={cardDelay} />;
           case "crypto":             return <CryptoCard delay={cardDelay} />;
-          case "data-hub":           return <DataHubCard delay={cardDelay} />;
+          case "data-hub":           return null;
           case "supply-chain":       return <SupplyChainCard delay={cardDelay} />;
           case "workspace":          return <WorkspaceCard delay={cardDelay} />;
           case "archive":            return <ArchiveCard delay={cardDelay} />;

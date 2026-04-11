@@ -34,6 +34,7 @@ export async function GET(request: NextRequest) {
     .from("whiteboard_boards")
     .select("id,name,scene,updated_at")
     .eq("user_id", userId)
+    .or("is_group.is.null,is_group.eq.false")
     .order("updated_at", { ascending: false });
 
   if (boardId) query = query.eq("id", boardId);

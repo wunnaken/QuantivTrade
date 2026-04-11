@@ -30,7 +30,7 @@ const SITE_PAGES = [
   { label: "Calendar",          path: "/calendar",        description: "Economic events, earnings, central banks",      keywords: ["calendar", "events", "earnings", "economic"] },
   { label: "Screener",          path: "/screener",        description: "Filter stocks by custom criteria",              keywords: ["screener", "filter", "scan", "stocks"] },
   { label: "Supply Chain",      path: "/supply-chain",    description: "Supply chain risk and dependency analysis",     keywords: ["supply chain", "risk", "dependencies"] },
-  { label: "DataHub",           path: "/datahub",         description: "Raw economic and market datasets",              keywords: ["data", "datasets", "hub", "raw"] },
+
   { label: "Backtest",          path: "/backtest",        description: "Backtest trading strategies",                   keywords: ["backtest", "strategy", "historical", "test"] },
   // Personal
   { label: "Journal",           path: "/journal",         description: "Your private trading journal",                  keywords: ["journal", "notes", "diary", "trades"] },

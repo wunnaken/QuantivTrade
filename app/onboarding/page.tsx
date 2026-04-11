@@ -24,42 +24,35 @@ const MARKET_TAGS = [
 
 // ─── Personalised tips ────────────────────────────────────────────────────────
 
-function getStartingTip(experience: Experience): { emoji: string; heading: string; body: string } {
+function getStartingTip(experience: Experience): { heading: string; body: string } {
   if (experience === "beginner") return {
-    emoji: "🌱",
     heading: "Where to start",
     body: "Head to the Dashboard first. You'll see top market movers, a morning briefing, and trending ideas from other traders — no jargon, just what's happening.",
   };
   if (experience === "some") return {
-    emoji: "📰",
     heading: "Your daily routine",
     body: "Open the News & Calendar each morning to catch macro events. Pair it with the Market Map to see which sectors are reacting — a 5-minute habit that keeps you sharp.",
   };
   return {
-    emoji: "⚡",
     heading: "Power up your workflow",
-    body: "Set up your Watchlist, run a Backtest on your strategy, and follow analysts in Communities whose reasoning you trust. The DataHub has deep historical data when you need it.",
+    body: "Set up your Watchlist, run a Backtest on your strategy, and follow analysts in Communities whose reasoning you trust.",
   };
 }
 
-function getGoalTip(goal: Goal): { emoji: string; heading: string; body: string } {
+function getGoalTip(goal: Goal): { heading: string; body: string } {
   if (goal === "save-big") return {
-    emoji: "🏠",
     heading: "Saving for a goal",
     body: "Use the Screener to filter for low-volatility ETFs and dividend stocks. Consistency beats timing — small, regular positions add up fast.",
   };
   if (goal === "passive-income") return {
-    emoji: "💸",
     heading: "Building passive income",
     body: "The Portfolios section surfaces dividend-focused and income-generating ideas. Watch for yield and payout consistency, not just price movement.",
   };
   if (goal === "maximize") return {
-    emoji: "🚀",
     heading: "Chasing maximum returns",
     body: "The Futures and Crypto sections carry the highest upside — and the highest risk. Use Backtesting to pressure-test your ideas before sizing up.",
   };
   return {
-    emoji: "📈",
     heading: "Growing your wealth",
     body: "Follow high-conviction traders in Communities to see how they think, not just what they buy. Combine that with the Market Relations chart to stay ahead of macro shifts.",
   };
@@ -100,7 +93,6 @@ function BreakdownStep({
             className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5"
           >
             <div className="flex items-center gap-3 mb-2">
-              <span className="text-2xl">{tip.emoji}</span>
               <p className="font-semibold text-zinc-100 text-sm">{tip.heading}</p>
             </div>
             <p className="text-sm text-zinc-400 leading-relaxed">{tip.body}</p>
@@ -110,7 +102,6 @@ function BreakdownStep({
         {topMarkets.length > 0 && (
           <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
             <div className="flex items-center gap-3 mb-3">
-              <span className="text-2xl">🎯</span>
               <p className="font-semibold text-zinc-100 text-sm">Your selected markets</p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -248,14 +239,13 @@ export default function OnboardingPage() {
               </h2>
               <div className="mt-8 grid gap-4">
                 {[
-                  { id: "beginner" as const, icon: "🌱", title: "Complete Beginner", sub: "I'm just getting started" },
-                  { id: "some" as const, icon: "📚", title: "Some Knowledge", sub: "I understand the basics" },
-                  { id: "intermediate" as const, icon: "📊", title: "Intermediate", sub: "I follow markets regularly" },
-                  { id: "advanced" as const, icon: "⚡", title: "Advanced", sub: "I trade actively and understand risk" },
+                  { id: "beginner" as const, title: "Complete Beginner", sub: "I'm just getting started" },
+                  { id: "some" as const, title: "Some Knowledge", sub: "I understand the basics" },
+                  { id: "intermediate" as const, title: "Intermediate", sub: "I follow markets regularly" },
+                  { id: "advanced" as const, title: "Advanced", sub: "I trade actively and understand risk" },
                 ].map((opt) => (
                   <button key={opt.id} type="button" onClick={() => setExperience(opt.id)}
                     className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition-all duration-200 ${experience === opt.id ? "border-[var(--accent-color)]/60 bg-[var(--accent-color)]/10" : "border-white/10 bg-white/5 hover:border-white/20"}`}>
-                    <span className="text-2xl">{opt.icon}</span>
                     <div><p className="font-semibold text-zinc-100">{opt.title}</p><p className="text-sm text-zinc-400">{opt.sub}</p></div>
                   </button>
                 ))}
@@ -302,14 +292,13 @@ export default function OnboardingPage() {
               </h2>
               <div className="mt-8 grid gap-4">
                 {[
-                  { id: "sell-all" as const, icon: "😰", title: "Sell everything", sub: "I can't handle that loss" },
-                  { id: "sell-some" as const, icon: "😟", title: "Sell some", sub: "Reduce my exposure" },
-                  { id: "hold" as const, icon: "😐", title: "Hold", sub: "Stick to my plan" },
-                  { id: "buy-more" as const, icon: "😎", title: "Buy more", sub: "It's a discount" },
+                  { id: "sell-all" as const, title: "Sell everything", sub: "I can't handle that loss" },
+                  { id: "sell-some" as const, title: "Sell some", sub: "Reduce my exposure" },
+                  { id: "hold" as const, title: "Hold", sub: "Stick to my plan" },
+                  { id: "buy-more" as const, title: "Buy more", sub: "It's a discount" },
                 ].map((opt) => (
                   <button key={opt.id} type="button" onClick={() => setRiskReaction(opt.id)}
                     className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition-all duration-200 ${riskReaction === opt.id ? "border-[var(--accent-color)]/60 bg-[var(--accent-color)]/10" : "border-white/10 bg-white/5 hover:border-white/20"}`}>
-                    <span className="text-2xl">{opt.icon}</span>
                     <div><p className="font-semibold text-zinc-100">{opt.title}</p><p className="text-sm text-zinc-400">{opt.sub}</p></div>
                   </button>
                 ))}
@@ -329,14 +318,13 @@ export default function OnboardingPage() {
               </h2>
               <div className="mt-8 grid gap-4">
                 {[
-                  { id: "save-big" as const, icon: "🏠", title: "Save for something big", sub: "House, car, tuition" },
-                  { id: "grow-wealth" as const, icon: "📈", title: "Grow my wealth over time", sub: "" },
-                  { id: "passive-income" as const, icon: "💸", title: "Generate passive income", sub: "" },
-                  { id: "maximize" as const, icon: "🚀", title: "Maximize returns", sub: "I accept high risk" },
+                  { id: "save-big" as const, title: "Save for something big", sub: "House, car, tuition" },
+                  { id: "grow-wealth" as const, title: "Grow my wealth over time", sub: "" },
+                  { id: "passive-income" as const, title: "Generate passive income", sub: "" },
+                  { id: "maximize" as const, title: "Maximize returns", sub: "I accept high risk" },
                 ].map((opt) => (
                   <button key={opt.id} type="button" onClick={() => setGoal(opt.id)}
                     className={`flex items-center gap-4 rounded-2xl border p-4 text-left transition-all duration-200 ${goal === opt.id ? "border-[var(--accent-color)]/60 bg-[var(--accent-color)]/10" : "border-white/10 bg-white/5 hover:border-white/20"}`}>
-                    <span className="text-2xl">{opt.icon}</span>
                     <div><p className="font-semibold text-zinc-100">{opt.title}</p>{opt.sub && <p className="text-sm text-zinc-400">{opt.sub}</p>}</div>
                   </button>
                 ))}

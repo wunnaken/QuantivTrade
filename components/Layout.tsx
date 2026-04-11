@@ -43,8 +43,9 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/calendar", label: "Calendar" },
   { href: "/screener", label: "Screener" },
   { href: "/supply-chain", label: "Supply Chain" },
-  { href: "/archive", label: "Archive", icon: "archive" },
+  { href: "/brokers", label: "My Brokerages", icon: "briefcase" },
   { href: "/marketplace", label: "Marketplace", icon: "marketplace" },
+  { href: "/archive", label: "Archive", icon: "archive" },
   { href: "/datahub", label: "DataHub" },
   { href: "/backtest", label: "Backtest" },
   { href: "/journal", label: "Journal" },
@@ -214,6 +215,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [hiddenPanelOpen, setHiddenPanelOpen] = useState(false);
   const [inAppNotifs, setInAppNotifs] = useState<ReturnType<typeof getInAppNotifications>>([]);
   const [notificationCount, setNotificationCount] = useState(0);
+  type BoardInvite = { id: string; board_id: string; board_name: string; inviter_name: string | null; permissions: string; created_at: string };
+  const [boardInvites, setBoardInvites] = useState<BoardInvite[]>([]);
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const messagesDropdownRef = useRef<HTMLDivElement>(null);
@@ -228,9 +231,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const n = inAppNotifs.length + getPredictNotifications().length;
+    if (!user) return;
+    const fetchInvites = () => {
+      fetch("/api/board-invites")
+        .then(r => r.json())
+        .then((d: { invites?: BoardInvite[] }) => setBoardInvites(d.invites ?? []))
+        .catch(() => {});
+    };
+    fetchInvites();
+    const interval = setInterval(fetchInvites, 30_000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  useEffect(() => {
+    const n = inAppNotifs.length + getPredictNotifications().length + boardInvites.length;
     setNotificationCount(Math.min(99, n));
-  }, [inAppNotifs.length]);
+  }, [inAppNotifs.length, boardInvites.length]);
   const hiddenPanelRef = useRef<HTMLDivElement>(null);
 
   const { connectionState } = usePriceContext();
@@ -350,6 +366,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
     [pathname]
   );
 
+  const handleBoardInviteAction = async (id: string, action: "accept" | "decline") => {
+    await fetch("/api/board-invites", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action }),
+    });
+    setBoardInvites(prev => prev.filter(i => i.id !== id));
+  };
+
   const isNarrowScreen = windowWidth < 1024;
   const collapsed = isNarrowScreen || prefs.collapsed;
   const sidebarWidth = collapsed ? (sidebarOpen ? SIDEBAR_WIDTH : 72) : SIDEBAR_WIDTH;
@@ -450,20 +475,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Search bar */}
-        <div className="border-b border-white/10 px-3 py-3">
-          <Link
-            href="/search"
-            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-left text-sm text-zinc-500 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-white/10 hover:text-zinc-300"
-            aria-label="Search any stock, crypto, forex"
-          >
-            <svg className="h-4 w-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            {!collapsed && <span className="truncate">Search any stock, crypto, forex...</span>}
-          </Link>
-        </div>
-
         <nav className="flex-1 overflow-y-auto p-3" aria-label="Main navigation">
           {/* Standalone items — not in any category */}
           <div className="mb-2 flex flex-col gap-0.5">
@@ -476,10 +487,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               onClick={() => setSidebarOpen(false)}
             />
             <NavItem
-              href="/archive"
-              label="Archive"
-              icon="archive"
-              isActive={isActive("/archive")}
+              href="/brokers"
+              label="My Brokerages"
+              icon="briefcase"
+              isActive={isActive("/brokers")}
               collapsed={collapsed}
               onClick={() => setSidebarOpen(false)}
             />
@@ -488,6 +499,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
               label="Marketplace"
               icon="marketplace"
               isActive={isActive("/marketplace")}
+              collapsed={collapsed}
+              onClick={() => setSidebarOpen(false)}
+            />
+            <NavItem
+              href="/archive"
+              label="Archive"
+              icon="archive"
+              isActive={isActive("/archive")}
               collapsed={collapsed}
               onClick={() => setSidebarOpen(false)}
             />
@@ -775,6 +794,41 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   Mark all as read
                 </button>
                 <div className="my-1 h-px bg-white/10" />
+                {boardInvites.length > 0 && (
+                  <>
+                    {boardInvites.map((invite) => (
+                      <div key={invite.id} className="px-4 py-3 border-b border-white/5">
+                        <div className="flex items-start gap-2 mb-2">
+                          <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-zinc-200">Board invite</p>
+                            <p className="text-xs text-zinc-400 mt-0.5">
+                              {invite.inviter_name ? `@${invite.inviter_name}` : "Someone"} invited you to <span className="font-medium text-zinc-300">{invite.board_name}</span>
+                            </p>
+                            <p className="text-[10px] text-zinc-600 mt-0.5">{invite.permissions === "edit" ? "Can edit" : "View only"}</p>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 pl-4">
+                          <button
+                            type="button"
+                            onClick={() => handleBoardInviteAction(invite.id, "accept")}
+                            className="flex-1 rounded-lg bg-[var(--accent-color)]/20 py-1.5 text-xs font-medium text-[var(--accent-color)] hover:bg-[var(--accent-color)]/30 transition-colors"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleBoardInviteAction(invite.id, "decline")}
+                            className="flex-1 rounded-lg border border-white/10 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 hover:border-white/20 transition-colors"
+                          >
+                            Decline
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="my-1 h-px bg-white/10" />
+                  </>
+                )}
                 {inAppNotifs.length > 0 && (
                   <>
                     {inAppNotifs.slice(0, 5).map((n) => (

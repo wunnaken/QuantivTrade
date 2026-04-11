@@ -62,6 +62,7 @@ const BASE_SUGGESTIONS = [
 export function SiteHelpBot() {
   const pathname = usePathname();
   const pageLabel = getPageLabel(pathname);
+  const isWhiteboard = pathname === "/whiteboard" || pathname.startsWith("/whiteboard/");
 
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -125,7 +126,7 @@ export function SiteHelpBot() {
       {/* Chat panel */}
       {open && (
         <div
-          className="fixed bottom-20 right-4 z-50 flex w-80 flex-col rounded-2xl border border-white/10 bg-[var(--app-bg)]"
+          className={`fixed ${isWhiteboard ? "bottom-32" : "bottom-20"} right-4 z-50 flex w-80 flex-col rounded-2xl border border-white/10 bg-[var(--app-bg)]`}
           style={{ maxHeight: "min(540px, calc(100vh - 100px))" }}
         >
           {/* Header */}
@@ -178,7 +179,7 @@ export function SiteHelpBot() {
               <div className="space-y-3">
                 <div className="rounded-xl border border-white/8 bg-white/4 px-3 py-2.5">
                   <p className="text-[11px] font-medium text-zinc-300">
-                    👋 Hi! I&apos;m your QuantivTrade guide.
+                    Hi, I&apos;m your QuantivTrade guide.
                   </p>
                   <p className="mt-0.5 text-[11px] text-zinc-500">
                     You&apos;re on <span className="font-medium text-zinc-300">{pageLabel}</span>. Ask me anything about this page or the site.
@@ -265,7 +266,7 @@ export function SiteHelpBot() {
       {/* Floating trigger */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="fixed bottom-4 right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full transition hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
+        className={`fixed ${isWhiteboard ? "bottom-16" : "bottom-4"} right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full transition hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]`}
         style={{ backgroundColor: "var(--accent-color)" }}
         aria-label={open ? "Close site guide" : "Open site guide"}
       >

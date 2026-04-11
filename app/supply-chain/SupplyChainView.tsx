@@ -9,7 +9,7 @@ import {
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
-type Tab = "energy" | "agriculture" | "manufacturing" | "shipping" | "semiconductors" | "consumer";
+type Tab = "energy" | "agriculture" | "manufacturing" | "shipping" | "semiconductors" | "consumer" | "commodities" | "macro";
 
 interface ApiResult<T> {
   loading: boolean;
@@ -147,6 +147,8 @@ function EnergyTab() {
     crudeOil: { history: { date: string; value: number }[]; latest: { date: string; value: number } | null; fiveYearAvg: number | null; signal: string; label: string; unit: string; reportLabel: string; updateSchedule: string };
     natGas: { history: { date: string; value: number }[]; latest: { date: string; value: number } | null; fiveYearAvg: number | null; signal: string; label: string; unit: string; reportLabel: string; updateSchedule: string };
     refinery: { history: { date: string; value: number }[]; latest: { date: string; value: number } | null; label: string; unit: string; reportLabel: string; updateSchedule: string };
+    gasoline: { history: { date: string; value: number }[]; latest: { date: string; value: number } | null; label: string; unit: string; reportLabel: string; updateSchedule: string; note: string };
+    distillate: { history: { date: string; value: number }[]; latest: { date: string; value: number } | null; fiveYearAvg: number | null; label: string; unit: string; reportLabel: string; updateSchedule: string; note: string };
   }>("/api/supply-chain/energy");
 
   if (loading) return <div className="space-y-4">{[1, 2, 3].map(i => <div key={i} className="h-64 animate-pulse rounded-xl bg-zinc-800/40" />)}</div>;
@@ -155,6 +157,8 @@ function EnergyTab() {
   const crude = data!.crudeOil;
   const gas = data!.natGas;
   const ref = data!.refinery;
+  const gasoline = data!.gasoline;
+  const distillate = data!.distillate;
 
   const crudeHistory = crude.history ?? [];
   const gasHistory = gas.history ?? [];
@@ -260,6 +264,75 @@ function EnergyTab() {
         </ResponsiveContainer>
         <SourceLabel label={ref.reportLabel} schedule={ref.updateSchedule} type="delayed" />
       </section>
+
+      {/* Gasoline */}
+      {gasoline?.history?.length > 0 && (
+        <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-zinc-100">Regular Gasoline Retail Price</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">{gasoline.note}</p>
+            </div>
+            {gasoline.latest && (
+              <div className="text-right">
+                <p className="text-2xl font-bold text-zinc-50">${fmt(gasoline.latest.value, 3)}<span className="ml-1 text-sm font-normal text-zinc-400">/gal</span></p>
+                <p className="text-[10px] text-zinc-500">as of {fmtDate(gasoline.latest.date)}</p>
+              </div>
+            )}
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={gasoline.history} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="gasolineGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={CHART_THEME.red} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={CHART_THEME.red} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
+              <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} interval={7} />
+              <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={44} tickFormatter={(v) => "$" + v.toFixed(2)} domain={["auto", "auto"]} />
+              <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => ["$" + fmt(v as number, 3) + "/gal", "Gasoline"]} />
+              <Area type="monotone" dataKey="value" stroke={CHART_THEME.red} fill="url(#gasolineGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+          <SourceLabel label={gasoline.reportLabel} schedule={gasoline.updateSchedule} type="delayed" />
+        </section>
+      )}
+
+      {/* Distillate Stocks */}
+      {distillate?.history?.length > 0 && (
+        <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-zinc-100">Distillate Fuel Oil Stocks</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">{distillate.note}</p>
+            </div>
+            {distillate.latest && (
+              <div className="text-right">
+                <p className="text-2xl font-bold text-zinc-50">{fmt(distillate.latest.value)}<span className="ml-1 text-sm font-normal text-zinc-400">K bbl</span></p>
+                <p className="text-[10px] text-zinc-500">as of {fmtDate(distillate.latest.date)}</p>
+              </div>
+            )}
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={distillate.history} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="distillateGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={CHART_THEME.amber} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={CHART_THEME.amber} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
+              <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} interval={7} />
+              <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={60} tickFormatter={(v) => (v / 1000).toFixed(0) + "M"} />
+              <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => [fmt(v as number) + " thousand bbl", "Distillate"]} />
+              {distillate.fiveYearAvg && <ReferenceLine y={distillate.fiveYearAvg} stroke={CHART_THEME.amber} strokeDasharray="4 2" label={{ value: "5yr avg", fill: CHART_THEME.amber, fontSize: 10 }} />}
+              <Area type="monotone" dataKey="value" stroke={CHART_THEME.amber} fill="url(#distillateGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+          <SourceLabel label={distillate.reportLabel} schedule={distillate.updateSchedule} type="delayed" />
+        </section>
+      )}
     </div>
   );
 }
@@ -375,7 +448,7 @@ function ManufacturingTab() {
       phillyFed: { value: number | null; date: string | null; label: string; source: string; note: string };
       kansasFed: { value: number | null; date: string | null; label: string; source: string; note: string };
     };
-    labels: { pmiNote: string; isratioNote: string; newOrdersNote: string; capexNote: string };
+    labels: { pmiNote: string; isratioNote: string; newOrdersNote: string; capexNote: string; indproNote: string; tcuNote: string; awhmNote: string };
   }>("/api/supply-chain/manufacturing");
 
   if (loading) return <div className="space-y-4">{[1, 2, 3].map(i => <div key={i} className="h-64 animate-pulse rounded-xl bg-zinc-800/40" />)}</div>;
@@ -391,6 +464,9 @@ function ManufacturingTab() {
   const unfilledOrders = s["AMDMUO"];
   const isratio = s["ISRATIO"];
   const durableGoods = s["DGORDER"];
+  const indpro = s["INDPRO"];
+  const tcu = s["TCU"];
+  const awhm = s["AWHMAN"];
   const regional = data!.regionalSurveys;
 
   const pmiVal = pmi?.latest?.value ?? null;
@@ -507,6 +583,85 @@ function ManufacturingTab() {
         </section>
       )}
 
+      {/* Industrial Production + Capacity Utilization */}
+      {(indpro?.history?.length > 0 || tcu?.history?.length > 0) && (
+        <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
+          <h3 className="mb-1 text-base font-semibold text-zinc-100">Industrial Production & Capacity Utilization</h3>
+          <div className="mb-4 grid gap-4 sm:grid-cols-2">
+            {indpro?.latest && (
+              <div className="rounded-xl border border-zinc-700/40 bg-zinc-800/30 p-4">
+                <p className="text-xs text-zinc-500">Industrial Production Index</p>
+                <p className="mt-1 text-2xl font-bold text-zinc-50">{fmt(indpro.latest.value, 1)}</p>
+                <p className="text-[10px] text-zinc-500">index (2017=100) · {fmtDate(indpro.latest.date)}</p>
+                <p className="mt-2 text-[10px] text-zinc-400">{data!.labels.indproNote}</p>
+              </div>
+            )}
+            {tcu?.latest && (
+              <div className="rounded-xl border border-zinc-700/40 bg-zinc-800/30 p-4">
+                <p className="text-xs text-zinc-500">Total Capacity Utilization</p>
+                <p className="mt-1 text-2xl font-bold" style={{ color: tcu.latest.value >= 80 ? CHART_THEME.green : tcu.latest.value >= 75 ? CHART_THEME.amber : CHART_THEME.red }}>
+                  {fmt(tcu.latest.value, 1)}%
+                </p>
+                <p className="text-[10px] text-zinc-500">{fmtDate(tcu.latest.date)}</p>
+                <p className="mt-2 text-[10px] text-zinc-400">{data!.labels.tcuNote}</p>
+              </div>
+            )}
+          </div>
+          {indpro?.history?.length > 0 && (
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={indpro.history.slice(-24)} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id="indproGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={CHART_THEME.green} stopOpacity={0.25} />
+                    <stop offset="95%" stopColor={CHART_THEME.green} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
+                <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} interval={5} />
+                <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={44} domain={["auto", "auto"]} />
+                <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => [fmt(v as number, 1), "INDPRO"]} />
+                <Area type="monotone" dataKey="value" stroke={CHART_THEME.green} fill="url(#indproGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+          <SourceLabel label="Federal Reserve via FRED (INDPRO, TCU)" schedule="Monthly — released ~mid-month" type="delayed" />
+        </section>
+      )}
+
+      {/* Avg Weekly Hours */}
+      {awhm?.history?.length > 0 && (
+        <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-zinc-100">Avg Weekly Hours — Manufacturing</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">{data!.labels.awhmNote}</p>
+            </div>
+            {awhm.latest && (
+              <div className="text-right">
+                <p className="text-2xl font-bold text-zinc-50">{fmt(awhm.latest.value, 1)}<span className="ml-1 text-sm font-normal text-zinc-400">hrs/week</span></p>
+                <p className="text-[10px] text-zinc-500">as of {fmtDate(awhm.latest.date)}</p>
+              </div>
+            )}
+          </div>
+          <ResponsiveContainer width="100%" height={180}>
+            <AreaChart data={awhm.history.slice(-24)} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="awhmGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={CHART_THEME.purple} stopOpacity={0.25} />
+                  <stop offset="95%" stopColor={CHART_THEME.purple} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
+              <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} interval={5} />
+              <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={40} domain={["auto", "auto"]} />
+              <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => [fmt(v as number, 1) + " hrs", "Avg Weekly Hours"]} />
+              <Area type="monotone" dataKey="value" stroke={CHART_THEME.purple} fill="url(#awhmGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+          <SourceLabel label="BLS via FRED (AWHMAN)" schedule="Monthly — released first Friday of month" type="delayed" />
+        </section>
+      )}
+
       {/* Regional Fed Surveys */}
       <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
         <h3 className="mb-1 text-base font-semibold text-zinc-100">Regional Fed Manufacturing Surveys</h3>
@@ -529,6 +684,8 @@ function ManufacturingTab() {
   );
 }
 
+type StockProxy = { quote?: { c?: number; d?: number; dp?: number }; label: string; segment?: string; type: string; error?: string };
+
 function ShippingTab() {
   const { loading, data, error } = useApi<{
     error?: string; message?: string;
@@ -543,7 +700,7 @@ function ShippingTab() {
     };
     containerShipping: {
       freightos: { status: string; message: string };
-      marketProxies: Record<string, { quote?: { c?: number; d?: number; dp?: number }; label: string; type: string; error?: string }>;
+      marketProxies: Record<string, StockProxy>;
     };
     portCongestion: {
       newsProxy: number | null;
@@ -553,7 +710,11 @@ function ShippingTab() {
     };
     trucking: {
       dat: { status: string; message: string };
-      marketProxies: Record<string, { quote?: { c?: number; d?: number; dp?: number }; label: string; type: string; error?: string }>;
+      tsi: { history: { date: string; value: number }[]; latest: { date: string; value: number } | null; available: boolean; label: string; source: string; schedule: string; note: string };
+      diesel: { history: { date: string; value: number }[]; latest: { date: string; value: number } | null; available: boolean; label: string; source: string; schedule: string; note: string };
+      truckloadProxies: Record<string, StockProxy>;
+      ltlProxies: Record<string, StockProxy>;
+      brokerProxies: Record<string, StockProxy>;
     };
   }>("/api/supply-chain/shipping");
 
@@ -565,6 +726,113 @@ function ShippingTab() {
 
   return (
     <div className="space-y-6">
+      {/* Trucking — Diesel */}
+      {data!.trucking.diesel.available ? (
+        <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-zinc-100">On-Highway Diesel Price</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">{data!.trucking.diesel.note}</p>
+            </div>
+            {data!.trucking.diesel.latest && (
+              <div className="text-right">
+                <p className="text-2xl font-bold text-zinc-50">${fmt(data!.trucking.diesel.latest.value, 3)}<span className="ml-1 text-sm font-normal text-zinc-400">/gal</span></p>
+                <p className="text-[10px] text-zinc-500">as of {fmtDate(data!.trucking.diesel.latest.date)}</p>
+              </div>
+            )}
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={data!.trucking.diesel.history} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="dieselGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={CHART_THEME.amber} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={CHART_THEME.amber} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
+              <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} interval={7} />
+              <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={44} tickFormatter={(v) => "$" + v.toFixed(2)} domain={["auto", "auto"]} />
+              <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => ["$" + fmt(v as number, 3) + "/gal", "Diesel"]} />
+              <Area type="monotone" dataKey="value" stroke={CHART_THEME.amber} fill="url(#dieselGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+          <SourceLabel label={data!.trucking.diesel.source} schedule={data!.trucking.diesel.schedule} type="delayed" />
+        </section>
+      ) : null}
+
+      {/* Trucking — TSI */}
+      {data!.trucking.tsi.available ? (
+        <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-zinc-100">Trucking Services Index (TSI)</h3>
+              <p className="text-xs text-zinc-500 mt-0.5">{data!.trucking.tsi.note}</p>
+            </div>
+            {data!.trucking.tsi.latest && (
+              <div className="text-right">
+                <p className="text-2xl font-bold text-zinc-50">{fmt(data!.trucking.tsi.latest.value, 1)}</p>
+                <p className="text-[10px] text-zinc-500">index (2000=100) as of {fmtDate(data!.trucking.tsi.latest.date)}</p>
+              </div>
+            )}
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <AreaChart data={data!.trucking.tsi.history} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+              <defs>
+                <linearGradient id="tsiGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={CHART_THEME.accent} stopOpacity={0.3} />
+                  <stop offset="95%" stopColor={CHART_THEME.accent} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
+              <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} interval={5} />
+              <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={44} domain={["auto", "auto"]} />
+              <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => [fmt(v as number, 1), "TSI-Trucking"]} />
+              <Area type="monotone" dataKey="value" stroke={CHART_THEME.accent} fill="url(#tsiGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+            </AreaChart>
+          </ResponsiveContainer>
+          <SourceLabel label={data!.trucking.tsi.source} schedule={data!.trucking.tsi.schedule} type="delayed" />
+        </section>
+      ) : null}
+
+      {/* Trucking — Market Proxies */}
+      <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
+        <h3 className="mb-1 text-base font-semibold text-zinc-100">Trucking Industry Stocks</h3>
+        <p className="mb-1 text-xs text-zinc-500">Equity prices of major carriers, brokers, and logistics firms as a proxy for industry health. DAT spot rate data requires a paid subscription.</p>
+        <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-400">
+          {data!.trucking.dat.message}
+        </div>
+
+        {[
+          { title: "Truckload (TL)", proxies: data!.trucking.truckloadProxies, color: CHART_THEME.accent },
+          { title: "Less-Than-Truckload (LTL)", proxies: data!.trucking.ltlProxies, color: CHART_THEME.green },
+          { title: "Brokerage & Leasing", proxies: data!.trucking.brokerProxies, color: CHART_THEME.purple },
+        ].map(({ title, proxies, color }) => (
+          <div key={title} className="mb-4">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color }}>{title}</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {Object.entries(proxies).map(([sym, q]) => (
+                <div key={sym} className="rounded-xl border border-zinc-700/40 bg-zinc-800/30 p-3">
+                  <div className="flex items-start justify-between gap-1">
+                    <div>
+                      <p className="text-sm font-bold text-zinc-100">{sym}</p>
+                      <p className="text-[10px] text-zinc-500 leading-tight">{q.label}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-semibold text-zinc-100">{q.quote?.c ? "$" + fmt(q.quote.c, 2) : "—"}</p>
+                      <p className="text-[10px]" style={{ color: (q.quote?.d ?? 0) >= 0 ? CHART_THEME.green : CHART_THEME.red }}>
+                        {q.quote?.d != null ? ((q.quote.d >= 0 ? "+" : "") + fmt(q.quote.d, 2)) : ""}
+                      </p>
+                    </div>
+                  </div>
+                  {q.segment && <span className="mt-2 inline-block rounded px-1.5 py-0.5 text-[9px] font-medium" style={{ background: color + "22", color }}>{q.segment}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        <SourceLabel label="Finnhub — equity market proxies, NOT actual trucking spot rates" type="proxy" />
+      </section>
+
       {/* BDI Proxy */}
       <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -651,28 +919,6 @@ function ShippingTab() {
           {data!.portCongestion.marineTaffic.message}
         </div>
         <SourceLabel label="NewsData.io news volume proxy — NOT official port data" type="proxy" />
-      </section>
-
-      {/* Trucking */}
-      <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
-        <h3 className="mb-1 text-base font-semibold text-zinc-100">Trucking</h3>
-        <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-400">
-          {data!.trucking.dat.message}
-        </div>
-        <p className="mb-3 text-xs font-medium text-zinc-400">Trucking company stocks as market proxies</p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {Object.entries(data!.trucking.marketProxies).filter(([k]) => k !== "disclaimer").map(([sym, q]) => (
-            <div key={sym} className="rounded-xl border border-zinc-700/40 bg-zinc-800/30 p-3">
-              <p className="text-xs text-zinc-500">{sym}</p>
-              <p className="text-lg font-bold text-zinc-100">{q.quote?.c ? "$" + fmt(q.quote.c, 2) : "—"}</p>
-              <p className="text-[10px]" style={{ color: (q.quote?.d ?? 0) >= 0 ? CHART_THEME.green : CHART_THEME.red }}>
-                {q.quote?.d != null ? ((q.quote.d >= 0 ? "+" : "") + fmt(q.quote.d, 2)) : ""}
-              </p>
-              <p className="mt-1 text-[9px] text-zinc-600 leading-tight">{q.label}</p>
-            </div>
-          ))}
-        </div>
-        <SourceLabel label="Finnhub — equity market proxies, NOT actual trucking spot rates" type="proxy" />
       </section>
     </div>
   );
@@ -960,6 +1206,200 @@ function ConsumerTab() {
   );
 }
 
+// ─── Commodities Tab ──────────────────────────────────────────────────────────
+
+type CommodityData = { name: string; unit: string; history: { date: string; value: number }[]; latest: { date: string; value: number } | null; available: boolean; note: string; error?: string };
+
+function CommodityChart({ commodity, color, gradientId }: { commodity: CommodityData; color: string; gradientId: string }) {
+  if (!commodity.available || commodity.history.length === 0) {
+    return <div className="rounded-lg border border-zinc-700/30 bg-zinc-800/20 p-3 text-xs text-zinc-500">{commodity.error ?? "Data unavailable"}</div>;
+  }
+  const change = commodity.history.length > 1 ? commodity.latest!.value - commodity.history[commodity.history.length - 2].value : null;
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-zinc-100">{commodity.name}</p>
+          <p className="text-[10px] text-zinc-500">{commodity.unit}</p>
+        </div>
+        {commodity.latest && (
+          <div className="text-right">
+            <p className="text-lg font-bold text-zinc-50">{fmt(commodity.latest.value, 2)}</p>
+            {change != null && (
+              <p className="text-[10px]" style={{ color: change >= 0 ? CHART_THEME.green : CHART_THEME.red }}>
+                {change >= 0 ? "+" : ""}{fmt(change, 2)}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+      <ResponsiveContainer width="100%" height={100}>
+        <AreaChart data={commodity.history} margin={{ top: 2, right: 2, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+              <stop offset="95%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="date" hide />
+          <YAxis hide domain={["auto", "auto"]} />
+          <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 6, fontSize: 11 }} formatter={(v: unknown) => [fmt(v as number, 2), commodity.name]} labelFormatter={(d) => d} />
+          <Area type="monotone" dataKey="value" stroke={color} fill={`url(#${gradientId})`} strokeWidth={1.5} dot={false} activeDot={{ r: 3, strokeWidth: 0 }} />
+        </AreaChart>
+      </ResponsiveContainer>
+      <p className="mt-1 text-[9px] text-zinc-600 leading-tight">{commodity.note}</p>
+    </div>
+  );
+}
+
+function CommoditiesTab() {
+  const { loading, data, error } = useApi<{
+    error?: string; message?: string;
+    metals: Record<string, CommodityData>;
+    agricultural: Record<string, CommodityData>;
+    energy: Record<string, CommodityData>;
+    source: string;
+    schedule: string;
+    rateNote: string;
+  }>("/api/supply-chain/commodities");
+
+  if (loading) return <div className="space-y-4">{[1, 2, 3].map(i => <div key={i} className="h-64 animate-pulse rounded-xl bg-zinc-800/40" />)}</div>;
+  if (error || data?.error) return <DataUnavailable message={data?.message ?? error ?? "Alpha Vantage API key required"} />;
+
+  const metalColors: Record<string, { color: string; id: string }> = {
+    COPPER: { color: CHART_THEME.amber, id: "copperGrad" },
+    ALUMINUM: { color: CHART_THEME.purple, id: "aluminumGrad" },
+  };
+  const agriColors: Record<string, { color: string; id: string }> = {
+    WHEAT: { color: CHART_THEME.amber, id: "wheatGrad" },
+    CORN: { color: CHART_THEME.green, id: "cornGrad" },
+    COTTON: { color: "#a78bfa", id: "cottonGrad" },
+    COFFEE: { color: "#92400e", id: "coffeeGrad" },
+  };
+  const energyColors: Record<string, { color: string; id: string }> = {
+    WTI: { color: CHART_THEME.accent, id: "wtiGrad" },
+    NATURAL_GAS: { color: CHART_THEME.green, id: "ngGrad" },
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="rounded-xl border border-zinc-700/30 bg-zinc-800/20 p-3 text-xs text-zinc-400">{data!.rateNote}</div>
+
+      {/* Metals */}
+      <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
+        <h3 className="mb-1 text-base font-semibold text-zinc-100">Industrial Metals</h3>
+        <p className="mb-4 text-xs text-zinc-500">Key manufacturing input costs — rising prices signal demand strength or supply constraints</p>
+        <div className="grid gap-6 sm:grid-cols-2">
+          {Object.entries(data!.metals).map(([sym, c]) => (
+            <CommodityChart key={sym} commodity={c} color={metalColors[sym]?.color ?? CHART_THEME.accent} gradientId={metalColors[sym]?.id ?? sym} />
+          ))}
+        </div>
+        <SourceLabel label={data!.source} schedule={data!.schedule} type="delayed" />
+      </section>
+
+      {/* Agricultural */}
+      <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
+        <h3 className="mb-1 text-base font-semibold text-zinc-100">Agricultural Commodities</h3>
+        <p className="mb-4 text-xs text-zinc-500">Food & fiber supply chain pricing — affected by weather, exports, and geopolitical disruptions</p>
+        <div className="grid gap-6 sm:grid-cols-2">
+          {Object.entries(data!.agricultural).map(([sym, c]) => (
+            <CommodityChart key={sym} commodity={c} color={agriColors[sym]?.color ?? CHART_THEME.green} gradientId={agriColors[sym]?.id ?? sym} />
+          ))}
+        </div>
+        <SourceLabel label={data!.source} schedule={data!.schedule} type="delayed" />
+      </section>
+
+      {/* Energy (backup) */}
+      <section className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
+        <h3 className="mb-1 text-base font-semibold text-zinc-100">Energy Commodities</h3>
+        <p className="mb-4 text-xs text-zinc-500">Monthly price history — see the Energy tab for weekly EIA inventory and storage data</p>
+        <div className="grid gap-6 sm:grid-cols-2">
+          {Object.entries(data!.energy).map(([sym, c]) => (
+            <CommodityChart key={sym} commodity={c} color={energyColors[sym]?.color ?? CHART_THEME.red} gradientId={energyColors[sym]?.id ?? sym} />
+          ))}
+        </div>
+        <SourceLabel label={data!.source} schedule={data!.schedule} type="delayed" />
+      </section>
+    </div>
+  );
+}
+
+// ─── Macro Tab ────────────────────────────────────────────────────────────────
+
+type MacroSeries = { history: { date: string; value: number }[]; latest: { date: string; value: number } | null; available: boolean; label: string; unit: string; source: string; schedule: string; note: string; error?: string };
+
+function MacroTab() {
+  const { loading, data, error } = useApi<{
+    error?: string; message?: string;
+    joblessClaims: MacroSeries;
+    cpi: MacroSeries;
+    ppiFinal: MacroSeries;
+    ppiAll: MacroSeries;
+    yieldCurve: MacroSeries;
+    unemployment: MacroSeries;
+  }>("/api/supply-chain/macro");
+
+  if (loading) return <div className="space-y-4">{[1, 2, 3].map(i => <div key={i} className="h-64 animate-pulse rounded-xl bg-zinc-800/40" />)}</div>;
+  if (error || data?.error) return <DataUnavailable message={data?.message ?? error ?? "FRED API key required"} setupUrl="https://fred.stlouisfed.org/docs/api/api_key.html" />;
+
+  const { joblessClaims, cpi, ppiFinal, ppiAll, yieldCurve, unemployment } = data!;
+
+  const macroSections: { key: keyof typeof data; color: string; gradId: string; refLine?: number; refLabel?: string }[] = [
+    { key: "joblessClaims", color: CHART_THEME.red, gradId: "icsakGrad" },
+    { key: "unemployment", color: CHART_THEME.amber, gradId: "unrateGrad", refLine: 4, refLabel: "4%" },
+    { key: "cpi", color: CHART_THEME.accent, gradId: "cpiGrad" },
+    { key: "ppiFinal", color: CHART_THEME.purple, gradId: "ppifisGrad" },
+    { key: "ppiAll", color: CHART_THEME.green, gradId: "ppiacoGrad" },
+    { key: "yieldCurve", color: CHART_THEME.amber, gradId: "t10y2yGrad", refLine: 0, refLabel: "0 (inversion)" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {macroSections.map(({ key, color, gradId, refLine, refLabel }) => {
+        const s = data![key as keyof typeof data] as MacroSeries;
+        if (!s?.available) return null;
+        const isYieldCurve = key === "yieldCurve";
+        const latestVal = s.latest?.value ?? null;
+        return (
+          <section key={key} className="rounded-2xl border border-zinc-700/40 bg-zinc-900/50 p-5">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-zinc-100">{s.label}</h3>
+                <p className="text-xs text-zinc-500 mt-0.5">{s.note}</p>
+              </div>
+              {latestVal != null && (
+                <div className="text-right">
+                  <p className="text-2xl font-bold" style={{ color: isYieldCurve ? (latestVal < 0 ? CHART_THEME.red : CHART_THEME.green) : "var(--tw-text-opacity, #f4f4f5)" }}>
+                    {isYieldCurve && latestVal >= 0 ? "+" : ""}{fmt(latestVal, key === "unemployment" || isYieldCurve ? 2 : 1)}{(key === "unemployment" || isYieldCurve) ? "%" : ""}
+                  </p>
+                  <p className="text-[10px] text-zinc-500">as of {fmtDate(s.latest?.date)}</p>
+                </div>
+              )}
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <AreaChart data={s.history.slice(-36)} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                <defs>
+                  <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={color} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={color} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_THEME.grid} />
+                <XAxis dataKey="date" tick={{ fill: CHART_THEME.text, fontSize: 10 }} tickFormatter={(d) => d.slice(0, 7)} interval={5} />
+                <YAxis tick={{ fill: CHART_THEME.text, fontSize: 10 }} width={50} domain={["auto", "auto"]} />
+                <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} formatter={(v: unknown) => [fmt(v as number, 2), s.label]} />
+                {refLine !== undefined && <ReferenceLine y={refLine} stroke={CHART_THEME.amber} strokeDasharray="4 2" label={{ value: refLabel, fill: CHART_THEME.amber, fontSize: 10, position: "insideTopRight" }} />}
+                <Area type="monotone" dataKey="value" stroke={color} fill={`url(#${gradId})`} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+            <SourceLabel label={s.source} schedule={s.schedule} type="delayed" />
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Signal Dashboard (sidebar) ───────────────────────────────────────────────
 
 interface SignalItem {
@@ -1080,6 +1520,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "shipping", label: "Shipping" },
   { id: "semiconductors", label: "Semiconductors" },
   { id: "consumer", label: "Consumer" },
+  { id: "commodities", label: "Commodities" },
+  { id: "macro", label: "Macro" },
 ];
 
 export default function SupplyChainView() {
@@ -1134,6 +1576,8 @@ export default function SupplyChainView() {
         {activeTab === "shipping" && <ShippingTab />}
         {activeTab === "semiconductors" && <SemiconductorsTab />}
         {activeTab === "consumer" && <ConsumerTab />}
+        {activeTab === "commodities" && <CommoditiesTab />}
+        {activeTab === "macro" && <MacroTab />}
       </div>
 
       {/* Right sidebar */}

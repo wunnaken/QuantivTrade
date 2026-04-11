@@ -56,7 +56,7 @@ type Board = {
 type RemoteCursor = { userId: string; username: string; x: number; y: number; color: string };
 type ActiveMember = { userId: string; username: string; color: string; joinedAt: number };
 type Community = { id: string; name: string };
-type MemberResult = { id: string; username: string; name: string | null };
+type MemberResult = { id: string; username: string; name: string | null; avatar_url?: string | null };
 
 type ExcalidrawAPI = {
   getSceneElements: () => unknown[];
@@ -134,12 +134,17 @@ async function fetchBoardsFromApi(): Promise<Board[]> {
 async function fetchGroupBoardsFromApi(): Promise<Board[]> {
   try {
     const res = await fetch("/api/whiteboard/group", { cache: "no-store" });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as { error?: string };
+      console.error("[group boards]", res.status, err.error);
+      return [];
+    }
     const data = (await res.json()) as { boards?: Board[] };
     return Array.isArray(data.boards)
       ? data.boards.map(b => ({ ...b, id: String((b as Record<string, unknown>).id) }))
       : [];
-  } catch {
+  } catch (e) {
+    console.error("[group boards] fetch error", e);
     return [];
   }
 }
@@ -162,6 +167,7 @@ function CreateBoardModal({
   const [selectedMembers, setSelectedMembers] = useState<MemberResult[]>([]);
   const [permissions, setPermissions] = useState<"edit" | "view">("edit");
   const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isGroup) return;
@@ -172,11 +178,14 @@ function CreateBoardModal({
   }, [isGroup]);
 
   useEffect(() => {
-    if (!memberSearch.trim()) { setSearchResults([]); return; }
+    if (memberSearch.trim().length < 1) { setSearchResults([]); return; }
     const t = setTimeout(() => {
-      fetch(`/api/whiteboard/members?q=${encodeURIComponent(memberSearch)}`)
+      fetch(`/api/global-search?q=${encodeURIComponent(memberSearch)}`)
         .then(r => r.json())
-        .then(d => setSearchResults(Array.isArray(d) ? (d as MemberResult[]).slice(0, 5) : []))
+        .then(d => {
+          const people = (d?.people ?? []) as Array<{ user_id: string; username: string; name: string; avatar_url?: string | null }>;
+          setSearchResults(people.slice(0, 5).map(p => ({ id: p.user_id, username: p.username, name: p.name, avatar_url: p.avatar_url })));
+        })
         .catch(() => {});
     }, 300);
     return () => clearTimeout(t);
@@ -190,6 +199,7 @@ function CreateBoardModal({
   const handleCreate = async () => {
     if (!name.trim()) return;
     setCreating(true);
+    setCreateError(null);
     try {
       if (isGroup) {
         const res = await fetch("/api/whiteboard/group", {
@@ -202,16 +212,19 @@ function CreateBoardModal({
             permissions,
           }),
         });
-        if (!res.ok) throw new Error("Failed");
-        const data = (await res.json()) as { board: Board };
-        onCreate({ ...data.board, id: String((data.board as Record<string, unknown>).id) }, true);
+        const data = (await res.json()) as { board?: Board; error?: string };
+        if (!res.ok) throw new Error(data.error ?? "Failed to create group board");
+        onCreate({ ...data.board!, id: String((data.board as Record<string, unknown>).id) }, true);
       } else {
         const id = String(Date.now());
         onCreate({ id, name: name.trim(), scene: emptyScene() }, false);
       }
       onClose();
-    } catch { /* fail silently */ }
-    finally { setCreating(false); }
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setCreating(false);
+    }
   };
 
   return (
@@ -242,7 +255,7 @@ function CreateBoardModal({
             onClick={() => setIsGroup(v => !v)}
             className={`relative h-5 w-9 rounded-full transition-colors ${isGroup ? "bg-[var(--accent-color)]" : "bg-zinc-700"}`}
           >
-            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${isGroup ? "translate-x-4" : "translate-x-0.5"}`} />
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all duration-200 ${isGroup ? "left-[18px]" : "left-[2px]"}`} />
           </button>
         </div>
 
@@ -262,7 +275,7 @@ function CreateBoardModal({
 
             <label className="mb-3 block">
               <span className="mb-1 block text-[10px] uppercase tracking-wider text-zinc-500">Add Members</span>
-              <div className="relative">
+              <div>
                 <input
                   value={memberSearch}
                   onChange={e => setMemberSearch(e.target.value)}
@@ -270,15 +283,21 @@ function CreateBoardModal({
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-[var(--accent-color)]/40"
                 />
                 {searchResults.length > 0 && (
-                  <ul className="absolute top-full z-10 mt-1 w-full rounded-lg border border-white/10 bg-[#080B14] shadow-lg">
+                  <ul className="mt-1 w-full rounded-lg border border-white/10 bg-[#080B14] shadow-lg overflow-hidden">
                     {searchResults.map(m => (
                       <li
                         key={m.id}
-                        onClick={() => addMember(m)}
-                        className="cursor-pointer px-3 py-2 text-xs text-zinc-300 hover:bg-white/5 first:rounded-t-lg last:rounded-b-lg"
+                        onMouseDown={() => addMember(m)}
+                        className="flex items-center gap-2.5 cursor-pointer px-3 py-2 hover:bg-white/5 first:rounded-t-lg last:rounded-b-lg"
                       >
-                        <span className="font-medium">@{m.username}</span>
-                        {m.name && <span className="ml-1.5 text-zinc-500">{m.name}</span>}
+                        {m.avatar_url
+                          ? <img src={m.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
+                          : <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-semibold text-[var(--accent-color)]">{(m.name ?? m.username).slice(0, 2).toUpperCase()}</span>
+                        }
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-medium text-zinc-200">{m.name ?? m.username}</p>
+                          <p className="text-[10px] text-zinc-500">@{m.username}</p>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -318,6 +337,10 @@ function CreateBoardModal({
           </>
         )}
 
+        {createError && (
+          <p className="mb-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{createError}</p>
+        )}
+
         <div className="flex gap-2">
           <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-white/10 py-2 text-sm text-zinc-400 hover:text-zinc-300">Cancel</button>
           <button
@@ -328,6 +351,323 @@ function CreateBoardModal({
           >
             {creating ? "Creating..." : "Create Board"}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── ManageMembersModal ─────────────────────────────────────────────────────────
+
+function ManageMembersModal({
+  board,
+  currentUserId,
+  onClose,
+  onMembersChanged,
+}: {
+  board: Board;
+  currentUserId: string;
+  onClose: () => void;
+  onMembersChanged: (board: Board) => void;
+}) {
+  type PendingInvite = { inviteId: string; member: MemberResult };
+
+  const [memberSearch, setMemberSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<MemberResult[]>([]);
+  const [members, setMembers] = useState<MemberResult[]>([]); // resolved profiles for allowed_members
+  const [permissions, setPermissions] = useState<"edit" | "view">(board.permissions ?? "edit");
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState(false);
+  const [copyLabel, setCopyLabel] = useState("Copy Link");
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  // Resolve member profiles
+  useEffect(() => {
+    const ids = board.allowed_members ?? [];
+    if (ids.length === 0) { setMembers([]); return; }
+    fetch(`/api/whiteboard/members?ids=${ids.join(",")}`)
+      .then(r => r.json())
+      .then((d: MemberResult[]) => setMembers(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [board.allowed_members]);
+
+  // Load pending invites for this board
+  useEffect(() => {
+    const boardIdRaw = board.id.startsWith("board-") ? board.id.slice("board-".length) : board.id;
+    fetch(`/api/board-invites?boardId=${boardIdRaw}`)
+      .then(r => r.json())
+      .then(async (d: { invites?: Array<{ id: string; invitee_id: string; permissions: string }> }) => {
+        const invites = d.invites ?? [];
+        if (invites.length === 0) return;
+        // Resolve invitee profiles
+        const ids = invites.map(i => i.invitee_id).join(",");
+        const res = await fetch(`/api/whiteboard/members?ids=${ids}`);
+        const profiles = await res.json() as MemberResult[];
+        const profileMap = Object.fromEntries(profiles.map(p => [p.id, p]));
+        setPendingInvites(invites.map(i => ({
+          inviteId: i.id,
+          member: profileMap[i.invitee_id] ?? { id: i.invitee_id, username: i.invitee_id.slice(0, 8), name: null },
+        })));
+      })
+      .catch(() => {});
+  }, [board.id]);
+
+  // Member username search via global-search (same endpoint as dashboard)
+  useEffect(() => {
+    if (memberSearch.trim().length < 1) { setSearchResults([]); return; }
+    const t = setTimeout(() => {
+      fetch(`/api/global-search?q=${encodeURIComponent(memberSearch)}`)
+        .then(r => r.json())
+        .then(d => {
+          const people = (d?.people ?? []) as Array<{ user_id: string; username: string; name: string; avatar_url?: string | null }>;
+          setSearchResults(people.slice(0, 5).map(p => ({ id: p.user_id, username: p.username, name: p.name, avatar_url: p.avatar_url })));
+        })
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [memberSearch]);
+
+  const addMember = async (m: MemberResult) => {
+    if (members.find(x => x.id === m.id)) return;
+    if (pendingInvites.find(x => x.member.id === m.id)) return;
+    setMemberSearch(""); setSearchResults([]);
+    setInviteError(null);
+    const boardIdRaw = board.id.startsWith("board-") ? board.id.slice("board-".length) : board.id;
+    try {
+      const res = await fetch("/api/board-invites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          board_id: boardIdRaw,
+          board_name: board.name,
+          invitee_id: m.id,
+          permissions: board.permissions ?? "edit",
+        }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string };
+      if (!res.ok) {
+        setInviteError(data.error ?? "Failed to send invite");
+        return;
+      }
+      setPendingInvites(prev => [...prev, { inviteId: String(Date.now()), member: m }]);
+    } catch {
+      setInviteError("Network error — invite not sent");
+    }
+  };
+
+  const removeMember = async (memberId: string) => {
+    setRemoving(memberId);
+    const boardIdRaw = board.id.startsWith("board-") ? board.id.slice("board-".length) : board.id;
+    await fetch("/api/whiteboard/group", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ boardId: boardIdRaw, action: "remove_member", memberId }),
+    });
+    const updated = { ...board, allowed_members: (board.allowed_members ?? []).filter(id => id !== memberId) };
+    setMembers(prev => prev.filter(m => m.id !== memberId));
+    onMembersChanged(updated);
+    setRemoving(null);
+  };
+
+  const changePermissions = async (p: "edit" | "view") => {
+    setPermissions(p);
+    const boardIdRaw = board.id.startsWith("board-") ? board.id.slice("board-".length) : board.id;
+    await fetch("/api/whiteboard/group", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ boardId: boardIdRaw, action: "set_permissions", permissions: p }),
+    });
+    onMembersChanged({ ...board, permissions: p });
+  };
+
+  const generateInviteLink = async () => {
+    setGeneratingLink(true);
+    const boardIdRaw = board.id.startsWith("board-") ? board.id.slice("board-".length) : board.id;
+    try {
+      const res = await fetch(`/api/whiteboard/invite?boardId=${boardIdRaw}`, { method: "POST" });
+      const data = await res.json() as { token?: string };
+      if (data.token) {
+        setInviteLink(`${window.location.origin}/whiteboard/join?token=${data.token}`);
+      }
+    } catch { /* fail silently */ }
+    finally { setGeneratingLink(false); }
+  };
+
+  const copyLink = () => {
+    if (!inviteLink) return;
+    navigator.clipboard.writeText(inviteLink).then(() => {
+      setCopyLabel("Copied!");
+      setTimeout(() => setCopyLabel("Copy Link"), 2000);
+    });
+  };
+
+  const revokeLink = async () => {
+    const boardIdRaw = board.id.startsWith("board-") ? board.id.slice("board-".length) : board.id;
+    await fetch(`/api/whiteboard/invite?boardId=${boardIdRaw}`, { method: "DELETE" });
+    setInviteLink(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="w-[460px] max-h-[85vh] overflow-y-auto rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-6 shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-100">Manage Board</h2>
+            <p className="mt-0.5 text-[10px] text-zinc-500 truncate max-w-[300px]">{board.name}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-zinc-600 hover:text-zinc-400">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Invite link */}
+        <div className="mb-5 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+          <p className="mb-2 text-xs font-semibold text-zinc-300">Invite Link</p>
+          <p className="mb-3 text-[10px] text-zinc-500">Anyone with this link can join the board. Share it with traders you want to collaborate with.</p>
+          {inviteLink ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-2.5 py-2">
+                <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-400">{inviteLink}</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={copyLink}
+                  className="flex-1 rounded-lg bg-[var(--accent-color)]/20 py-2 text-xs font-medium text-[var(--accent-color)] hover:bg-[var(--accent-color)]/30 transition-colors"
+                >
+                  {copyLabel}
+                </button>
+                <button
+                  type="button"
+                  onClick={revokeLink}
+                  className="rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-500 hover:text-red-400 hover:border-red-500/30 transition-colors"
+                >
+                  Revoke
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={generateInviteLink}
+              disabled={generatingLink}
+              className="w-full rounded-lg border border-dashed border-white/20 py-2.5 text-xs text-zinc-500 hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)] transition-colors disabled:opacity-50"
+            >
+              {generatingLink ? "Generating…" : "Generate Invite Link"}
+            </button>
+          )}
+        </div>
+
+        {/* Add member by username */}
+        <div className="mb-4">
+          <p className="mb-2 text-xs font-semibold text-zinc-300">Add by Username</p>
+          <div>
+            <input
+              value={memberSearch}
+              onChange={e => setMemberSearch(e.target.value)}
+              placeholder="Search username…"
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 outline-none focus:border-[var(--accent-color)]/40"
+            />
+            {searchResults.length > 0 && (
+              <ul className="mt-1 w-full rounded-lg border border-white/10 bg-[#080B14] shadow-lg overflow-hidden">
+                {searchResults.map(m => (
+                  <li
+                    key={m.id}
+                    onMouseDown={() => addMember(m)}
+                    className="flex items-center gap-2.5 cursor-pointer px-3 py-2 hover:bg-white/5 first:rounded-t-lg last:rounded-b-lg"
+                  >
+                    {m.avatar_url
+                      ? <img src={m.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover shrink-0" />
+                      : <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/10 text-[11px] font-semibold text-[var(--accent-color)]">{(m.name ?? m.username).slice(0, 2).toUpperCase()}</span>
+                    }
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-medium text-zinc-200">{m.name ?? m.username}</p>
+                      <p className="text-[10px] text-zinc-500">@{m.username}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {inviteError && (
+          <p className="mb-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400">{inviteError}</p>
+        )}
+
+        {/* Member list */}
+        <div className="mb-5">
+          <p className="mb-2 text-xs font-semibold text-zinc-300">
+            Members {members.length > 0 && <span className="font-normal text-zinc-600">({members.length})</span>}
+          </p>
+          {members.length === 0 ? (
+            <p className="text-[11px] text-zinc-600">No members yet — share the invite link or add by username.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {members.map(m => (
+                <li key={m.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                  <span className="text-xs text-zinc-300">
+                    <span className="font-medium">@{m.username}</span>
+                    {m.name && <span className="ml-1.5 text-zinc-500">{m.name}</span>}
+                  </span>
+                  {m.id !== currentUserId && (
+                    <button
+                      type="button"
+                      onClick={() => removeMember(m.id)}
+                      disabled={removing === m.id}
+                      className="text-[10px] text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40"
+                    >
+                      {removing === m.id ? "…" : "Remove"}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {pendingInvites.length > 0 && (
+            <>
+              <p className="mt-3 mb-1 text-[10px] uppercase tracking-wider text-zinc-600">Pending Invites</p>
+              <ul className="space-y-1.5">
+                {pendingInvites.map(({ inviteId, member }) => (
+                  <li key={inviteId} className="flex items-center justify-between rounded-lg border border-amber-500/10 bg-amber-500/5 px-3 py-2">
+                    <span className="text-xs text-zinc-400">
+                      <span className="font-medium">@{member.username}</span>
+                      {member.name && <span className="ml-1.5 text-zinc-600">{member.name}</span>}
+                    </span>
+                    <span className="text-[10px] text-amber-500/70">Invite sent</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+
+        {/* Permissions */}
+        <div>
+          <p className="mb-2 text-xs font-semibold text-zinc-300">Member Permissions</p>
+          <div className="flex gap-2">
+            {(["edit", "view"] as const).map(p => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => changePermissions(p)}
+                className={`flex-1 rounded-lg py-2 text-xs font-medium transition-colors ${
+                  permissions === p
+                    ? "bg-[var(--accent-color)]/20 text-[var(--accent-color)]"
+                    : "border border-white/10 text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {p === "edit" ? "All members can edit" : "View only"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -378,6 +718,7 @@ export default function WhiteboardPage() {
   const [boardName, setBoardName] = useState("My Trading Board");
   const [editingBoardNameId, setEditingBoardNameId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [managingBoard, setManagingBoard] = useState<Board | null>(null);
 
   // Realtime state
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
@@ -395,28 +736,33 @@ export default function WhiteboardPage() {
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveFnRef = useRef<() => Promise<void>>(async () => {});
   const authUserIdRef = useRef<string | null>(null);
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const skipGroupFetchRef = useRef(false);
 
   // Computed
   const isGroupBoard = activeBoard?.is_group === true;
   const isViewOnly =
     isGroupBoard &&
     activeBoard?.permissions === "view" &&
-    activeBoard?.user_id !== authUserIdRef.current;
+    activeBoard?.user_id !== authUserId;
 
   // Fetch Supabase auth user ID on mount
   useEffect(() => {
     createClient().auth.getUser().then(({ data: { user: sbUser } }) => {
-      authUserIdRef.current = sbUser?.id ?? null;
+      const id = sbUser?.id ?? null;
+      authUserIdRef.current = id;
+      setAuthUserId(id);
     });
   }, []);
 
-  // Load personal boards on mount
+  // Load personal + group boards on mount
   useEffect(() => {
     setLastWorkspaceTab("whiteboard");
     let cancelled = false;
-    fetchBoardsFromApi().then(list => {
+    Promise.all([fetchBoardsFromApi(), fetchGroupBoardsFromApi()]).then(([list, gList]) => {
       if (cancelled) return;
       setBoards(list);
+      setGroupBoards(gList);
       if (list.length > 0) {
         const first = list[0];
         initialDataRef.current = toInitialData(first.scene);
@@ -440,6 +786,7 @@ export default function WhiteboardPage() {
   // Load group boards when switching to group tab
   useEffect(() => {
     if (tab !== "group") return;
+    if (skipGroupFetchRef.current) { skipGroupFetchRef.current = false; return; }
     fetchGroupBoardsFromApi().then(list => setGroupBoards(list));
   }, [tab]);
 
@@ -482,6 +829,7 @@ export default function WhiteboardPage() {
       // Presence sync — who's online
       channel.on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<{ userId: string; username: string; joinedAt: number }>();
+        const seen = new Set<string>();
         const members: ActiveMember[] = Object.values(state).flatMap(presences =>
           presences.map(p => ({
             userId: p.userId,
@@ -489,7 +837,11 @@ export default function WhiteboardPage() {
             color: getUserColor(p.userId),
             joinedAt: p.joinedAt,
           }))
-        );
+        ).filter(m => {
+          if (seen.has(m.userId)) return false;
+          seen.add(m.userId);
+          return true;
+        });
         if (isMounted) setActiveMembers(members);
       });
 
@@ -665,7 +1017,8 @@ export default function WhiteboardPage() {
   }, [activeId, activeBoard, toast]);
 
   const deleteActive = useCallback(async (id: string) => {
-    const isGroup = activeBoard?.is_group;
+    const boardToDelete = [...boards, ...groupBoards].find(b => b.id === id);
+    const isGroup = boardToDelete?.is_group === true;
     if (isGroup) {
       await fetch(`/api/whiteboard/group?boardId=${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
       setGroupBoards(prev => prev.filter(b => b.id !== id));
@@ -704,8 +1057,14 @@ export default function WhiteboardPage() {
     });
   }, [isGroupBoard, user]);
 
+  const handleMembersChanged = useCallback((updated: Board) => {
+    setGroupBoards(prev => prev.map(b => b.id === updated.id ? { ...b, ...updated } : b));
+    if (managingBoard?.id === updated.id) setManagingBoard(updated);
+  }, [managingBoard]);
+
   const handleBoardCreated = useCallback((board: Board, isGroup: boolean) => {
     if (isGroup) {
+      skipGroupFetchRef.current = true;
       setGroupBoards(prev => [board, ...prev]);
       setTab("group");
     } else {
@@ -736,6 +1095,14 @@ export default function WhiteboardPage() {
     <>
       {showCreateModal && (
         <CreateBoardModal onClose={() => setShowCreateModal(false)} onCreate={handleBoardCreated} />
+      )}
+      {managingBoard && user && (
+        <ManageMembersModal
+          board={managingBoard}
+          currentUserId={user.id}
+          onClose={() => setManagingBoard(null)}
+          onMembersChanged={handleMembersChanged}
+        />
       )}
 
       <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden bg-[var(--app-bg)]">
@@ -800,60 +1167,71 @@ export default function WhiteboardPage() {
                 currentBoards.map(b => (
                   <div
                     key={b.id}
-                    className={`mb-1.5 rounded-lg border px-2 py-2 ${
+                    onClick={() => { if (b.id !== activeId) switchBoard(b); }}
+                    className={`mb-1.5 rounded-lg border px-2 py-2 transition-colors ${
                       b.id === activeId
                         ? "border-[var(--accent-color)]/40 bg-white/10"
-                        : "border-white/10 bg-white/5"
+                        : "cursor-pointer border-white/10 bg-white/5 hover:bg-white/8"
                     }`}
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (b.id === activeId) setEditingBoardNameId(b.id);
-                        else switchBoard(b);
-                      }}
-                      className="w-full text-left"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate text-sm text-zinc-200">{b.id === activeId ? boardName : b.name}</span>
-                        {b.is_group && (
-                          <span className="shrink-0 rounded-full bg-[var(--accent-color)]/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--accent-color)]">
-                            Group
-                          </span>
-                        )}
-                      </div>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        onClick={e => { if (b.id === activeId) { e.stopPropagation(); setEditingBoardNameId(b.id); } }}
+                        className={`truncate text-sm ${b.id === activeId ? "cursor-text text-zinc-200" : "text-zinc-300"}`}
+                      >
+                        {b.id === activeId ? boardName : b.name}
+                      </span>
                       {b.is_group && (
-                        <div className="mt-0.5 flex flex-wrap items-center gap-x-1 text-[9px] text-zinc-600">
-                          {b.community_name && <span>{b.community_name}</span>}
-                          {b.creator_name && <span>by {b.creator_name}</span>}
-                          {(b.member_count ?? 0) > 0 && <span>· {b.member_count}m</span>}
-                        </div>
-                      )}
-                    </button>
-                    <div className="mt-1.5 flex gap-1">
-                      {b.id === activeId && editingBoardNameId === b.id && (
-                        <input
-                          autoFocus
-                          value={boardName}
-                          onChange={e => renameActive(e.target.value)}
-                          onBlur={() => persistBoardNameToStore(boardName)}
-                          onKeyDown={e => {
-                            if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
-                            if (e.key === "Escape") setEditingBoardNameId(null);
-                          }}
-                          className="min-w-0 flex-1 rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-zinc-300 outline-none"
-                        />
-                      )}
-                      {(!b.is_group || b.user_id === authUserIdRef.current) && (
-                        <button
-                          type="button"
-                          onClick={() => deleteActive(b.id)}
-                          className="rounded border border-white/10 px-2 py-1 text-[10px] text-zinc-400 hover:bg-white/10"
-                        >
-                          Delete
-                        </button>
+                        <span className="shrink-0 rounded-full bg-[var(--accent-color)]/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-[var(--accent-color)]">
+                          Group
+                        </span>
                       )}
                     </div>
+                    {b.is_group && (
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-1 text-[9px] text-zinc-600">
+                        {b.community_name && <span>{b.community_name} ·</span>}
+                        <span>{(b.member_count ?? 0) + 1} {(b.member_count ?? 0) + 1 === 1 ? "member" : "members"}</span>
+                        {b.creator_name && <span>· by @{b.creator_name}</span>}
+                      </div>
+                    )}
+                    {b.id === activeId && (
+                      <div className="mt-1.5 flex gap-1" onClick={e => e.stopPropagation()}>
+                        {editingBoardNameId === b.id && (
+                          <input
+                            autoFocus
+                            value={boardName}
+                            onChange={e => renameActive(e.target.value)}
+                            onBlur={() => persistBoardNameToStore(boardName)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") (e.currentTarget as HTMLInputElement).blur();
+                              if (e.key === "Escape") setEditingBoardNameId(null);
+                            }}
+                            className="min-w-0 flex-1 rounded border border-white/10 bg-black/20 px-2 py-1 text-xs text-zinc-300 outline-none"
+                          />
+                        )}
+                        {b.is_group && b.user_id === authUserId && (
+                          <button
+                            type="button"
+                            onClick={() => setManagingBoard(b)}
+                            className="rounded border border-white/10 px-2 py-1 text-[10px] text-zinc-400 hover:bg-white/10 hover:text-[var(--accent-color)]"
+                          >
+                            Manage
+                          </button>
+                        )}
+                        {(!b.is_group || b.user_id === authUserId) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!confirm(`Delete "${boardName}"? This cannot be undone.`)) return;
+                              deleteActive(b.id);
+                            }}
+                            className="rounded border border-white/10 px-2 py-1 text-[10px] text-zinc-400 hover:bg-white/10 hover:text-red-400"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))
               )}
@@ -901,13 +1279,6 @@ export default function WhiteboardPage() {
               </div>
             )}
 
-            {/* Autosave indicator */}
-            {isGroupBoard && !isViewOnly && (
-              <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 rounded-lg border border-white/10 bg-[var(--app-card)]/90 px-2.5 py-1.5 text-[10px] text-zinc-500">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                Live · auto-saves every 30s
-              </div>
-            )}
 
             {/* Save reminder for personal boards */}
             {!isGroupBoard && (

@@ -33,6 +33,39 @@ type CongressTrade = {
 type StatFilter = "all" | "notable" | "purchases" | "delay" | "ticker";
 type ReturnRange = "3m" | "6m" | "ytd" | "1y" | "all";
 
+type CorporateTrade = {
+  id: string;
+  ticker: string;
+  insider: string;
+  transactionType: "Purchase" | "Sale";
+  transactionCode: string;
+  shares: number;
+  price: number;
+  value: number;
+  transactionDate: string;
+  filingDate: string;
+};
+
+type CabinetFiling = {
+  accession: string;
+  filingDate: string;
+  periodDate: string | null;
+  formType: string;
+  displayNames: string[];
+  company: string | null;
+  link: string;
+  edgarLink: string;
+};
+
+type CabinetOfficial = {
+  name: string;
+  searchName: string;
+  role: string;
+  agency: string;
+  party: string;
+  filings: CabinetFiling[];
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const PARTY_BG: Record<Party, string> = { D: "#3B82F6", R: "#EF4444", I: "#8B5CF6" };
@@ -354,6 +387,21 @@ export default function InsiderTradesView() {
   const [statFilter, setStatFilter] = useState<StatFilter>("all");
   const [selectedPol, setSelectedPol] = useState<PolProfile | null>(null);
 
+  // Corporate tab state
+  const [corpTrades, setCorpTrades] = useState<CorporateTrade[]>([]);
+  const [corpLoading, setCorpLoading] = useState(false);
+  const [corpLoaded, setCorpLoaded] = useState(false);
+
+  // Cabinet tab state
+  const [cabinetOfficials, setCabinetOfficials] = useState<CabinetOfficial[]>([]);
+  const [cabinetLoading, setCabinetLoading] = useState(false);
+  const [cabinetLoaded, setCabinetLoaded] = useState(false);
+
+  // Corporate filters
+  const [corpSearch, setCorpSearch] = useState("");
+  const [corpTypeFilter, setCorpTypeFilter] = useState<"all" | "Purchase" | "Sale">("all");
+  const [expandedCorpId, setExpandedCorpId] = useState<string | null>(null);
+
   const isAllActive = !showBuys && !showSells && !showHouse && !showSenate;
 
   function clearFilters() {
@@ -375,6 +423,34 @@ export default function InsiderTradesView() {
       .then((d: LegislatorEntry[]) => setLegislators(d ?? []))
       .catch(() => {});
   }, []);
+
+  // Lazy-load corporate data when that tab is first activated
+  useEffect(() => {
+    if (activeTab !== "corporate" || corpLoaded || corpLoading) return;
+    setCorpLoading(true);
+    fetch("/api/insider-trades/corporate")
+      .then((r) => r.json())
+      .then((d: { trades: CorporateTrade[] }) => {
+        setCorpTrades(d.trades ?? []);
+        setCorpLoaded(true);
+      })
+      .catch(() => setCorpLoaded(true))
+      .finally(() => setCorpLoading(false));
+  }, [activeTab, corpLoaded, corpLoading]);
+
+  // Lazy-load cabinet data when that tab is first activated
+  useEffect(() => {
+    if (activeTab !== "cabinet" || cabinetLoaded || cabinetLoading) return;
+    setCabinetLoading(true);
+    fetch("/api/insider-trades/cabinet")
+      .then((r) => r.json())
+      .then((d: { officials: CabinetOfficial[] }) => {
+        setCabinetOfficials(d.officials ?? []);
+        setCabinetLoaded(true);
+      })
+      .catch(() => setCabinetLoaded(true))
+      .finally(() => setCabinetLoading(false));
+  }, [activeTab, cabinetLoaded, cabinetLoading]);
 
   const traderMap = useMemo(() => {
     const map = new Map<string, CongressTrade[]>();
@@ -575,7 +651,7 @@ export default function InsiderTradesView() {
           </div>
           {dateRange && (
             <span className="text-emerald-400/70 shrink-0">
-              {fmtDate(dateRange.from)} — {fmtDate(dateRange.to)} · {congressTrades.length} trades
+              Latest: {fmtDate(dateRange.to)} · {congressTrades.length.toLocaleString()} trades
             </span>
           )}
         </div>
@@ -849,39 +925,325 @@ export default function InsiderTradesView() {
 
       {/* ── Corporate Tab ── */}
       {activeTab === "corporate" && (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {/* Info banner */}
           <div className="flex items-center gap-2 rounded-lg border border-[var(--accent-color)]/20 bg-[var(--accent-color)]/5 px-3 py-2 text-xs text-[var(--accent-color)]">
             <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            SEC Form 4 filings — executives &amp; directors must disclose within 2 business days of the trade.
+            SEC Form 4 — executives &amp; directors must disclose within 2 business days of the trade. Open-market purchases and sales only.
           </div>
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-[var(--app-card)] py-16 text-center">
-            <div className="rounded-full bg-white/5 p-5">
-              <svg className="h-8 w-8 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
+
+          {/* Filters */}
+          {corpLoaded && !corpLoading && (
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                placeholder="Search ticker or insider…"
+                value={corpSearch}
+                onChange={(e) => setCorpSearch(e.target.value)}
+                className="h-8 flex-1 min-w-[160px] rounded-lg border border-white/10 bg-zinc-900 px-3 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-[var(--accent-color)]/40"
+              />
+              {(["all", "Purchase", "Sale"] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setCorpTypeFilter(f)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                    corpTypeFilter === f
+                      ? f === "Purchase"
+                        ? "bg-emerald-500/20 text-emerald-400"
+                        : f === "Sale"
+                        ? "bg-red-500/20 text-red-400"
+                        : "bg-[var(--accent-color)]/20 text-[var(--accent-color)]"
+                      : "text-zinc-500 hover:text-zinc-300 bg-zinc-900/50"
+                  }`}
+                >
+                  {f === "all" ? "All" : f === "Purchase" ? "Purchases" : "Sales"}
+                </button>
+              ))}
             </div>
-            <h3 className="mt-3 text-sm font-medium text-zinc-400">Corporate Insider Filings</h3>
-            <p className="mt-1 max-w-xs text-xs text-zinc-600">
-              SEC Form 4 data integration coming soon.
-            </p>
-          </div>
+          )}
+
+          {/* Loading state */}
+          {corpLoading && (
+            <div className="flex items-center justify-center py-16">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-[var(--accent-color)]" />
+                <p className="text-xs text-zinc-500">Fetching Form 4 filings…</p>
+              </div>
+            </div>
+          )}
+
+          {/* Trade table */}
+          {!corpLoading && corpLoaded && (() => {
+            const q = corpSearch.toLowerCase();
+            const filtered = corpTrades.filter((t) => {
+              if (corpTypeFilter !== "all" && t.transactionType !== corpTypeFilter) return false;
+              if (q && !t.ticker.toLowerCase().includes(q) && !t.insider.toLowerCase().includes(q)) return false;
+              return true;
+            });
+
+            if (filtered.length === 0) {
+              return (
+                <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-[var(--app-card)] py-12 text-center">
+                  <p className="text-sm text-zinc-500">No trades match your filters.</p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="rounded-2xl border border-white/10 bg-[var(--app-card)] overflow-hidden">
+                {/* Summary row */}
+                <div className="flex items-center gap-4 border-b border-white/5 px-4 py-2.5">
+                  <span className="text-xs text-zinc-500">{filtered.length} trades</span>
+                  <span className="text-xs text-emerald-400">{filtered.filter(t => t.transactionType === "Purchase").length} purchases</span>
+                  <span className="text-xs text-red-400">{filtered.filter(t => t.transactionType === "Sale").length} sales</span>
+                  <span className="ml-auto text-[10px] text-zinc-600">120+ tickers across all sectors · Updated hourly</span>
+                </div>
+
+                {/* Header */}
+                <div className="grid grid-cols-[0.8fr_1.8fr_0.8fr_0.9fr_0.9fr_0.9fr_1fr] gap-2 border-b border-white/5 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                  <span>Ticker</span>
+                  <span>Insider</span>
+                  <span>Type</span>
+                  <span className="text-right">Shares</span>
+                  <span className="text-right">Price</span>
+                  <span className="text-right">Value</span>
+                  <span className="text-right">Trade Date</span>
+                </div>
+
+                {/* Rows */}
+                <div className="max-h-[600px] overflow-y-auto divide-y divide-white/5">
+                  {filtered.map((trade) => {
+                    const isExpanded = expandedCorpId === trade.id;
+                    // Build this insider's history on this ticker for the mini chart
+                    const insiderHistory = corpTrades
+                      .filter((t) => t.insider === trade.insider && t.ticker === trade.ticker)
+                      .sort((a, b) => new Date(a.transactionDate).getTime() - new Date(b.transactionDate).getTime())
+                      .map((t) => ({
+                        date: t.transactionDate.slice(5), // MM-DD
+                        value: t.value,
+                        type: t.transactionType,
+                      }));
+                    return (
+                      <div key={trade.id}>
+                        {/* Main row — clickable to expand */}
+                        <button
+                          type="button"
+                          onClick={() => setExpandedCorpId(isExpanded ? null : trade.id)}
+                          className="w-full grid grid-cols-[0.8fr_1.8fr_0.8fr_0.9fr_0.9fr_0.9fr_1fr] gap-2 items-center px-4 py-2.5 hover:bg-white/[0.02] transition-colors text-left"
+                        >
+                          <span className="text-xs font-bold text-[var(--accent-color)]">{trade.ticker}</span>
+                          <span className="text-xs text-zinc-300 truncate">{trade.insider}</span>
+                          <span className={`inline-flex w-fit rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                            trade.transactionType === "Purchase"
+                              ? "bg-emerald-500/15 text-emerald-400"
+                              : "bg-red-500/15 text-red-400"
+                          }`}>
+                            {trade.transactionType === "Purchase" ? "Buy" : "Sell"}
+                          </span>
+                          <span className="text-right text-xs text-zinc-300">
+                            {trade.shares >= 1000 ? `${(trade.shares / 1000).toFixed(0)}K` : trade.shares.toLocaleString()}
+                          </span>
+                          <span className="text-right text-xs text-zinc-400">
+                            {trade.price > 0 ? `$${trade.price.toFixed(2)}` : "—"}
+                          </span>
+                          <span className="text-right text-xs font-medium text-zinc-200">
+                            {trade.value >= 1e6
+                              ? `$${(trade.value / 1e6).toFixed(1)}M`
+                              : trade.value >= 1e3
+                              ? `$${(trade.value / 1e3).toFixed(0)}K`
+                              : trade.value > 0
+                              ? `$${trade.value.toFixed(0)}`
+                              : "—"}
+                          </span>
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="text-right text-[10px] text-zinc-500">
+                              {trade.transactionDate ? new Date(trade.transactionDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" }) : "—"}
+                            </span>
+                            <svg
+                              className={`h-3 w-3 shrink-0 text-zinc-600 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            >
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            </svg>
+                          </div>
+                        </button>
+
+                        {/* Expanded detail panel */}
+                        {isExpanded && (
+                          <div className="border-t border-white/5 bg-white/[0.015] px-4 py-3">
+                            <div className="flex items-start justify-between gap-4 mb-3">
+                              <div>
+                                <p className="text-xs font-semibold text-zinc-200">{trade.insider}</p>
+                                <p className="text-[10px] text-zinc-500 mt-0.5">
+                                  Trade date: {trade.transactionDate ? new Date(trade.transactionDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "—"}
+                                </p>
+                                <p className="text-[10px] text-zinc-600">
+                                  Filed: {trade.filingDate ? new Date(trade.filingDate + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                                  {trade.transactionDate && trade.filingDate && (() => {
+                                    const days = Math.round((new Date(trade.filingDate).getTime() - new Date(trade.transactionDate).getTime()) / 86400000);
+                                    return days > 0 ? ` (${days}d to disclose)` : "";
+                                  })()}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] text-zinc-600">Transaction history</p>
+                                <p className="text-[10px] text-zinc-500">{insiderHistory.length} trade{insiderHistory.length !== 1 ? "s" : ""} on {trade.ticker} (90d)</p>
+                              </div>
+                            </div>
+
+                            {/* Mini chart — bar per transaction */}
+                            {insiderHistory.length > 1 ? (
+                              <div className="h-24">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart data={insiderHistory} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                                    <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#52525b" }} axisLine={false} tickLine={false} />
+                                    <YAxis hide />
+                                    <Tooltip
+                                      contentStyle={{ background: "#18181b", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 10 }}
+                                      formatter={(v) => [`$${((v as number) / 1000).toFixed(0)}K`, "Value"]}
+                                    />
+                                    <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+                                      {insiderHistory.map((entry, idx) => (
+                                        <Cell key={idx} fill={entry.type === "Purchase" ? "#10b981" : "#ef4444"} fillOpacity={0.7} />
+                                      ))}
+                                    </Bar>
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-center rounded-lg border border-white/5 bg-white/[0.02] h-16 text-[10px] text-zinc-600">
+                                Only one transaction on record for this insider + ticker in the 90-day window
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Footer */}
+                <div className="border-t border-white/5 px-4 py-2 text-[10px] text-zinc-600">
+                  Source: SEC Form 4 via Finnhub · Open-market transactions only · Click any row to expand trade history · Not investment advice
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
 
       {/* ── Cabinet Tab ── */}
       {activeTab === "cabinet" && (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-white/10 bg-[var(--app-card)] py-16 text-center">
-          <div className="rounded-full bg-white/5 p-5">
-            <svg className="h-8 w-8 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
+        <div className="space-y-4">
+          {/* Non-partisan note */}
+          <div className="rounded-xl border border-white/10 bg-[var(--app-card)] px-4 py-3">
+            <div className="flex items-start gap-2.5">
+              <svg className="mt-0.5 h-4 w-4 shrink-0 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" />
+              </svg>
+              <div>
+                <p className="text-xs font-semibold text-zinc-300">Non-partisan &amp; administration-neutral</p>
+                <p className="mt-1 text-[10px] text-zinc-500 leading-relaxed">
+                  This section tracks cabinet-level financial disclosures regardless of party or administration. It will update with each new presidency — covering both Republican and Democratic administrations. Our goal is factual transparency, not political commentary. All data comes from public SEC EDGAR and OGE filings.
+                </p>
+              </div>
+            </div>
           </div>
-          <h3 className="mt-3 text-sm font-medium text-zinc-400">Cabinet Disclosures</h3>
-          <p className="mt-1 max-w-xs text-xs text-zinc-600">
-            Executive branch financial disclosures via the Office of Government Ethics. Coming soon.
-          </p>
+
+          {/* Info banner */}
+          <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-400">
+            <svg className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Cabinet members must file OGE Form 278e annual disclosures and often divest holdings upon confirmation. SEC Form 4 filings are shown where found.
+          </div>
+
+          {/* Loading */}
+          {cabinetLoading && (
+            <div className="flex items-center justify-center py-16">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-[var(--accent-color)]" />
+                <p className="text-xs text-zinc-500">Searching SEC EDGAR…</p>
+              </div>
+            </div>
+          )}
+
+          {/* Officials grid */}
+          {!cabinetLoading && cabinetLoaded && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {cabinetOfficials.map((official) => (
+                <div
+                  key={official.name}
+                  className="rounded-xl border border-white/10 bg-[var(--app-card)] p-4"
+                >
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-200">{official.name}</p>
+                      <p className="mt-0.5 text-[10px] text-zinc-500">{official.role}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-red-500/15 px-2 py-0.5 text-[9px] font-bold text-red-400">
+                      {official.agency}
+                    </span>
+                  </div>
+
+                  {/* Filings */}
+                  {official.filings.length === 0 ? (
+                    <div className="mt-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 text-[10px] text-zinc-600">
+                      No SEC Form 4 filings found. May have divested prior to entering government or holds assets not requiring Form 4.
+                    </div>
+                  ) : (
+                    <div className="mt-3 space-y-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                        SEC Form 4 Filings ({official.filings.length})
+                      </p>
+                      {official.filings.slice(0, 5).map((filing) => (
+                        <div
+                          key={filing.accession}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-white/5 bg-white/[0.02] px-2.5 py-1.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate text-[10px] text-zinc-300">
+                              {filing.company ?? filing.displayNames.find(n => !n.includes(official.searchName))?.replace(/ \(CIK.*\)/, "") ?? "Company not identified"}
+                            </p>
+                            <p className="text-[9px] text-zinc-600">{filing.filingDate}</p>
+                          </div>
+                          <a
+                            href={`https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&company=&CIK=${filing.accession.split("-")[0]}&type=4&dateb=&owner=include&count=10`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="shrink-0 text-[9px] text-[var(--accent-color)] hover:underline"
+                          >
+                            View →
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* OGE disclosure link */}
+          {!cabinetLoading && cabinetLoaded && (
+            <div className="rounded-xl border border-white/10 bg-[var(--app-card)] p-4">
+              <p className="text-xs font-semibold text-zinc-300">Annual OGE Financial Disclosures</p>
+              <p className="mt-1 text-[10px] text-zinc-500">
+                Cabinet members file OGE Form 278e annually with the Office of Government Ethics. These cover assets, income, positions held, and agreements — but are not transaction-level disclosures.
+              </p>
+              <a
+                href="https://efts.sec.gov/LATEST/search-index"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1 text-[10px] text-[var(--accent-color)] hover:underline"
+              >
+                Search SEC EDGAR filings →
+              </a>
+            </div>
+          )}
         </div>
       )}
 

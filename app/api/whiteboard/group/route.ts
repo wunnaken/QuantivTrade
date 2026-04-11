@@ -27,17 +27,29 @@ export async function GET() {
   if (!userId) return bad("Unauthorized", 401);
 
   const supabase = createServerClient();
+  const sel = "id, name, scene, updated_at, is_group, community_id, allowed_members, permissions, user_id, creator_name";
 
-  const { data, error } = await supabase
-    .from("whiteboard_boards")
-    .select("id, name, scene, updated_at, is_group, community_id, allowed_members, permissions, user_id, creator_name")
-    .eq("is_group", true)
-    .or(`user_id.eq.${userId},allowed_members.cs.{${userId}}`)
-    .order("updated_at", { ascending: false });
+  // Run two queries and merge to avoid fragile or+cs PostgREST syntax
+  const [{ data: owned }, { data: member }] = await Promise.all([
+    supabase.from("whiteboard_boards").select(sel).eq("is_group", true).eq("user_id", userId).order("updated_at", { ascending: false }),
+    supabase.from("whiteboard_boards").select(sel).eq("is_group", true).contains("allowed_members", [userId]).order("updated_at", { ascending: false }),
+  ]);
 
-  if (error) return bad(error.message, 500);
+  // Deduplicate by id
+  const seen = new Set<string>();
+  const merged = [...(owned ?? []), ...(member ?? [])].filter(b => {
+    const id = String((b as Record<string, unknown>).id);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+  merged.sort((a, b) => {
+    const ta = (a as Record<string, unknown>).updated_at as string ?? "";
+    const tb = (b as Record<string, unknown>).updated_at as string ?? "";
+    return tb.localeCompare(ta);
+  });
 
-  const boards = (data ?? []) as Array<Record<string, unknown>>;
+  const boards = merged as Array<Record<string, unknown>>;
 
   // Enrich with community names
   const communityIds = [...new Set(
@@ -82,7 +94,7 @@ export async function POST(request: NextRequest) {
   const { data: profile } = await supabase
     .from("profiles")
     .select("username, name")
-    .eq("id", userId)
+    .eq("user_id", userId)
     .single();
   const creatorName = (profile as Record<string, unknown> | null)?.username as string
     ?? (profile as Record<string, unknown> | null)?.name as string ?? null;
@@ -114,7 +126,7 @@ export async function POST(request: NextRequest) {
   );
 }
 
-// PATCH — update group board scene/name (creator or edit-permission members)
+// PATCH — update group board scene/name/members (creator or edit-permission members)
 export async function PATCH(request: NextRequest) {
   const userId = await getCurrentProfileId();
   if (!userId) return bad("Unauthorized", 401);
@@ -123,6 +135,10 @@ export async function PATCH(request: NextRequest) {
     boardId?: string;
     name?: string;
     scene?: unknown;
+    // Member management (creator only)
+    action?: "add_member" | "remove_member" | "set_permissions";
+    memberId?: string;
+    permissions?: "edit" | "view";
   } | null;
 
   if (!body?.boardId) return bad("Missing boardId");
@@ -131,7 +147,6 @@ export async function PATCH(request: NextRequest) {
 
   const supabase = createServerClient();
 
-  // Verify access
   const { data: board } = await supabase
     .from("whiteboard_boards")
     .select("user_id, allowed_members, permissions")
@@ -143,6 +158,45 @@ export async function PATCH(request: NextRequest) {
   const b = board as { user_id: string; allowed_members: string[] | null; permissions: string };
   const isCreator = b.user_id === userId;
   const isMember = Array.isArray(b.allowed_members) && b.allowed_members.includes(userId);
+
+  // Member management actions require creator
+  if (body.action) {
+    if (!isCreator) return bad("Only the board creator can manage members", 403);
+    const members: string[] = Array.isArray(b.allowed_members) ? b.allowed_members : [];
+
+    if (body.action === "add_member") {
+      if (!body.memberId) return bad("Missing memberId");
+      if (members.includes(body.memberId)) return NextResponse.json({ ok: true }); // already added
+      const { error } = await supabase
+        .from("whiteboard_boards")
+        .update({ allowed_members: [...members, body.memberId], updated_at: new Date().toISOString() })
+        .eq("id", boardIdForDb);
+      if (error) return bad(error.message, 500);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "remove_member") {
+      if (!body.memberId) return bad("Missing memberId");
+      const { error } = await supabase
+        .from("whiteboard_boards")
+        .update({ allowed_members: members.filter(id => id !== body.memberId), updated_at: new Date().toISOString() })
+        .eq("id", boardIdForDb);
+      if (error) return bad(error.message, 500);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "set_permissions") {
+      if (!body.permissions) return bad("Missing permissions");
+      const { error } = await supabase
+        .from("whiteboard_boards")
+        .update({ permissions: body.permissions, updated_at: new Date().toISOString() })
+        .eq("id", boardIdForDb);
+      if (error) return bad(error.message, 500);
+      return NextResponse.json({ ok: true });
+    }
+  }
+
+  // Scene/name update — creator or edit-permission member
   if (!isCreator && !(isMember && b.permissions === "edit")) return bad("Permission denied", 403);
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
