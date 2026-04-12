@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Lora } from "next/font/google";
+import { Geist, IBM_Plex_Mono, Lora } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "../components/AppShell";
 import { AuthProvider } from "../components/AuthContext";
@@ -15,9 +15,10 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
+const ibmPlexMono = IBM_Plex_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
 });
 
 const lora = Lora({
@@ -47,7 +48,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var k='quantivtrade-accent-color',d='#e8846a',o='#4f9cf9',s=localStorage.getItem(k);if(!s||s.toLowerCase()===o){localStorage.setItem(k,d);}else if(/^#[0-9a-f]{6}$/i.test(s)){document.documentElement.style.setProperty('--accent-color',s);}}catch(e){}})()` }} />
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} ${lora.variable} antialiased`}
+        className={`${geistSans.variable} ${ibmPlexMono.variable} ${lora.variable} antialiased`}
       >
         <ThemeProvider>
           <AuthProvider>

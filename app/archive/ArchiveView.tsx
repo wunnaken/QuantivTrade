@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ArchiveBook, ArchiveVideo } from "../api/archive/resources/route";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { ARCHIVE_CATEGORIES, PREBUILT_TERMS, slugify } from "../../lib/archive-prebuilt";
+import { TypewriterText } from "../../components/TypewriterText";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -318,10 +319,12 @@ function ArticleView({
   article,
   onBack,
   onNavigate,
+  animate = false,
 }: {
   article: Article;
   onBack: () => void;
   onNavigate: (slug: string, title?: string) => void;
+  animate?: boolean;
 }) {
   const c = article.content;
   const catColor = categoryColor(article.category);
@@ -360,7 +363,7 @@ function ArticleView({
                 </a>
               ) : (
                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">
-                  AI Generated — always verify with official sources
+                  Always verify with official sources
                 </span>
               )}
               {article.view_count > 0 && (
@@ -383,7 +386,9 @@ function ArticleView({
           {c.definition && (
             <section>
               <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-zinc-500">Definition</h2>
-              <p className="text-sm text-zinc-300 leading-relaxed">{c.definition}</p>
+              <p className="text-sm text-zinc-300 leading-relaxed">
+                {animate ? <TypewriterText text={c.definition} startDelay={0} /> : c.definition}
+              </p>
             </section>
           )}
 
@@ -391,7 +396,9 @@ function ArticleView({
           {c.howItWorks && (
             <section>
               <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-zinc-500">How It Works</h2>
-              <p className="text-sm text-zinc-300 leading-relaxed">{c.howItWorks}</p>
+              <p className="text-sm text-zinc-300 leading-relaxed">
+                {animate ? <TypewriterText text={c.howItWorks} startDelay={600} /> : c.howItWorks}
+              </p>
             </section>
           )}
 
@@ -414,7 +421,9 @@ function ArticleView({
           {c.tradingApplication && (
             <section>
               <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-zinc-500">Trading Application</h2>
-              <p className="text-sm text-zinc-300 leading-relaxed">{c.tradingApplication}</p>
+              <p className="text-sm text-zinc-300 leading-relaxed">
+                {animate ? <TypewriterText text={c.tradingApplication} startDelay={1200} /> : c.tradingApplication}
+              </p>
             </section>
           )}
 
@@ -423,7 +432,9 @@ function ArticleView({
             <section>
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-zinc-500">Real-World Example</h2>
               <div className="border-l-4 border-amber-500 bg-amber-500/5 pl-4 py-3 rounded-r-xl">
-                <p className="text-sm text-zinc-200 leading-relaxed">{c.example}</p>
+                <p className="text-sm text-zinc-200 leading-relaxed">
+                  {animate ? <TypewriterText text={c.example} startDelay={1800} /> : c.example}
+                </p>
               </div>
             </section>
           )}
@@ -493,7 +504,9 @@ function ArticleView({
           {c.proTip && (
             <section className="rounded-xl border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/5 p-4">
               <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--accent-color)]"><Icon name="zap" size={12} /> Pro Tip</h2>
-              <p className="text-sm text-zinc-200 leading-relaxed">{c.proTip}</p>
+              <p className="text-sm text-zinc-200 leading-relaxed">
+                {animate ? <TypewriterText text={c.proTip} startDelay={2400} /> : c.proTip}
+              </p>
             </section>
           )}
 
@@ -756,6 +769,7 @@ export default function ArchiveView() {
   const [currentArticle, setCurrentArticle] = useState<Article | null>(null);
   const [generatingTerm, setGeneratingTerm] = useState<string | null>(null);
   const [articleReady, setArticleReady] = useState(false);
+  const [justGenerated, setJustGenerated] = useState(false);
   const [offTopicTerm, setOffTopicTerm] = useState<string | null>(null);
   const [popularData, setPopularData] = useState<PopularData | null>(null);
   const [loadingPopular, setLoadingPopular] = useState(true);
@@ -816,13 +830,16 @@ export default function ArchiveView() {
     }
 
     try {
+      const fetchStart = Date.now();
       const res = await fetch(`/api/archive/article?${params}`);
+      const elapsed = Date.now() - fetchStart;
       const data = await res.json() as { article?: Article; error?: string; message?: string };
       if (data.error === "off_topic") {
         setOffTopicTerm(displayTerm);
         setGeneratingTerm(null);
       } else if (data.article) {
         setArticleReady(true);
+        setJustGenerated(elapsed > 1500); // generated fresh if took > 1.5s
         await new Promise((r) => setTimeout(r, 600));
         setCurrentArticle(data.article);
         addRecent(data.article.slug, data.article.title);
@@ -961,7 +978,7 @@ export default function ArchiveView() {
           </button>
         </div>
       ) : currentArticle ? (
-        <ArticleView article={currentArticle} onBack={handleBack} onNavigate={loadArticle} />
+        <ArticleView article={currentArticle} onBack={handleBack} onNavigate={loadArticle} animate={justGenerated} />
       ) : (
         <>
           {/* Category grid */}

@@ -18,6 +18,7 @@ import { useLivePrice } from "../../../lib/hooks/useLivePrice";
 import { usePriceContext } from "../../../lib/price-context";
 import { PriceDisplay } from "../../../components/PriceDisplay";
 import { CandlestickChart } from "../../../components/CandlestickChart";
+import { TypewriterText } from "../../../components/TypewriterText";
 
 const CARD_BG = "var(--app-card)";
 
@@ -289,7 +290,11 @@ function AIAnalysisSkeleton() {
   );
 }
 
-function AIAnalysisCard({ data }: { data: AnalyzeTickerResponse }) {
+// Each field animates after the previous one finishes (sequential, not simultaneous).
+// Delays are cumulative: field N starts after ~550 ms × N (500ms type + 50ms gap).
+const SEQ = 550;
+
+function AIAnalysisCard({ data, animate = false }: { data: AnalyzeTickerResponse; animate?: boolean }) {
   const riskBarColor =
     data.riskRating <= 3 ? "var(--accent-color)" : data.riskRating <= 6 ? "#eab308" : "#ef4444";
   const riskBarWidth = Math.min(100, (data.riskRating / 10) * 100);
@@ -304,8 +309,8 @@ function AIAnalysisCard({ data }: { data: AnalyzeTickerResponse }) {
       }}
     >
       <div className="mb-4 flex items-center gap-2">
-        <span className="text-lg">✨</span>
-        <h2 className="text-lg font-semibold text-zinc-100">AI Analysis</h2>
+        <svg className="h-5 w-5 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+        <h2 className="text-lg font-semibold text-zinc-100">Market Analysis</h2>
       </div>
 
       <section className="mb-6">
@@ -333,20 +338,26 @@ function AIAnalysisCard({ data }: { data: AnalyzeTickerResponse }) {
 
       <section className="mb-6">
         <h3 className="mb-2 text-sm font-semibold text-zinc-300">Summary</h3>
-        <p className="text-sm leading-relaxed text-zinc-400">{data.summary}</p>
+        <p className="text-sm leading-relaxed text-zinc-400">
+          {animate ? <TypewriterText text={data.summary} startDelay={0} /> : data.summary}
+        </p>
       </section>
 
       <section className="mb-6">
         <h3 className="mb-2 text-sm font-semibold text-zinc-300">Bull case 📈</h3>
         <div className="border-l-4 border-[var(--accent-color)] bg-[var(--accent-color)]/5 px-4 py-3 rounded-r-lg">
-          <p className="text-sm text-zinc-300">{data.bullCase}</p>
+          <p className="text-sm text-zinc-300">
+            {animate ? <TypewriterText text={data.bullCase} startDelay={SEQ} /> : data.bullCase}
+          </p>
         </div>
       </section>
 
       <section className="mb-6">
         <h3 className="mb-2 text-sm font-semibold text-zinc-300">Bear case 📉</h3>
         <div className="border-l-4 border-red-500 bg-red-500/5 px-4 py-3 rounded-r-lg">
-          <p className="text-sm text-zinc-300">{data.bearCase}</p>
+          <p className="text-sm text-zinc-300">
+            {animate ? <TypewriterText text={data.bearCase} startDelay={SEQ * 2} /> : data.bearCase}
+          </p>
         </div>
       </section>
 
@@ -361,7 +372,9 @@ function AIAnalysisCard({ data }: { data: AnalyzeTickerResponse }) {
         <h3 className="mb-2 text-sm font-semibold text-zinc-300">Key factors</h3>
         <ul className="list-inside list-disc space-y-1 text-sm text-zinc-400">
           {data.keyFactors.map((f, i) => (
-            <li key={i}>{f}</li>
+            <li key={i}>
+              {animate ? <TypewriterText text={f} startDelay={SEQ * 3 + i * 200} /> : f}
+            </li>
           ))}
         </ul>
       </section>
@@ -408,7 +421,10 @@ export default function TickerPage() {
   const [inWatchlist, setInWatchlist] = useState(false);
   const [analysis, setAnalysis] = useState<AnalyzeTickerResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [streaming, setStreaming] = useState(false);
+  const [streamProgress, setStreamProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [animate, setAnimate] = useState(false);
   const [quoteMeta, setQuoteMeta] = useState<QuoteData | null>(null);
   const [chartData, setChartData] = useState<ChartPoint[]>([]);
   const [chartLoading, setChartLoading] = useState(true);
@@ -505,19 +521,39 @@ export default function TickerPage() {
       setError(null);
       return;
     }
-    setLoading(true);
+    setLoading(false);
+  }, [ticker]);
+
+  const runAnalysis = useCallback(async () => {
+    setStreaming(true);
+    setStreamProgress(0);
     setError(null);
-    fetch(`/api/analyze-ticker?ticker=${encodeURIComponent(ticker)}`)
-      .then((res) => {
-        if (!res.ok) return res.json().then((b) => Promise.reject(new Error((b as { error?: string }).error || res.statusText)));
-        return res.json() as Promise<AnalyzeTickerResponse>;
-      })
-      .then((data) => {
-        setAnalysis(data);
-        setCachedAnalysis(ticker, data);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load analysis"))
-      .finally(() => setLoading(false));
+    setAnimate(false);
+    try {
+      const res = await fetch(`/api/analyze-ticker?ticker=${encodeURIComponent(ticker)}`);
+      if (!res.ok || !res.body) {
+        const b = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(b.error ?? res.statusText);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        setStreamProgress(accumulated.length);
+      }
+      const clean = accumulated.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+      const data = JSON.parse(clean) as AnalyzeTickerResponse;
+      setAnalysis(data);
+      setAnimate(true);
+      setCachedAnalysis(ticker, data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load analysis");
+    } finally {
+      setStreaming(false);
+    }
   }, [ticker]);
 
   const toast = useToast();
@@ -583,12 +619,57 @@ export default function TickerPage() {
 
           <div>
             {loading && <AIAnalysisSkeleton />}
-            {error && (
-              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-300">
-                {error}. Add <code className="rounded bg-black/20 px-1">ANTHROPIC_API_KEY</code> to .env.local to enable AI analysis.
+            {streaming && (
+              <div className="rounded-2xl border border-[var(--accent-color)]/30 bg-[var(--app-card)]/80 p-6">
+                <div className="mb-4 flex items-center gap-2">
+                  <svg className="h-5 w-5 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                  <h2 className="text-lg font-semibold text-zinc-100">Market Analysis</h2>
+                </div>
+                <div className="flex items-center gap-3 py-1">
+                  {[0, 150, 300].map((d) => (
+                    <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent-color)]" style={{ animationDelay: `${d}ms` }} />
+                  ))}
+                  <span className="text-sm text-zinc-400">Analyzing {ticker}…</span>
+                </div>
+                <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-[var(--accent-color)]/60 transition-all duration-300"
+                    style={{ width: `${Math.min(90, (streamProgress / 950) * 100)}%` }}
+                  />
+                </div>
               </div>
             )}
-            {!loading && !error && analysis && <AIAnalysisCard data={analysis} />}
+            {error && (
+              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-300">
+                {error}
+                <button
+                  type="button"
+                  onClick={runAnalysis}
+                  className="mt-3 block rounded-full border border-white/10 px-4 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/5"
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+            {!loading && !streaming && !error && analysis && <AIAnalysisCard data={analysis} animate={animate} />}
+            {!loading && !streaming && !error && !analysis && (
+              <div className="rounded-2xl border border-white/10 bg-[var(--app-card)]/80 p-6 text-center">
+                <svg className="mx-auto h-10 w-10 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                <h2 className="mt-3 text-base font-semibold text-zinc-100">Market Analysis</h2>
+                <p className="mt-2 text-sm text-zinc-400">
+                  Get a breakdown of {ticker} — risk rating, bull &amp; bear case, and key factors.
+                </p>
+                <button
+                  type="button"
+                  onClick={runAnalysis}
+                  className="mt-4 rounded-full px-6 py-2.5 text-sm font-semibold text-[#020308] transition hover:opacity-90"
+                  style={{ backgroundColor: "var(--accent-color)" }}
+                >
+                  Analyze {ticker}
+                </button>
+                <p className="mt-3 text-xs text-zinc-600">Powered by Claude</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

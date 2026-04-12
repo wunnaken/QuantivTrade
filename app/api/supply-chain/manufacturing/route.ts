@@ -3,6 +3,9 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 const FRED_SERIES = [
+  { id: "INDPRO", label: "Industrial Production Index", unit: "index (2017=100)" },
+  { id: "TCU", label: "Total Capacity Utilization", unit: "percent of capacity" },
+  { id: "AWHMAN", label: "Avg Weekly Hours — Manufacturing", unit: "hours" },
   { id: "MANEMP", label: "Manufacturing Employment", unit: "thousands of persons" },
   { id: "AMTMNO", label: "Manufacturers New Orders (Total)", unit: "millions of dollars" },
   { id: "AMDMVS", label: "Manufacturers Shipments (Durable Goods)", unit: "millions of dollars" },
@@ -110,6 +113,9 @@ export async function GET() {
       isratioNote: "Rising inventory-to-sales ratio = inventory buildup = potential production slowdown ahead",
       newOrdersNote: "New orders diverging above shipments = backlog building = bullish for future production",
       capexNote: "Core capex (ex-aircraft, ex-defense) = business investment signal — leading indicator for corporate earnings",
+      indproNote: "Industrial Production Index measures real output of manufacturing, mining, and utilities. Above trend = economic expansion.",
+      tcuNote: "Capacity utilization above 80% signals tight supply and potential inflationary pressure. Below 75% indicates slack in the economy.",
+      awhmNote: "Average weekly hours in manufacturing. Rising hours precede hiring; falling hours precede layoffs. A leading labor market indicator.",
     },
   });
 }

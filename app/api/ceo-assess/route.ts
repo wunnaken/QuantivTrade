@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { anthropicSSEToTextStream } from "@/lib/anthropicStream";
 
 export const dynamic = "force-dynamic";
 
@@ -63,21 +64,17 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 1024,
+        stream: true,
         messages: [{ role: "user", content: prompt }],
       }),
     });
-    if (!res.ok) {
+    if (!res.ok || !res.body) {
       const t = await res.text();
-      return NextResponse.json({ error: "AI request failed", detail: t.slice(0, 200) }, { status: 502 });
+      return NextResponse.json({ error: "Assessment failed", detail: t.slice(0, 200) }, { status: 502 });
     }
-    const data = (await res.json()) as { content?: { type: string; text?: string }[] };
-    const text = data?.content?.find((c) => c.type === "text")?.text ?? "";
-    const jsonStr = text.replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, "$1").trim();
-    const parsed = JSON.parse(jsonStr) as CEOAssessment;
-    if (typeof parsed.leadershipScore !== "number") parsed.leadershipScore = 5;
-    if (!Array.isArray(parsed.strengths)) parsed.strengths = [];
-    if (!Array.isArray(parsed.watchPoints)) parsed.watchPoints = [];
-    return NextResponse.json(parsed);
+    return new Response(anthropicSSEToTextStream(res.body), {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   } catch (e) {
     return NextResponse.json({ error: "Assessment failed", detail: String(e).slice(0, 200) }, { status: 500 });
   }

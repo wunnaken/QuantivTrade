@@ -21,6 +21,7 @@ import { tickJournalStreak } from "../../lib/engagement/streaks";
 import { addXPFromTrade } from "../../lib/engagement/xp";
 import { useToast } from "../../components/ToastContext";
 import type { JournalInsightsResponse } from "../api/journal-insights/route";
+import { TypewriterText } from "../../components/TypewriterText";
 import {
   LineChart,
   Line,
@@ -86,6 +87,9 @@ export default function JournalView() {
   const [insights, setInsights] = useState<JournalInsightsResponse | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
   const [insightsError, setInsightsError] = useState<string | null>(null);
+  const [insightsStreaming, setInsightsStreaming] = useState(false);
+  const [insightsProgress, setInsightsProgress] = useState(0);
+  const [animateInsights, setAnimateInsights] = useState(false);
   const insightsCacheRef = useRef<{ data: JournalInsightsResponse; at: number } | null>(null);
   const migratedRef = useRef(false);
   const toast = useToast();
@@ -101,8 +105,6 @@ export default function JournalView() {
   const [filterAsset, setFilterAsset] = useState("");
   const [filterDirection, setFilterDirection] = useState<"all" | "LONG" | "SHORT">("all");
   const [filterOutcome, setFilterOutcome] = useState<"all" | "winners" | "losers">("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
   const [sortBy, setSortBy] = useState<"date" | "pnl" | "asset">("date");
 
   const loadTrades = useCallback(async () => {
@@ -215,8 +217,7 @@ export default function JournalView() {
         return pnl.pnlDollars < 0;
       });
     }
-    if (dateFrom) list = list.filter((t) => t.entryDate >= dateFrom);
-    if (dateTo) list = list.filter((t) => (t.exitDate || t.entryDate) <= dateTo);
+
     if (sortBy === "date") list.sort((a, b) => (b.entryDate + b.id).localeCompare(a.entryDate + a.id));
     else if (sortBy === "asset") list.sort((a, b) => a.asset.localeCompare(b.asset));
     else if (sortBy === "pnl") {
@@ -227,7 +228,7 @@ export default function JournalView() {
       });
     }
     return list;
-  }, [displayTrades, filterStatus, filterAsset, filterDirection, filterOutcome, dateFrom, dateTo, sortBy]);
+  }, [displayTrades, filterStatus, filterAsset, filterDirection, filterOutcome, sortBy]);
 
   const closedTrades = useMemo(() => displayTrades.filter((t) => t.exitPrice != null), [displayTrades]);
   const analyticsTrades = useMemo(() => closedTrades.slice(0, 100), [closedTrades]);
@@ -340,16 +341,17 @@ export default function JournalView() {
 
   const fetchInsights = useCallback(async (forceRefresh = false) => {
     if (displayTrades.length < 5) return;
-    setInsightsLoading(true);
     setInsightsError(null);
     if (forceRefresh) insightsCacheRef.current = null;
     try {
       const cached = insightsCacheRef.current;
       if (!forceRefresh && cached && Date.now() - cached.at < INSIGHTS_CACHE_TTL_MS) {
+        setAnimateInsights(false);
         setInsights(cached.data);
-        setInsightsLoading(false);
         return;
       }
+      setInsightsStreaming(true);
+      setInsightsProgress(0);
       const last20 = displayTrades.slice(0, 20);
       const userMessage = `Analyze my trading journal:
 Total trades: ${displayTrades.length}
@@ -366,16 +368,28 @@ Trades data: ${JSON.stringify(last20)}`;
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userMessage }),
       });
-      if (!res.ok) {
+      if (!res.ok || !res.body) {
         const err = await res.json().catch(() => ({}));
         throw new Error((err as { error?: string }).error || res.statusText);
       }
-      const data = (await res.json()) as JournalInsightsResponse;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        setInsightsProgress(accumulated.length);
+      }
+      const clean = accumulated.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+      const data = JSON.parse(clean) as JournalInsightsResponse;
+      setAnimateInsights(true);
       setInsights(data);
       insightsCacheRef.current = { data, at: Date.now() };
     } catch (e) {
       setInsightsError(e instanceof Error ? e.message : "Failed to load insights");
     } finally {
+      setInsightsStreaming(false);
       setInsightsLoading(false);
     }
   }, [displayTrades, stats.winRate, stats.totalPnl, stats.avgReturn, bestWorst]);
@@ -413,7 +427,7 @@ Trades data: ${JSON.stringify(last20)}`;
   const tabs: { id: TabId; label: string }[] = [
     { id: "trades", label: `My Trades (${displayTrades.length})` },
     { id: "analytics", label: "Analytics" },
-    { id: "insights", label: "AI Insights" },
+    { id: "insights", label: "Trade Insights" },
   ];
 
   const tradesByDate = useMemo(() => {
@@ -441,7 +455,7 @@ Trades data: ${JSON.stringify(last20)}`;
             Trade Journal
           </h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Log trades, track performance, and get AI-powered insights.
+            Log trades, track performance, and uncover patterns in your trading.
           </p>
         </div>
 
@@ -524,18 +538,6 @@ Trades data: ${JSON.stringify(last20)}`;
                   <option value="winners">Winners</option>
                   <option value="losers">Losers</option>
                 </select>
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-1.5 text-xs text-zinc-200"
-                />
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-1.5 text-xs text-zinc-200"
-                />
               </div>
               <button
                 type="button"
@@ -552,8 +554,8 @@ Trades data: ${JSON.stringify(last20)}`;
 
             {filteredTrades.length === 0 ? (
               <div className="mt-16 flex flex-col items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] py-16 text-center">
-                <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white/5 text-4xl">
-                  📓
+                <div className="mb-4 flex h-24 w-24 items-center justify-center rounded-full bg-white/5 text-[var(--accent-color)]">
+                  <svg className="h-10 w-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
                 </div>
                 <p className="text-lg font-medium text-zinc-200">Start logging your trades</p>
                 <p className="mt-2 max-w-sm text-sm text-zinc-400">
@@ -830,12 +832,12 @@ Trades data: ${JSON.stringify(last20)}`;
           </div>
         )}
 
-        {/* AI Insights */}
+        {/* Trade Insights */}
         {activeTab === "insights" && (
           <div className="mt-6">
             {displayTrades.length < 5 ? (
               <div className="flex flex-col items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] py-16 text-center">
-                <p className="text-lg font-medium text-zinc-200">Log at least 5 trades to unlock AI insights</p>
+                <p className="text-lg font-medium text-zinc-200">Log at least 5 trades to unlock trade insights</p>
                 <div className="mt-4 w-64 overflow-hidden rounded-full bg-white/10">
                   <div
                     className="h-2 rounded-full transition-all"
@@ -846,6 +848,18 @@ Trades data: ${JSON.stringify(last20)}`;
                   />
                 </div>
                 <p className="mt-2 text-sm text-zinc-400">{displayTrades.length}/5 trades logged</p>
+              </div>
+            ) : insightsStreaming ? (
+              <div className="flex flex-col items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] py-16 gap-4">
+                <div className="flex items-center gap-3">
+                  {[0,150,300].map((d) => (
+                    <span key={d} className="h-2 w-2 animate-bounce rounded-full bg-[var(--accent-color)]" style={{ animationDelay: `${d}ms` }} />
+                  ))}
+                  <span className="text-sm text-zinc-400">Analyzing your {displayTrades.length} trades…</span>
+                </div>
+                <div className="w-48 h-0.5 overflow-hidden rounded-full bg-zinc-800">
+                  <div className="h-full rounded-full bg-[var(--accent-color)]/60 transition-all duration-300" style={{ width: `${Math.min(90, (insightsProgress / 900) * 100)}%` }} />
+                </div>
               </div>
             ) : insightsLoading ? (
               <div className="flex flex-col items-center justify-center rounded-2xl border border-white/5 bg-white/[0.02] py-16">
@@ -882,7 +896,9 @@ Trades data: ${JSON.stringify(last20)}`;
                   >
                     {insights.overallGrade}
                   </span>
-                  <p className="mt-2 text-sm text-zinc-400">{insights.gradeSummary}</p>
+                  <p className="mt-2 text-sm text-zinc-400">
+                    {animateInsights ? <TypewriterText text={insights.gradeSummary} startDelay={0} /> : insights.gradeSummary}
+                  </p>
                 </div>
 
                 <section>
@@ -890,7 +906,8 @@ Trades data: ${JSON.stringify(last20)}`;
                   <ul className="space-y-1">
                     {insights.strengths.map((s, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
-                        <span className="text-emerald-400">✓</span> {s}
+                        <span className="text-emerald-400">✓</span>{" "}
+                        {animateInsights ? <TypewriterText text={s} startDelay={550 + i * 200} /> : s}
                       </li>
                     ))}
                   </ul>
@@ -901,7 +918,8 @@ Trades data: ${JSON.stringify(last20)}`;
                   <ul className="space-y-1">
                     {insights.weaknesses.map((w, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
-                        <span className="text-amber-400">⚠</span> {w}
+                        <span className="text-amber-400">⚠</span>{" "}
+                        {animateInsights ? <TypewriterText text={w} startDelay={1150 + i * 200} /> : w}
                       </li>
                     ))}
                   </ul>
@@ -912,7 +930,8 @@ Trades data: ${JSON.stringify(last20)}`;
                   <ul className="space-y-1">
                     {insights.patterns.map((p, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
-                        <span className="text-blue-400">ℹ</span> {p}
+                        <span className="text-blue-400">ℹ</span>{" "}
+                        {animateInsights ? <TypewriterText text={p} startDelay={1750 + i * 200} /> : p}
                       </li>
                     ))}
                   </ul>
@@ -923,7 +942,8 @@ Trades data: ${JSON.stringify(last20)}`;
                   <ol className="list-inside list-decimal space-y-1 text-sm text-zinc-300">
                     {insights.actionItems.map((a, i) => (
                       <li key={i}>
-                        <span style={{ color: "var(--accent-color)" }}>{i + 1}.</span> {a}
+                        <span style={{ color: "var(--accent-color)" }}>{i + 1}.</span>{" "}
+                        {animateInsights ? <TypewriterText text={a} startDelay={2250 + i * 200} /> : a}
                       </li>
                     ))}
                   </ol>
@@ -931,19 +951,25 @@ Trades data: ${JSON.stringify(last20)}`;
 
                 <div className="rounded-xl border-l-4 border-amber-500/60 bg-amber-500/5 p-4">
                   <h3 className="text-sm font-semibold text-zinc-200">Risk assessment</h3>
-                  <p className="mt-1 text-sm text-zinc-300">{insights.riskAssessment}</p>
+                  <p className="mt-1 text-sm text-zinc-300">
+                    {animateInsights ? <TypewriterText text={insights.riskAssessment} startDelay={2850} /> : insights.riskAssessment}
+                  </p>
                 </div>
 
                 <div className="rounded-xl border-2 p-4" style={{ borderColor: "var(--accent-color)", borderImage: "linear-gradient(to right, var(--accent-color), #6366f1) 1" }}>
-                  <p className="text-lg">🎯</p>
+                  <svg className="h-4 w-4 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" /></svg>
                   <h3 className="mt-1 text-sm font-semibold text-zinc-200">Coaching tip</h3>
-                  <p className="mt-1 text-sm text-zinc-300">{insights.coachingTip}</p>
+                  <p className="mt-1 text-sm text-zinc-300">
+                    {animateInsights ? <TypewriterText text={insights.coachingTip} startDelay={3450} /> : insights.coachingTip}
+                  </p>
                 </div>
 
                 <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/5 p-4">
-                  <p className="text-lg">💪</p>
+                  <svg className="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                   <h3 className="mt-1 text-sm font-semibold text-zinc-200">Weekly challenge</h3>
-                  <p className="mt-1 text-sm text-zinc-300">{insights.weeklyChallenge}</p>
+                  <p className="mt-1 text-sm text-zinc-300">
+                    {animateInsights ? <TypewriterText text={insights.weeklyChallenge} startDelay={4050} /> : insights.weeklyChallenge}
+                  </p>
                 </div>
               </div>
             ) : null}
@@ -1253,7 +1279,7 @@ function LogTradeModal({
           const { milestone } = tickJournalStreak();
           addXPFromTrade();
           if (milestone) {
-            toast.showToast(`📓 ${milestone} Day Journal Streak! Keep logging.`, "celebration");
+            toast.showToast(`${milestone} Day Journal Streak! Keep logging.`, "celebration");
           }
           onSaved(saved);
         } else {
@@ -1268,7 +1294,7 @@ function LogTradeModal({
         const { milestone } = tickJournalStreak();
         addXPFromTrade();
         if (milestone) {
-          toast.showToast(`📓 ${milestone} Day Journal Streak! Keep logging.`, "celebration");
+          toast.showToast(`${milestone} Day Journal Streak! Keep logging.`, "celebration");
         }
       }
       onSaveFailed?.(localTrade);

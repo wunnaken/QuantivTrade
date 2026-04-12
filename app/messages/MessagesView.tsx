@@ -7,6 +7,9 @@ import { createClient } from "@/lib/supabase/client";
 import { getInitials } from "@/lib/suggested-people";
 import { VerifiedBadge } from "@/components/VerifiedBadge";
 import { useAuth } from "@/components/AuthContext";
+import { useUserSearch } from "@/hooks/useUserSearch";
+import type { SearchProfile } from "@/hooks/useUserSearch";
+import { UserSearchInput } from "@/components/UserSearchInput";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,8 +42,6 @@ type Message = {
   is_pinned?: boolean;
   edited_at?: string | null;
 };
-
-type SearchProfile = { user_id: string; name: string; username: string; is_verified?: boolean; is_founder?: boolean };
 
 type ActiveTab = "community" | "direct";
 
@@ -124,21 +125,8 @@ function convAvatar(c: Conversation): string {
 
 function NewDmModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<SearchProfile[]>([]);
-  const [searching, setSearching] = useState(false);
+  const { results, searching } = useUserSearch(q);
   const [creating, setCreating] = useState(false);
-
-  useEffect(() => {
-    if (q.length < 2) { setResults([]); return; }
-    const t = setTimeout(async () => {
-      setSearching(true);
-      const res = await fetch(`/api/profiles/search?q=${encodeURIComponent(q)}`);
-      const data = await res.json() as { profiles: SearchProfile[] };
-      setResults(data.profiles ?? []);
-      setSearching(false);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [q]);
 
   const startDm = async (profile: SearchProfile) => {
     setCreating(true);
@@ -159,13 +147,11 @@ function NewDmModal({ onClose, onCreated }: { onClose: () => void; onCreated: (i
           <h2 className="font-semibold text-zinc-100">New Message</h2>
           <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300">✕</button>
         </div>
-        <input
-          type="search"
+        <UserSearchInput
           placeholder="Search by name or username..."
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
         />
         <ul className="mt-3 space-y-1">
           {searching && <li className="py-2 text-center text-xs text-zinc-500">Searching…</li>}
@@ -201,24 +187,14 @@ function NewDmModal({ onClose, onCreated }: { onClose: () => void; onCreated: (i
 function NewGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated: (id: string) => void }) {
   const [name, setName] = useState("");
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<SearchProfile[]>([]);
+  const { results: allResults } = useUserSearch(q);
   const [members, setMembers] = useState<SearchProfile[]>([]);
   const [creating, setCreating] = useState(false);
-
-  useEffect(() => {
-    if (q.length < 2) { setResults([]); return; }
-    const t = setTimeout(async () => {
-      const res = await fetch(`/api/profiles/search?q=${encodeURIComponent(q)}`);
-      const data = await res.json() as { profiles: SearchProfile[] };
-      setResults((data.profiles ?? []).filter((p) => !members.some((m) => m.user_id === p.user_id)));
-    }, 300);
-    return () => clearTimeout(t);
-  }, [q, members]);
+  const results = allResults.filter((p) => !members.some((m) => m.user_id === p.user_id));
 
   const addMember = (p: SearchProfile) => {
     setMembers((prev) => [...prev, p]);
     setQ("");
-    setResults([]);
   };
 
   const removeMember = (uid: string) => setMembers((prev) => prev.filter((m) => m.user_id !== uid));
@@ -261,12 +237,10 @@ function NewGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated:
             ))}
           </div>
         )}
-        <input
-          type="search"
+        <UserSearchInput
           placeholder="Add members…"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
         />
         {results.length > 0 && (
           <ul className="mt-2 space-y-1">
@@ -302,22 +276,9 @@ function NewGroupModal({ onClose, onCreated }: { onClose: () => void; onCreated:
 
 function AddMemberModal({ convId, onClose, onAdded }: { convId: string; onClose: () => void; onAdded: () => void }) {
   const [q, setQ] = useState("");
-  const [results, setResults] = useState<SearchProfile[]>([]);
-  const [searching, setSearching] = useState(false);
+  const { results, searching } = useUserSearch(q);
   const [adding, setAdding] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (q.length < 2) { setResults([]); return; }
-    const t = setTimeout(async () => {
-      setSearching(true);
-      const res = await fetch(`/api/profiles/search?q=${encodeURIComponent(q)}`);
-      const data = await res.json() as { profiles: SearchProfile[] };
-      setResults(data.profiles ?? []);
-      setSearching(false);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [q]);
 
   const addMember = async (profile: SearchProfile) => {
     setAdding(profile.user_id);
@@ -344,13 +305,11 @@ function AddMemberModal({ convId, onClose, onAdded }: { convId: string; onClose:
           <h2 className="font-semibold text-zinc-100">Add Member</h2>
           <button type="button" onClick={onClose} className="text-zinc-500 hover:text-zinc-300">✕</button>
         </div>
-        <input
-          type="search"
+        <UserSearchInput
           placeholder="Search by name or username..."
           autoFocus
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
         />
         {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
         <ul className="mt-3 space-y-1">
@@ -410,8 +369,7 @@ function MessagesContent() {
   const [showAddMember, setShowAddMember] = useState(false);
   const [leavingGroup, setLeavingGroup] = useState(false);
   const [search, setSearch] = useState("");
-  const [peopleResults, setPeopleResults] = useState<SearchProfile[]>([]);
-  const [peopleSearching, setPeopleSearching] = useState(false);
+  const { results: peopleResults, searching: peopleSearching } = useUserSearch(search);
   const [startingDm, setStartingDm] = useState<string | null>(null);
   const [typingUsers, setTypingUsers] = useState<string[]>([]);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
@@ -459,19 +417,6 @@ function MessagesContent() {
   }, []);
 
   useEffect(() => { void loadConversations(); }, [loadConversations]);
-
-  // People search when typing in the sidebar search bar
-  useEffect(() => {
-    if (search.length < 2) { setPeopleResults([]); return; }
-    const t = setTimeout(async () => {
-      setPeopleSearching(true);
-      const res = await fetch(`/api/profiles/search?q=${encodeURIComponent(search)}`);
-      const data = await res.json() as { profiles: SearchProfile[] };
-      setPeopleResults(data.profiles ?? []);
-      setPeopleSearching(false);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [search]);
 
   // Handle ?with= param (navigate to existing DM by username)
   useEffect(() => {
@@ -877,12 +822,11 @@ function MessagesContent() {
         <aside className={`flex w-full flex-col border-r border-white/10 bg-[var(--app-card)] md:w-[300px] ${selectedId ? "hidden md:flex" : ""}`}>
           {/* Search */}
           <div className="border-b border-white/10 p-3">
-            <input
-              type="search"
+            <UserSearchInput
+              sizeVariant="sm"
               placeholder="Search people or conversations…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-[var(--accent-color)]/50"
             />
           </div>
 

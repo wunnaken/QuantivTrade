@@ -14,6 +14,7 @@ import {
   type LayerId,
 } from "../../lib/map-layers";
 import { CountryDetailPanel } from "./CountryDetailPanel";
+import { MapChartView } from "./MapChartView";
 import { prepareWorldAtlasForLeaflet } from "../../lib/prepare-world-atlas-leaflet";
 
 const GEO_URL = "/world-110m.json";
@@ -293,6 +294,8 @@ export default function MapView() {
   const [tradeDataLoading, setTradeDataLoading] = useState(false);
   const [lastTradeUpdate, setLastTradeUpdate] = useState<string | null>(null);
   const [globeReadyTick, setGlobeReadyTick] = useState(0);
+  const [viewMode, setViewMode] = useState<"chart" | "globe">("chart");
+  const [layerDataAsOf, setLayerDataAsOf] = useState<string>("");
 
   const containerRef = useRef<HTMLDivElement>(null);
   const globeRef = useRef<GlobeInstance | null>(null);
@@ -513,11 +516,14 @@ export default function MapView() {
 
   useEffect(() => {
     setLayerLoading(true);
+    setLayerHistory({}); // clear stale history immediately on layer switch
+    setLayerDataAsOf("");
     fetch(`/api/map-layer-data?layer=${activeLayerId}&history=1`)
       .then((r) => r.json())
-      .then((data: LayerDataState) => {
+      .then((data: LayerDataState & { dataAsOf?: string }) => {
         setLayerData({ byIso3: data.byIso3 ?? {}, byName: data.byName ?? {} });
         setLayerHistory(data.history ?? {});
+        setLayerDataAsOf(data.dataAsOf ?? "");
       })
       .catch(() => setLayerData({ byIso3: {}, byName: {} }))
       .finally(() => setLayerLoading(false));
@@ -716,6 +722,12 @@ export default function MapView() {
     clearTradeGlobeLayers();
     setMapMode("market");
   }, [clearTradeGlobeLayers]);
+
+  // Trade mode always uses the globe
+  const switchToTradeMode = useCallback(() => {
+    setViewMode("globe");
+    setMapMode("trade");
+  }, []);
 
   /** Globe.gl instance (once) */
   useEffect(() => {
@@ -1102,7 +1114,7 @@ export default function MapView() {
           </button>
           <button
             type="button"
-            onClick={() => setMapMode("trade")}
+            onClick={switchToTradeMode}
             className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
               mapMode === "trade"
                 ? "border-[var(--accent-color)]/50 bg-[var(--accent-color)]/10 text-[var(--accent-color)]"
@@ -1215,7 +1227,47 @@ export default function MapView() {
               <span className="text-[9px] text-zinc-500">{activeLayer.legend.highLabel}</span>
             </div>
           </div>
+
+          {/* View toggle */}
+          <div className="ml-auto flex shrink-0 items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode("chart")}
+              title="Flat map"
+              className={`rounded-md p-1.5 transition ${viewMode === "chart" ? "bg-white/10 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <rect x="2" y="3" width="20" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8M12 17v4" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("globe")}
+              title="3D globe"
+              className={`rounded-md p-1.5 transition ${viewMode === "globe" ? "bg-white/10 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" />
+              </svg>
+            </button>
+          </div>
         </div>
+      )}
+
+      {mapMode === "market" && viewMode === "chart" && (
+        <MapChartView
+          layerData={{ ...layerData, history: layerHistory }}
+          getDisplayValueForCountry={getDisplayValueForCountry}
+          activeLayer={activeLayer}
+          isLoading={layerLoading}
+          dataAsOf={layerDataAsOf}
+          onCountryClick={(name, id) => {
+            setSelected({ name, id });
+            setHovered({ name, id });
+          }}
+        />
       )}
 
       <div
@@ -1228,6 +1280,7 @@ export default function MapView() {
           background: "var(--app-card-alt)",
           borderRadius: "1rem",
           overflow: "hidden",
+          display: mapMode === "market" && viewMode === "chart" ? "none" : "block",
         }}
       >
         <div ref={containerRef} className="absolute inset-0" />

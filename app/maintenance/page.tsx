@@ -147,7 +147,7 @@ export default function AccessPage() {
 
         <p style={{ textAlign: "center", color: "#3f3f46", fontSize: "0.75rem", marginTop: "1.5rem" }}>
           Don&apos;t have a code?{" "}
-          <a href="mailto:hello@xchange.com" style={{ color: "#71717a", textDecoration: "underline" }}>
+          <a href="mailto:quantivtrade@gmail.com" style={{ color: "#71717a", textDecoration: "underline" }}>
             Request access
           </a>
         </p>

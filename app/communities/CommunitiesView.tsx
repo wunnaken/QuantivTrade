@@ -291,7 +291,7 @@ export default function CommunitiesView() {
                 href="/leaderboard"
                 className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium text-zinc-300 transition hover:border-[var(--accent-color)]/50 hover:bg-[var(--accent-color)]/10 hover:text-[var(--accent-color)]"
               >
-                🏆 Leaderboard
+                Leaderboard
               </Link>
             </div>
           </div>
@@ -299,31 +299,108 @@ export default function CommunitiesView() {
 
         {/* Verified Only section */}
         <section className="mb-8">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-[#3B82F6]">🔒 Verified Trader Rooms</h2>
-          <p className="mt-1 text-xs text-zinc-400">Exclusive communities for verified traders only. Broker-verified traders get priority access and a special badge in this room.</p>
+          <div className="flex items-center gap-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-400/70">Private Rooms</p>
+            <div className="h-px flex-1 bg-gradient-to-r from-amber-400/20 to-transparent" />
+          </div>
+          <p className="mt-1.5 text-xs text-zinc-500">Exclusive communities for verified traders. Broker-verified access and priority badge included.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            {[
-              { id: "pro-desk", name: "Pro Desk Flow", desc: "Institutional grade flow and ideas", members: "Verified traders only" },
-              { id: "macro-alpha", name: "Verified Macro Alpha", desc: "High conviction macro plays", members: "Verified traders only" },
-              { id: "options-elite", name: "Options Elite", desc: "Professional options strategies", members: "Verified traders only" },
-            ].map((room) => {
+            {([
+              {
+                id: "macro-alpha",
+                name: "Macro Alpha Desk",
+                desc: "Macro, rates & global flows",
+                members: "847 verified traders",
+                chat: [
+                  { user: "yieldhunter", text: "10Y holding 4.5 — watching for a break" },
+                  { user: "macro_dave", text: "DXY strength continuing into close" },
+                  { user: "fx_alpha", text: "Fed minutes drop at 2pm. I'm flat until then" },
+                  { user: "ratefade", text: "Gold coiling on daily. Breakout soon" },
+                  { user: "yieldhunter", text: "CPI print tomorrow. IV elevated across the board" },
+                  { user: "macro_dave", text: "Short bonds, long crude is the trade" },
+                  { user: "fx_alpha", text: "EUR/USD retesting 1.085 support" },
+                  { user: "ratefade", text: "Soft landing narrative starting to crack" },
+                ],
+              },
+              {
+                id: "options-flow",
+                name: "Options Flow",
+                desc: "Unusual options activity & live flow",
+                members: "612 verified traders",
+                chat: [
+                  { user: "flow_desk", text: "NVDA 135c unusual sweep just printed" },
+                  { user: "ivcrush", text: "SPX 0dte — watching 5800 as key level" },
+                  { user: "delta_king", text: "GS covered calls at 52W high. Smart money hedging?" },
+                  { user: "flow_desk", text: "Big put buying in XLE. Possible rotation out of energy" },
+                  { user: "ivcrush", text: "TSLA skew flattening ahead of earnings" },
+                  { user: "delta_king", text: "AMZN 220c bought for Jan. 8k contracts" },
+                  { user: "flow_desk", text: "VIX term structure inverting slightly" },
+                  { user: "ivcrush", text: "Selling premium into this low vol environment" },
+                ],
+              },
+              {
+                id: "swing-desk",
+                name: "Swing Traders Circle",
+                desc: "Multi-day setups & technical analysis",
+                members: "1,204 verified traders",
+                chat: [
+                  { user: "swing_alpha", text: "TSLA weekly bull flag setting up nicely" },
+                  { user: "chart_pro", text: "AAPL at key weekly resistance. Watching 215" },
+                  { user: "level2_pro", text: "META pullback into 21EMA — textbook entry" },
+                  { user: "swing_alpha", text: "SPY holding 200MA on daily. Bullish bias" },
+                  { user: "chart_pro", text: "MSFT flag breakout confirmed. Target 450" },
+                  { user: "level2_pro", text: "Risk/reward on this AMZN setup is elite" },
+                  { user: "swing_alpha", text: "Watching GOOGL for a higher low" },
+                  { user: "chart_pro", text: "Relative strength in semis vs. market" },
+                ],
+              },
+            ] as const).map((room) => {
               const verified = user?.isVerified ?? false;
               return (
-                <article key={room.id} className={`relative overflow-hidden rounded-2xl border border-white/5 p-4 ${verified ? "border-[#3B82F6]/30 bg-gradient-to-br from-[#3B82F6]/10 to-white/[0.02]" : "bg-[var(--app-card-alt)]"}`}>
+                <article key={room.id} className={`relative overflow-hidden rounded-2xl border ${verified ? "border-amber-400/20 bg-gradient-to-br from-amber-400/5 to-transparent" : "border-white/[0.07] bg-zinc-950"}`} style={{ minHeight: 260 }}>
+                  {/* Blurred chat background — always rendered, blurred by overlay for non-verified */}
+                  <div className="absolute inset-0 select-none overflow-hidden p-4 pt-14" aria-hidden>
+                    <div className="space-y-2.5">
+                      {room.chat.map((msg, i) => (
+                        <div key={i} className="flex gap-1.5 text-[10px] leading-relaxed">
+                          <span className="shrink-0 font-semibold text-zinc-400">{msg.user}</span>
+                          <span className="text-zinc-600">{msg.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Lock overlay for non-verified */}
                   {!verified && (
-                    <div className="absolute inset-0 z-10 bg-black/50 backdrop-blur-sm" aria-hidden />
+                    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/70 backdrop-blur-[5px]">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full border border-amber-400/30 bg-amber-400/10">
+                        <svg className="h-4 w-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-400/80">Members Only</p>
+                        <p className="mt-0.5 text-xs text-zinc-500">{room.name}</p>
+                      </div>
+                      <Link href="/verify" className="mt-1 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs font-semibold text-amber-300 transition hover:border-amber-400/50 hover:bg-amber-400/20">
+                        Get Access
+                      </Link>
+                    </div>
                   )}
-                  <div className={!verified ? "blur-[2px] select-none" : ""}>
+
+                  {/* Card header — always visible */}
+                  <div className={`relative z-[1] border-b p-4 ${verified ? "border-white/10" : "border-white/5"}`}>
                     <div className="flex items-center gap-2">
                       <h3 className="text-sm font-semibold text-zinc-50">{room.name}</h3>
-                      <VerifiedBadge size={16} />
+                      <VerifiedBadge size={14} />
                     </div>
-                    <p className="mt-1 text-xs text-zinc-400">{room.desc}</p>
-                    <p className="mt-1 text-[11px] text-zinc-500">Members: {room.members}</p>
-                    {verified && (
-                      <button type="button" className="mt-3 w-full rounded-full bg-[#22c55e] px-3 py-1.5 text-xs font-medium text-[#020308] hover:bg-[#22c55e]/90">Enter Room</button>
-                    )}
+                    <p className="mt-0.5 text-[11px] text-zinc-500">{room.desc}</p>
+                    <p className="mt-1 text-[10px] text-zinc-600">{room.members}</p>
                   </div>
+
+                  {verified && (
+                    <div className="relative z-[1] p-4">
+                      <button type="button" className="w-full rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-400/20">Enter Room</button>
+                    </div>
+                  )}
                 </article>
               );
             })}

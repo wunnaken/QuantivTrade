@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { anthropicSSEToTextStream } from "@/lib/anthropicStream";
 import type { BriefingPreferences } from "../../../lib/briefing-preferences";
 import { buildPreferencesSummary } from "../../../lib/briefing-preferences";
 
@@ -95,12 +96,13 @@ async function generate(preferences: BriefingPreferences | null): Promise<Respon
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 1200,
+        stream: true,
         system: systemPrompt,
         messages: [{ role: "user", content: userMessage }],
       }),
     });
 
-    if (!res.ok) {
+    if (!res.ok || !res.body) {
       const err = await res.text();
       return NextResponse.json(
         { error: err || `Anthropic API error: ${res.status}` },
@@ -108,15 +110,9 @@ async function generate(preferences: BriefingPreferences | null): Promise<Respon
       );
     }
 
-    const data = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
-    const text = data.content?.[0]?.text?.trim() ?? "";
-    if (!text) {
-      return NextResponse.json({ error: "Empty response from API" }, { status: 502 });
-    }
-
-    const jsonStr = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
-    const parsed = JSON.parse(jsonStr) as MorningBriefingResponse;
-    return NextResponse.json(parsed);
+    return new Response(anthropicSSEToTextStream(res.body), {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

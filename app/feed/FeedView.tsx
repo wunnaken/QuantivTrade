@@ -128,8 +128,14 @@ function BentoCard({ href, title, icon, children, loading=false, delay=0, classN
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={customizeMode ? undefined : () => router.push(href)}
-      style={{ boxShadow: hovered && !customizeMode ? "0 0 16px color-mix(in srgb, var(--accent-color) 12%, transparent)" : "none", transition: "box-shadow 0.15s ease" }}
-      className={`h-full overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card-alt)] ${customizeMode ? "" : "cursor-pointer"} ${className}`}
+      style={{
+        willChange: "transform",
+        boxShadow: hovered && !customizeMode
+          ? "0 0 0 1px rgba(255,255,255,0.08), 0 0 16px color-mix(in srgb, var(--accent-color) 12%, transparent)"
+          : "0 0 0 1px rgba(255,255,255,0.08)",
+        transition: "box-shadow 0.15s ease",
+      }}
+      className={`h-full overflow-visible rounded-2xl bg-[var(--app-card-alt)] ${customizeMode ? "" : "cursor-pointer"} ${className}`}
     >
       <div className="flex items-center justify-between px-4 pt-3 pb-1.5">
         <div className="flex items-center gap-2">
@@ -553,7 +559,7 @@ function ParallaxGrid() {
       className="pointer-events-none fixed inset-0"
       aria-hidden
       style={{
-        zIndex: 0,
+        zIndex: -1,
         backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px)",
         backgroundSize: "36px 36px",
         transition: "background-position 0.15s ease-out",
@@ -2344,11 +2350,11 @@ export default function BentoDashboardView() {
         )}
 
         <CustomizeModeContext.Provider value={customizeOpen}>
-          <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,28%)_minmax(0,1fr)_minmax(0,28%)]">
+          <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,28%)_minmax(0,1fr)_minmax(0,28%)]" style={{ isolation: "isolate" }}>
 
             {/* ── LEFT COLUMN ── */}
             <motion.div
-              className="flex min-w-0 flex-col gap-1 overflow-hidden"
+              className="flex min-w-0 flex-col gap-1"
               style={{ y: customizeOpen ? 0 : leftY }}
               initial={{x:-10}} animate={{x:0}} transition={{duration:0.55,ease:"easeOut"}}
               onDragOver={(e) => e.preventDefault()}
@@ -2359,7 +2365,7 @@ export default function BentoDashboardView() {
 
             {/* ── CENTER COLUMN ── */}
             <div
-              className="flex min-w-0 flex-col gap-1 overflow-hidden"
+              className="flex min-w-0 flex-col gap-1"
               onDragOver={(e) => e.preventDefault()}
             >
               {renderCol("center")}
@@ -2368,7 +2374,7 @@ export default function BentoDashboardView() {
 
             {/* ── RIGHT COLUMN ── */}
             <motion.div
-              className="flex min-w-0 flex-col gap-1 overflow-hidden"
+              className="flex min-w-0 flex-col gap-1"
               style={{ y: customizeOpen ? 0 : rightY }}
               initial={{x:10}} animate={{x:0}} transition={{duration:0.55,ease:"easeOut"}}
               onDragOver={(e) => e.preventDefault()}

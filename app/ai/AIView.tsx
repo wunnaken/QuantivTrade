@@ -632,7 +632,7 @@ export default function AIView() {
 
   const handleShare = useCallback((content: string) => {
     if (typeof window === "undefined") return;
-    const text = `💡 QuantivTrade AI insight:\n\n${content}`;
+    const text = `💡 QuantivTrade insight:\n\n${content}`;
     try {
       sessionStorage.setItem(AI_SHARE_KEY, JSON.stringify({ content: text }));
     } catch {
@@ -870,7 +870,7 @@ export default function AIView() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-0 rounded-lg border border-white/10 bg-white/5 p-0.5">
-                <span className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-medium text-zinc-100">AI Chat</span>
+                <span className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-medium text-zinc-100">Assistant</span>
                 <Link
                   href="/whiteboard"
                   className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]"

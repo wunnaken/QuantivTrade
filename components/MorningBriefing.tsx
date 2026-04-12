@@ -10,6 +10,7 @@ import {
   type BriefingPreferences,
 } from "../lib/briefing-preferences";
 import { BriefingPreferencesForm } from "./BriefingPreferencesForm";
+import { TypewriterText } from "./TypewriterText";
 
 const BG = "var(--app-bg)";
 
@@ -121,12 +122,37 @@ export function MorningBriefing({
           ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preferences: usePrefs }) }
           : {}),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data?.error ?? "Failed to load briefing");
+
+      if (!res.ok || !res.body) {
+        const errData = await res.json().catch(() => ({})) as { error?: string };
+        setError(errData.error ?? "Failed to load briefing");
         setPhase("content");
         return;
       }
+
+      // Stream the response and update the progress bar in real time
+      if (progressRef.current) progressRef.current.style.width = "0%";
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      // ~1200 tokens ≈ ~900 chars of JSON; cap bar at 90% until done
+      const EXPECTED_CHARS = 1400;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        if (progressRef.current) {
+          const pct = Math.min(90, (accumulated.length / EXPECTED_CHARS) * 100);
+          progressRef.current.style.width = `${pct}%`;
+        }
+      }
+
+      // Fill bar to 100% briefly before transitioning
+      if (progressRef.current) progressRef.current.style.width = "100%";
+
+      const clean = accumulated.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+      const data = JSON.parse(clean) as BriefingData;
       setBriefing(data);
       setFetchedAt(new Date().toISOString());
       setCachedBriefing(data);
@@ -169,16 +195,18 @@ export function MorningBriefing({
     return () => clearInterval(id);
   }, [phase]);
 
+  // Only animate the bar on the brief intro-to-loading transition (phase 3).
+  // During actual streaming (phase "loading"), the bar is driven by fetchBriefing.
   useEffect(() => {
-    if (phase !== "loading" && phase !== 3) return;
+    if (phase !== 3) return;
     const el = progressRef.current;
     if (!el) return;
+    el.style.width = "0%";
     const start = Date.now();
-    const duration = 400;
     const tick = () => {
       const elapsed = Date.now() - start;
-      const p = Math.min(1, elapsed / duration);
-      el.style.width = `${p * 100}%`;
+      const p = Math.min(1, elapsed / 400);
+      el.style.width = `${p * 15}%`; // only fill to 15% — streaming takes over after
       if (p < 1) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -304,10 +332,12 @@ export function MorningBriefing({
               </div>
 
               <h1 className="mb-6 text-center text-2xl font-bold md:text-3xl" style={{ color: "var(--accent-color)" }}>
-                {briefing.headline}
+                <TypewriterText text={briefing.headline} startDelay={0} />
               </h1>
 
-              <p className="mx-auto mb-10 max-w-[700px] text-center text-zinc-300 leading-relaxed">{briefing.overview}</p>
+              <p className="mx-auto mb-10 max-w-[700px] text-center text-zinc-300 leading-relaxed">
+                <TypewriterText text={briefing.overview} startDelay={600} />
+              </p>
 
               <section className="mb-10">
                 <h2 className="mb-4 text-lg font-semibold text-zinc-100">Top Stories</h2>
@@ -369,15 +399,15 @@ export function MorningBriefing({
                 <div className="rounded-xl p-[2px]" style={{ background: "linear-gradient(to right, var(--accent-color), rgba(245,158,11,0.8))" }}>
                   <div className="rounded-[10px] bg-[var(--app-card)] p-4">
                     <div className="text-lg font-semibold text-zinc-100">Trader&apos;s Edge</div>
-                    <p className="mt-2 text-zinc-300">{briefing.tradersEdge}</p>
+                    <p className="mt-2 text-zinc-300"><TypewriterText text={briefing.tradersEdge} startDelay={1200} /></p>
                   </div>
                 </div>
               </section>
 
-              <p className="text-center italic text-zinc-500">&ldquo;{briefing.oneLiner}&rdquo;</p>
+              <p className="text-center italic text-zinc-500">&ldquo;<TypewriterText text={briefing.oneLiner} startDelay={1800} />&rdquo;</p>
 
               <footer className="mt-12 flex flex-col items-center gap-4 border-t border-white/10 pt-8">
-                <p className="text-center text-xs text-zinc-500">AI-generated briefing based on current market data. Not financial advice.</p>
+                <p className="text-center text-xs text-zinc-500">Daily briefing based on current market data. Not financial advice.</p>
                 <Link
                   href="/feed"
                   onClick={(e) => { e.preventDefault(); onClose(); router.push("/feed"); }}

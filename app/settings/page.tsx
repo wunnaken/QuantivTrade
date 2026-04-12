@@ -5,17 +5,14 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../components/AuthContext";
 import { useTheme } from "../../components/ThemeContext";
 import { createClient } from "../../lib/supabase/client";
-import { getBrokerConnection, disconnectBroker, BROKER_TEAL } from "../../lib/broker-connection";
-import { ConnectBrokerModal } from "../../components/ConnectBrokerModal";
 import { NewsletterSignup } from "../../components/NewsletterSignup";
 import { BriefingPreferencesForm } from "../../components/BriefingPreferencesForm";
 import { fetchBriefingPreferences, type BriefingPreferences } from "../../lib/briefing-preferences";
+import { ACCENT_OPTIONS } from "../../lib/accent-color";
 
 export default function SettingsPage() {
   const { user, authLoading, deleteAccount, signInWithGoogle, signInWithApple } = useAuth();
-  const { theme, setTheme } = useTheme();
-  const [brokerState, setBrokerState] = useState(getBrokerConnection());
-  const [connectModalOpen, setConnectModalOpen] = useState(false);
+  const { theme, setTheme, accentColor, setAccentColor } = useTheme();
   const [briefingPrefs, setBriefingPrefs] = useState<BriefingPreferences | null>(null);
   const [briefingPrefsSaved, setBriefingPrefsSaved] = useState(false);
   const [mfaEnabled, setMfaEnabled] = useState<boolean | null>(null);
@@ -24,18 +21,48 @@ export default function SettingsPage() {
   const [stripeConnected, setStripeConnected] = useState(false);
   const [stripeOnboarded, setStripeOnboarded] = useState(false);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setBrokerState(getBrokerConnection());
-    const onStorage = () => setBrokerState(getBrokerConnection());
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+
+  // Notification preferences
+  const [notifPrefs, setNotifPrefs] = useState({ priceAlerts: true, messages: true, mentions: true, briefing: true, tradeAlerts: true });
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifSaved, setNotifSaved] = useState(false);
+
+  // Privacy
+  const [privacyPrefs, setPrivacyPrefs] = useState({ publicProfile: true, showPortfolioStats: true, showRealName: true });
+  const [privacySaving, setPrivacySaving] = useState(false);
+  const [privacySaved, setPrivacySaved] = useState(false);
+
+  // Region
+  const [currency, setCurrency] = useState("USD");
+  const [timezone, setTimezone] = useState("");
+  const [regionSaving, setRegionSaving] = useState(false);
+  const [regionSaved, setRegionSaved] = useState(false);
+
+  // Session
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [sessionDone, setSessionDone] = useState(false);
+
+  // Export
+  const [exportLoading, setExportLoading] = useState(false);
+
 
   useEffect(() => {
     if (!user?.isVerified) return;
     fetchBriefingPreferences().then((p) => { if (p) setBriefingPrefs(p); });
   }, [user?.isVerified]);
+
+  useEffect(() => {
+    if (!user) return;
+    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    // Load ui_preferences extras
+    fetch("/api/profile/me").then((r) => r.json()).then((d) => {
+      const prefs = d.ui_preferences ?? {};
+      if (prefs.notifications) setNotifPrefs((p) => ({ ...p, ...prefs.notifications }));
+      if (prefs.privacy) setPrivacyPrefs((p) => ({ ...p, ...prefs.privacy }));
+      if (prefs.currency) setCurrency(prefs.currency);
+      if (prefs.timezone) setTimezone(prefs.timezone);
+    }).catch(() => {});
+  }, [user]);
 
   useEffect(() => {
     if (!user) return;
@@ -81,6 +108,14 @@ export default function SettingsPage() {
     );
   }
 
+  const patchUiPrefs = async (patch: Record<string, unknown>) => {
+    await fetch("/api/profile/me", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ui_prefs_patch: patch }),
+    });
+  };
+
   const handleDeleteAccount = async () => {
     if (
       typeof window !== "undefined" &&
@@ -91,19 +126,52 @@ export default function SettingsPage() {
     }
   };
 
+  const NAV_ITEMS = [
+    { id: "security", label: "Security" },
+    { id: "appearance", label: "Appearance" },
+    { id: "notifications", label: "Notifications" },
+    { id: "privacy", label: "Privacy" },
+    { id: "connections", label: "Connections" },
+    { id: "region", label: "Region" },
+    { id: "data", label: "Data & Sessions" },
+    ...(user.isVerified ? [{ id: "briefing", label: "Briefing" }] : []),
+    { id: "account", label: "Account" },
+  ];
+
   return (
     <main className="app-page min-h-screen px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-4xl space-y-8">
+      <div className="mx-auto max-w-5xl">
         <header>
           <h1 className="text-2xl font-semibold text-zinc-100">Settings</h1>
           <p className="mt-2 text-sm text-zinc-400">
-            Manage your appearance, risk preferences, and account in one place.
+            Manage your appearance, notifications, and account in one place.
           </p>
         </header>
 
+        <div className="mt-8 flex gap-8">
+          {/* Sticky sidebar nav */}
+          <nav className="hidden w-40 shrink-0 lg:block">
+            <ul className="sticky top-20 space-y-0.5">
+              {NAV_ITEMS.map((item) => (
+                <li key={item.id}>
+                  <a
+                    href={`#${item.id}`}
+                    className="block rounded-lg px-3 py-2 text-xs font-medium text-zinc-500 transition hover:bg-white/5 hover:text-zinc-300"
+                  >
+                    {item.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          {/* Sections */}
+          <div className="min-w-0 flex-1 space-y-8">
+
         {/* Security */}
         <section
-          className="rounded-2xl border p-5 transition-colors duration-300"
+          id="security"
+          className="scroll-mt-24 rounded-2xl border p-5 transition-colors duration-300"
           style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
         >
           <h2 className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>Security</h2>
@@ -147,54 +215,28 @@ export default function SettingsPage() {
               {mfaEnabled ? "Manage 2FA" : "Enable 2FA"}
             </Link>
           </div>
-        </section>
 
-        {/* Newsletter */}
-        <section
-          className="rounded-2xl border p-5 transition-colors duration-300"
-          style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
-        >
-          <h2 className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>Product Updates</h2>
-          <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>
-            Get notified by email when a new version of QuantivTrade is released.
-          </p>
-          <div className="mt-4 max-w-sm">
-            <NewsletterSignup compact />
+          {/* Change Password */}
+          <div className="mt-5 border-t border-white/5 pt-5">
+            <p className="text-xs font-medium text-zinc-300">Change Password</p>
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              Password changes are temporarily unavailable. Email{" "}
+              <a href="mailto:quantivtrade@gmail.com" className="text-zinc-400 hover:underline">
+                quantivtrade@gmail.com
+              </a>{" "}
+              and we'll get it sorted for you.
+            </p>
           </div>
         </section>
 
-        {/* Connected Accounts */}
+        {/* Connections */}
         <section
-          className="rounded-2xl border p-5 transition-colors duration-300"
+          id="connections"
+          className="scroll-mt-24 rounded-2xl border p-5 transition-colors duration-300"
           style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
         >
-          <h2 className="text-sm font-semibold text-zinc-50">Connected Accounts</h2>
+          <h2 className="text-sm font-semibold text-zinc-50">Connections</h2>
           <p className="mt-1 text-xs text-zinc-500">Link social or broker accounts. Your data is encrypted and read-only.</p>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            {brokerState.connected ? (
-              <>
-                <span className="rounded-lg border px-3 py-2 text-sm text-zinc-300" style={{ borderColor: `${BROKER_TEAL}40` }}>
-                  Broker: {brokerState.brokerName ?? "Connected"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => { disconnectBroker(); setBrokerState(getBrokerConnection()); }}
-                  className="text-sm text-zinc-500 hover:text-zinc-300 underline"
-                >
-                  Disconnect
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setConnectModalOpen(true)}
-                className="rounded-lg px-4 py-2 text-sm font-medium text-[#020308] transition hover:opacity-90"
-                style={{ backgroundColor: BROKER_TEAL }}
-              >
-                Connect Broker
-              </button>
-            )}
-          </div>
           {/* Stripe Connect — seller payouts */}
           <div className="mt-4 border-t border-white/5 pt-4">
             <p className="text-xs font-medium text-zinc-300">Sell on Marketplace</p>
@@ -255,12 +297,22 @@ export default function SettingsPage() {
               Link Google account
             </button>
           </div>
+
+          {/* Product Updates */}
+          <div className="mt-5 border-t border-white/5 pt-5">
+            <p className="text-xs font-medium text-zinc-300">Product Updates</p>
+            <p className="mt-0.5 text-[11px] text-zinc-500">Get notified by email when a new version of QuantivTrade is released.</p>
+            <div className="mt-3 max-w-sm">
+              <NewsletterSignup compact />
+            </div>
+          </div>
         </section>
 
 
         {/* Appearance */}
         <section
-          className="rounded-2xl border p-5 transition-colors duration-300"
+          id="appearance"
+          className="scroll-mt-24 rounded-2xl border p-5 transition-colors duration-300"
           style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
         >
           <h2 className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--app-text)" }}>
@@ -311,12 +363,248 @@ export default function SettingsPage() {
               Light Mode
             </button>
           </div>
+
+          {/* Accent Color */}
+          <div className="mt-5 border-t border-white/5 pt-5">
+            <p className="text-xs font-medium" style={{ color: "var(--app-text)" }}>Accent Color</p>
+            <p className="mt-0.5 text-[11px]" style={{ color: "var(--app-text-muted)" }}>Choose the highlight color used across the interface.</p>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {ACCENT_OPTIONS.map((opt) => {
+                const isActive = accentColor === opt.hex;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    title={opt.name}
+                    onClick={() => setAccentColor(opt.hex)}
+                    className="flex flex-col items-center gap-1.5"
+                  >
+                    <span
+                      className={`h-8 w-8 rounded-full border-2 transition-transform ${isActive ? "scale-110 border-white" : "border-transparent hover:scale-105"}`}
+                      style={{ background: opt.hex }}
+                    />
+                    <span className={`text-[10px] ${isActive ? "text-zinc-200" : "text-zinc-500"}`}>{opt.name.split(" ")[0]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* Notification Preferences */}
+        <section id="notifications" className="scroll-mt-24 rounded-2xl border p-5 transition-colors duration-300" style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>Notification Preferences</h2>
+              <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>Choose which in-app events notify you.</p>
+            </div>
+            {notifSaved && <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-400">Saved</span>}
+          </div>
+          <div className="mt-4 space-y-3">
+            {([
+              { key: "priceAlerts", label: "Price alerts", desc: "Notify when a watched ticker hits your target" },
+              { key: "tradeAlerts", label: "Trade executions", desc: "Confirmation when a trade is logged" },
+              { key: "messages", label: "New messages", desc: "Direct messages and trade room activity" },
+              { key: "mentions", label: "Mentions & replies", desc: "When someone mentions or replies to you" },
+              { key: "briefing", label: "Morning briefing", desc: "Daily AI briefing ready notification" },
+            ] as { key: keyof typeof notifPrefs; label: string; desc: string }[]).map(({ key, label, desc }) => (
+              <div key={key} className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium text-zinc-300">{label}</p>
+                  <p className="text-[11px] text-zinc-500">{desc}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNotifPrefs((p) => ({ ...p, [key]: !p[key] }))}
+                  className={`relative h-5 w-9 shrink-0 cursor-pointer overflow-hidden rounded-full transition-colors duration-200 ${notifPrefs[key] ? "bg-[var(--accent-color)]" : "bg-white/15"}`}
+                >
+                  <span className={`absolute inset-y-0 my-auto left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${notifPrefs[key] ? "translate-x-4" : "translate-x-0"}`} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={notifSaving}
+            onClick={async () => {
+              setNotifSaving(true);
+              await patchUiPrefs({ notifications: notifPrefs }).catch(() => {});
+              setNotifSaving(false);
+              setNotifSaved(true);
+              setTimeout(() => setNotifSaved(false), 3000);
+            }}
+            className="mt-4 rounded-full px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: "var(--accent-color)" }}
+          >
+            {notifSaving ? "Saving…" : "Save"}
+          </button>
+        </section>
+
+        {/* Privacy */}
+        <section id="privacy" className="scroll-mt-24 rounded-2xl border p-5 transition-colors duration-300" style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>Privacy</h2>
+              <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>Control what others can see on your public profile.</p>
+            </div>
+            {privacySaved && <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-400">Saved</span>}
+          </div>
+          <div className="mt-4 space-y-3">
+            {([
+              { key: "publicProfile", label: "Public profile", desc: "Your profile appears in search and suggestions" },
+              { key: "showRealName", label: "Show real name", desc: "Display your name alongside your username" },
+              { key: "showPortfolioStats", label: "Show portfolio stats", desc: "Show P&L and trade performance on your profile" },
+            ] as { key: keyof typeof privacyPrefs; label: string; desc: string }[]).map(({ key, label, desc }) => (
+              <div key={key} className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium text-zinc-300">{label}</p>
+                  <p className="text-[11px] text-zinc-500">{desc}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPrivacyPrefs((p) => ({ ...p, [key]: !p[key] }))}
+                  className={`relative h-5 w-9 shrink-0 cursor-pointer overflow-hidden rounded-full transition-colors duration-200 ${privacyPrefs[key] ? "bg-[var(--accent-color)]" : "bg-white/15"}`}
+                >
+                  <span className={`absolute inset-y-0 my-auto left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200 ${privacyPrefs[key] ? "translate-x-4" : "translate-x-0"}`} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={privacySaving}
+            onClick={async () => {
+              setPrivacySaving(true);
+              await patchUiPrefs({ privacy: privacyPrefs }).catch(() => {});
+              setPrivacySaving(false);
+              setPrivacySaved(true);
+              setTimeout(() => setPrivacySaved(false), 3000);
+            }}
+            className="mt-4 rounded-full px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: "var(--accent-color)" }}
+          >
+            {privacySaving ? "Saving…" : "Save"}
+          </button>
+        </section>
+
+        {/* Language / Region */}
+        <section id="region" className="scroll-mt-24 rounded-2xl border p-5 transition-colors duration-300" style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>Language &amp; Region</h2>
+              <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>Affects how prices, dates, and times are displayed.</p>
+            </div>
+            {regionSaved && <span className="shrink-0 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-400">Saved</span>}
+          </div>
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">Display Currency</label>
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 outline-none focus:border-[var(--accent-color)]"
+              >
+                {["USD", "EUR", "GBP", "JPY", "CAD", "AUD", "CHF", "CNY", "INR", "BRL"].map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[11px] font-medium text-zinc-500">Timezone</label>
+              <select
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                className="w-full rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 outline-none focus:border-[var(--accent-color)]"
+              >
+                {Intl.supportedValuesOf("timeZone").map((tz) => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={regionSaving}
+            onClick={async () => {
+              setRegionSaving(true);
+              await patchUiPrefs({ currency, timezone }).catch(() => {});
+              setRegionSaving(false);
+              setRegionSaved(true);
+              setTimeout(() => setRegionSaved(false), 3000);
+            }}
+            className="mt-4 rounded-full px-5 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+            style={{ backgroundColor: "var(--accent-color)" }}
+          >
+            {regionSaving ? "Saving…" : "Save"}
+          </button>
+        </section>
+
+        {/* Data & Sessions */}
+        <section id="data" className="scroll-mt-24 rounded-2xl border p-5 transition-colors duration-300" style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--app-text)" }}>Data &amp; Sessions</h2>
+          <p className="mt-1 text-[11px]" style={{ color: "var(--app-text-muted)" }}>Export your data or manage active sessions.</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              disabled={exportLoading}
+              onClick={() => {
+                setExportLoading(true);
+                try {
+                  const raw = localStorage.getItem("quantivtrade-journal-trades");
+                  const trades: Record<string, unknown>[] = raw ? JSON.parse(raw) : [];
+                  if (trades.length === 0) { alert("No journal entries to export."); return; }
+                  const headers = ["id","asset","direction","entryPrice","exitPrice","entryDate","exitDate","positionSize","strategy","notes","tags","pnlDollars","pnlPercent","createdAt"];
+                  const rows = trades.map((t) => headers.map((h) => {
+                    const v = t[h];
+                    return Array.isArray(v) ? `"${v.join(", ")}"` : v != null ? `"${String(v).replace(/"/g, '""')}"` : "";
+                  }).join(","));
+                  const csv = [headers.join(","), ...rows].join("\n");
+                  const blob = new Blob([csv], { type: "text/csv" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url; a.download = `quantivtrade-journal-${new Date().toISOString().slice(0,10)}.csv`;
+                  a.click(); URL.revokeObjectURL(url);
+                } finally { setExportLoading(false); }
+              }}
+              className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10 disabled:opacity-50"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              Export journal (CSV)
+            </button>
+          </div>
+
+          {/* Session Management */}
+          <div className="mt-5 border-t border-white/5 pt-5">
+            <p className="text-xs font-medium text-zinc-300">Session Management</p>
+            <p className="mt-0.5 text-[11px] text-zinc-500">Sign out of all other devices while keeping your current session active.</p>
+            <div className="mt-3 flex items-center gap-3">
+              <button
+                type="button"
+                disabled={sessionLoading || sessionDone}
+                onClick={async () => {
+                  setSessionLoading(true);
+                  try {
+                    const supabase = createClient();
+                    await supabase.auth.signOut({ scope: "others" });
+                    setSessionDone(true);
+                  } catch { /* ignore */ } finally { setSessionLoading(false); }
+                }}
+                className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10 disabled:opacity-50"
+              >
+                {sessionLoading ? "Signing out…" : sessionDone ? "Done" : "Sign out all other devices"}
+              </button>
+              {sessionDone && <span className="text-xs text-emerald-400">All other sessions revoked.</span>}
+            </div>
+          </div>
         </section>
 
         {/* Morning Briefing Preferences — premium users only */}
         {user.isVerified && (
           <section
-            className="rounded-2xl border p-5 transition-colors duration-300"
+            id="briefing"
+            className="scroll-mt-24 rounded-2xl border p-5 transition-colors duration-300"
             style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}
           >
             <div className="flex items-start justify-between gap-4">
@@ -348,7 +636,7 @@ export default function SettingsPage() {
         )}
 
         {/* Account */}
-        <section className="rounded-2xl border border-red-500/30 bg-red-500/5 p-5 transition-colors duration-300">
+        <section id="account" className="scroll-mt-24 rounded-2xl border border-red-500/30 bg-red-500/5 p-5 transition-colors duration-300">
           <h2 className="text-sm font-semibold text-zinc-50">Account</h2>
           <p className="mt-1 text-xs text-zinc-400">
             Permanently delete your account and all associated data from this demo. This cannot be undone.
@@ -361,8 +649,9 @@ export default function SettingsPage() {
             Delete account
           </button>
         </section>
+          </div>{/* /sections */}
+        </div>{/* /flex */}
       </div>
-      {connectModalOpen && <ConnectBrokerModal onClose={() => { setConnectModalOpen(false); setBrokerState(getBrokerConnection()); }} onConnect={() => setBrokerState(getBrokerConnection())} />}
     </main>
   );
 }

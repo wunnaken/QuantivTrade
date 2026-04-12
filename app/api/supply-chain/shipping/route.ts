@@ -24,7 +24,6 @@ async function fetchFinnhubCandles(symbol: string, key: string, days = 90) {
 }
 
 async function fetchNewsCount(query: string, key: string) {
-  // NewsData.io article count as proxy for port congestion
   const url = `https://newsdata.io/api/1/news?apikey=${key}&q=${encodeURIComponent(query)}&language=en&category=business`;
   const res = await fetch(url, { next: { revalidate: 3600 } });
   if (!res.ok) throw new Error(`NewsData fetch failed: ${res.status}`);
@@ -32,9 +31,34 @@ async function fetchNewsCount(query: string, key: string) {
   return data.totalResults ?? data.results?.length ?? 0;
 }
 
+async function fetchFredSeries(seriesId: string, key: string, limit = 52) {
+  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${key}&file_type=json&sort_order=desc&limit=${limit}`;
+  const res = await fetch(url, { next: { revalidate: 3600 } });
+  if (!res.ok) throw new Error(`FRED ${seriesId} failed: ${res.status}`);
+  const json = await res.json() as { observations?: Array<{ date: string; value: string }> };
+  return (json.observations ?? [])
+    .filter((o) => o.value !== "." && o.value !== "")
+    .map((o) => ({ date: o.date, value: parseFloat(o.value) }))
+    .reverse();
+}
+
+async function fetchEIADiesel(key: string) {
+  // Weekly US on-highway diesel retail prices ($/gallon)
+  const url = `https://api.eia.gov/v2/petroleum/pri/gnd/data/?frequency=weekly&data[0]=value&facets[duoarea][]=NUS&facets[product][]=EPD2D&sort[0][column]=period&sort[0][direction]=desc&length=52&api_key=${key}`;
+  const res = await fetch(url, { next: { revalidate: 3600 } });
+  if (!res.ok) throw new Error(`EIA diesel failed: ${res.status}`);
+  const json = await res.json() as { response?: { data?: Array<{ period: string; value: string | number }> } };
+  return (json.response?.data ?? [])
+    .filter((d) => d.value !== null && d.value !== "")
+    .map((d) => ({ date: d.period, value: typeof d.value === "string" ? parseFloat(d.value) : d.value }))
+    .reverse();
+}
+
 export async function GET() {
   const finnhubKey = process.env.FINNHUB_API_KEY?.trim();
   const newsKey = process.env.NEWS_API_KEY?.trim();
+  const fredKey = process.env.FRED_API_KEY?.trim();
+  const eiaKey = process.env.EIA_API_KEY?.trim();
 
   if (!finnhubKey) {
     return NextResponse.json(
@@ -43,15 +67,15 @@ export async function GET() {
     );
   }
 
-  // Shipping proxy tickers
-  const shippingProxies = ["BDRY", "ZIM", "MATX", "SBLK", "JBHT", "WERN", "KNX"];
+  // All market proxy tickers (shipping + trucking)
+  const allProxies = ["BDRY", "ZIM", "MATX", "SBLK", "JBHT", "WERN", "KNX", "ODFL", "XPO", "CHRW", "R"];
   const quoteResults = await Promise.allSettled(
-    shippingProxies.map(async (sym) => ({ symbol: sym, quote: await fetchFinnhubQuote(sym, finnhubKey) }))
+    allProxies.map(async (sym) => ({ symbol: sym, quote: await fetchFinnhubQuote(sym, finnhubKey) }))
   );
 
   const quotes: Record<string, unknown> = {};
   quoteResults.forEach((r, i) => {
-    const sym = shippingProxies[i];
+    const sym = allProxies[i];
     if (r.status === "fulfilled") {
       quotes[sym] = { ...r.value.quote, symbol: sym };
     } else {
@@ -72,6 +96,26 @@ export async function GET() {
     try {
       congestionCount = await fetchNewsCount("port congestion delay shipping", newsKey);
       congestionDate = new Date().toISOString().slice(0, 10);
+    } catch {}
+  }
+
+  // Trucking Services Index (FRED: TSITRK) — monthly, from BTS
+  let tsiHistory: { date: string; value: number }[] = [];
+  let tsiLatest: { date: string; value: number } | null = null;
+  if (fredKey) {
+    try {
+      tsiHistory = await fetchFredSeries("TSITRK", fredKey, 36);
+      tsiLatest = tsiHistory.length > 0 ? tsiHistory[tsiHistory.length - 1] : null;
+    } catch {}
+  }
+
+  // Weekly diesel prices (EIA)
+  let dieselHistory: { date: string; value: number }[] = [];
+  let dieselLatest: { date: string; value: number } | null = null;
+  if (eiaKey) {
+    try {
+      dieselHistory = await fetchEIADiesel(eiaKey);
+      dieselLatest = dieselHistory.length > 0 ? dieselHistory[dieselHistory.length - 1] : null;
     } catch {}
   }
 
@@ -118,12 +162,37 @@ export async function GET() {
         message:
           "DAT Freight & Analytics trucking spot rates require a paid DAT subscription. DAT is the leading source for truckload spot rates. Visit https://www.dat.com for pricing.",
       },
-      marketProxies: {
-        JBHT: { quote: quotes["JBHT"], label: "J.B. Hunt Transport — truckload carrier proxy", type: "market-proxy" },
-        WERN: { quote: quotes["WERN"], label: "Werner Enterprises — truckload carrier proxy", type: "market-proxy" },
-        KNX: { quote: quotes["KNX"], label: "Knight-Swift Transportation — truckload carrier proxy", type: "market-proxy" },
-        disclaimer:
-          "These are equity prices of trucking companies — market proxies only, not actual spot rates. Trucking stock prices reflect investor expectations but may lag or diverge from actual rate movements.",
+      tsi: {
+        history: tsiHistory,
+        latest: tsiLatest,
+        available: tsiHistory.length > 0,
+        label: "Transportation Services Index — Trucking",
+        source: "Bureau of Transportation Statistics via FRED (TSITRK)",
+        schedule: "Monthly — released ~60 days after month end",
+        note: "The TSI-Trucking measures the output of the for-hire trucking industry. Rising index = more freight volume moving. 2000=100 baseline.",
+      },
+      diesel: {
+        history: dieselHistory,
+        latest: dieselLatest,
+        available: dieselHistory.length > 0,
+        label: "US On-Highway Diesel Retail Price",
+        source: "EIA Weekly Retail Gasoline and Diesel Prices",
+        schedule: "Weekly — released every Monday",
+        note: "Diesel is ~40% of trucking operating costs. Rising diesel prices compress carrier margins and often lead to fuel surcharge increases passed to shippers.",
+      },
+      // Categorized trucking stocks
+      truckloadProxies: {
+        JBHT: { quote: quotes["JBHT"], label: "J.B. Hunt Transport", segment: "Intermodal / TL", type: "market-proxy" },
+        WERN: { quote: quotes["WERN"], label: "Werner Enterprises", segment: "Truckload (TL)", type: "market-proxy" },
+        KNX: { quote: quotes["KNX"], label: "Knight-Swift Transportation", segment: "Truckload (TL)", type: "market-proxy" },
+      },
+      ltlProxies: {
+        ODFL: { quote: quotes["ODFL"], label: "Old Dominion Freight Line", segment: "LTL", type: "market-proxy" },
+        XPO: { quote: quotes["XPO"], label: "XPO Inc", segment: "LTL / Logistics", type: "market-proxy" },
+      },
+      brokerProxies: {
+        CHRW: { quote: quotes["CHRW"], label: "C.H. Robinson Worldwide", segment: "Freight Brokerage", type: "market-proxy" },
+        R: { quote: quotes["R"], label: "Ryder System", segment: "Fleet Leasing / Logistics", type: "market-proxy" },
       },
     },
   });

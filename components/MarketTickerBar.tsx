@@ -1,6 +1,50 @@
 "use client";
 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+
+// ─── Market Status ────────────────────────────────────────────────────────────
+
+type MarketStatus = "open" | "pre" | "after" | "closed";
+
+function getUSMarketStatus(): MarketStatus {
+  const etString = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+  const et = new Date(etString);
+  const day = et.getDay();
+  const t = et.getHours() * 60 + et.getMinutes();
+  if (day === 0 || day === 6) return "closed";
+  if (t < 240) return "closed";   // before 4:00 AM
+  if (t < 570) return "pre";      // 4:00–9:30 AM
+  if (t < 960) return "open";     // 9:30 AM–4:00 PM
+  if (t < 1200) return "after";   // 4:00–8:00 PM
+  return "closed";
+}
+
+const FOREX_SYMBOLS = new Set(["EURUSD", "DXY", "GBPUSD", "USDJPY", "USDCAD", "AUDUSD"]);
+
+function MarketStatusIcon({ status }: { status: "pre" | "after" | "closed" }) {
+  if (status === "pre") {
+    return (
+      <span title="Pre-Market" aria-label="Pre-Market" className="text-amber-400 flex items-center">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M12 2v2M12 12a5 5 0 0 1-5-5" />
+          <path d="M5.636 5.636 4.222 4.222M2 12h2M20 12h2M18.364 5.636l1.414-1.414" />
+          <line x1="3" y1="19" x2="21" y2="19" />
+          <path d="M7 19a5 5 0 0 1 10 0" />
+        </svg>
+      </span>
+    );
+  }
+  if (status === "after") {
+    return (
+      <span title="After Hours" aria-label="After Hours" className="text-indigo-400 flex items-center">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+        </svg>
+      </span>
+    );
+  }
+  return null;
+}
 import Link from "next/link";
 import { useLivePrices } from "../lib/hooks/useLivePrice";
 import { PriceDisplay } from "./PriceDisplay";
@@ -37,15 +81,19 @@ const TickerItem = memo(function TickerItem({
   symbol,
   name,
   data,
+  marketStatus,
 }: {
   symbol: string;
   name: string;
   data: { price: number | null; change: number | null; changePercent: number | null; isLoading: boolean };
+  marketStatus: MarketStatus;
 }) {
   const isPositive = data.changePercent != null && data.changePercent >= 0;
   const isZero = data.changePercent != null && data.changePercent === 0;
   const dotColor = data.isLoading ? "bg-white/20" : isZero ? "bg-zinc-500" : isPositive ? "bg-emerald-400" : "bg-red-400";
   const isCrypto = CRYPTO_SYMBOLS.has(symbol);
+  const isForex = FOREX_SYMBOLS.has(symbol);
+  const showStatus = !isCrypto && !isForex && (marketStatus === "pre" || marketStatus === "after");
   const changeLabel = isCrypto ? "24h change (CoinGecko); may differ from TradingView day change" : undefined;
   return (
     <Link
@@ -56,19 +104,18 @@ const TickerItem = memo(function TickerItem({
       <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotColor} ${data.isLoading ? "animate-pulse" : ""}`} aria-hidden />
       <span className="font-medium text-zinc-200">{name}</span>
       {data.price != null ? (
-        <>
-          <PriceDisplay
-            price={data.price}
-            change={data.change}
-            changePercent={data.changePercent}
-            symbol={symbol}
-            format="compact"
-            showChange={true}
-          />
-        </>
+        <PriceDisplay
+          price={data.price}
+          change={data.change}
+          changePercent={data.changePercent}
+          symbol={symbol}
+          format="compact"
+          showChange={true}
+        />
       ) : (
         <span className="text-zinc-500">—</span>
       )}
+      {showStatus && <MarketStatusIcon status={marketStatus} />}
     </Link>
   );
 });
@@ -94,6 +141,12 @@ export function MarketTickerBar() {
     tickers: DEFAULT_TICKERS,
     useWatchlist: false,
   });
+  const [marketStatus, setMarketStatus] = useState<MarketStatus>(getUSMarketStatus);
+
+  useEffect(() => {
+    const id = setInterval(() => setMarketStatus(getUSMarketStatus()), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -197,6 +250,7 @@ export function MarketTickerBar() {
             symbol={symbol}
             name={SYMBOL_NAMES[symbol] ?? symbol}
             data={prices[symbol] ?? LOADING_DATA}
+            marketStatus={marketStatus}
           />
         ))}
       </div>

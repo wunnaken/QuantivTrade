@@ -60,29 +60,51 @@ async function fetchPolymarket(): Promise<PredictMarket[]> {
 }
 
 async function fetchKalshi(): Promise<PredictMarket[]> {
+  const apiKey = process.env.KALSHI_API_KEY;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (apiKey) headers["Authorization"] = `Token ${apiKey}`;
+
   const res = await fetch(
-    "https://trading-api.kalshi.com/trade-api/v2/markets?limit=50&status=open",
-    { next: { revalidate: 300 } }
+    "https://trading-api.kalshi.com/trade-api/v2/markets?limit=100",
+    { headers, next: { revalidate: 300 } }
   );
-  if (!res.ok) return [];
+  if (!res.ok) {
+    console.warn("[kalshi] fetch failed:", res.status, await res.text().catch(() => ""));
+    return [];
+  }
   const data = await res.json();
   const markets: PredictMarket[] = [];
   for (const m of data.markets ?? []) {
     try {
-      // Kalshi prices are in cents (1–99)
-      const yesPrice = m.last_price ?? m.yes_bid ?? 50;
+      // Skip provisional markets (no trading yet) and multivariate parlay combos
+      if (m.is_provisional) continue;
+      if (m.mve_collection_ticker) continue;
+
+      // New Kalshi API: prices are _dollars string floats (0.0000–1.0000), multiply by 100 for %
+      const lastPrice = parseFloat(m.last_price_dollars ?? "0") * 100;
+      const yesBid = parseFloat(m.yes_bid_dollars ?? "0") * 100;
+      const yesAsk = parseFloat(m.yes_ask_dollars ?? "0") * 100;
+      const midpoint = (yesBid + yesAsk) / 2;
+      const yesPrice = Math.round(lastPrice > 0 ? lastPrice : midpoint > 0 ? midpoint : 50);
+
+      const volume = parseFloat(m.volume_24h_fp ?? "0");
+      const liquidity = parseFloat(m.liquidity_dollars ?? m.open_interest_fp ?? "0");
+
+      // Skip markets with no price signal and no activity
+      if (yesPrice === 50 && volume === 0 && liquidity === 0) continue;
+
       markets.push({
         id: `kalshi-${m.ticker}`,
         source: "kalshi",
         question: m.title ?? m.event_title ?? "",
         probability: yesPrice,
-        volume: m.volume_24h ?? m.volume ?? 0,
-        liquidity: m.open_interest ?? m.liquidity ?? 0,
+        volume,
+        liquidity,
         endDate: m.close_time ?? m.expected_expiration_time ?? null,
         category: detectCategory(m.title ?? "", m.category ?? ""),
         yesPrice,
         noPrice: 100 - yesPrice,
-        url: `https://kalshi.com/markets/${m.event_ticker ?? m.ticker}`,
+        url: `https://kalshi.com/markets/${m.event_ticker}`,
       });
     } catch { /* skip malformed */ }
   }
@@ -91,10 +113,13 @@ async function fetchKalshi(): Promise<PredictMarket[]> {
 
 async function fetchManifold(): Promise<PredictMarket[]> {
   const res = await fetch(
-    "https://api.manifold.markets/v0/markets?limit=50&sort=liquidity",
+    "https://api.manifold.markets/v0/markets?limit=50&sort=last-bet-time",
     { next: { revalidate: 300 } }
   );
-  if (!res.ok) return [];
+  if (!res.ok) {
+    console.warn("[manifold] fetch failed:", res.status, await res.text().catch(() => ""));
+    return [];
+  }
   const data = await res.json();
   const markets: PredictMarket[] = [];
   for (const m of Array.isArray(data) ? data : []) {

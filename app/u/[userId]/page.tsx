@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useAuth } from "../../../components/AuthContext";
 import { VerifiedBadge } from "../../../components/VerifiedBadge";
 import { getBubblesById } from "../../../lib/profile-bubbles";
@@ -65,15 +65,31 @@ function formatJoined(iso: string) {
 
 function FounderBadge() {
   return (
-    <span
-      className="inline-flex items-center justify-center rounded-full bg-amber-500/20 text-amber-400"
-      style={{ width: 16, height: 16 }}
-      title="Founder"
-    >
-      <svg width={10} height={10} fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-      </svg>
-    </span>
+    <>
+      <style>{`
+        @keyframes founder-shimmer {
+          0%   { background-position: -200% center; }
+          100% { background-position:  200% center; }
+        }
+        .founder-badge {
+          background: linear-gradient(
+            90deg,
+            #92400e 0%, #d97706 25%, #fbbf24 45%, #fde68a 50%, #fbbf24 55%, #d97706 75%, #92400e 100%
+          );
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: founder-shimmer 2.8s linear infinite;
+        }
+      `}</style>
+      <span
+        className="founder-badge inline-flex items-center rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+        title="Founder"
+      >
+        Founder
+      </span>
+    </>
   );
 }
 
@@ -82,7 +98,7 @@ export default function PublicProfilePage() {
   const params = useParams();
   const userId = params.userId as string;
   const { user } = useAuth();
-  const router = useRouter();
+
 
   const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -94,7 +110,6 @@ export default function PublicProfilePage() {
   const isOwnProfile = user?.id === userId;
 
   useEffect(() => {
-    if (isOwnProfile) { router.replace("/profile"); return; }
     setLoading(true);
     fetch(`/api/profiles/${userId}`)
       .then((r) => {
@@ -107,7 +122,7 @@ export default function PublicProfilePage() {
         setLoading(false);
       })
       .catch(() => { setNotFound(true); setLoading(false); });
-  }, [userId, isOwnProfile, router]);
+  }, [userId]);
 
   const toggleFollow = async () => {
     if (!user || !data || followLoading) return;
@@ -164,7 +179,7 @@ export default function PublicProfilePage() {
     return (
       <main className="app-page flex min-h-screen flex-col items-center justify-center gap-4">
         <p className="text-zinc-400">This profile doesn&apos;t exist or has been removed.</p>
-        <Link href="/people" className="text-sm text-[var(--accent-color)] hover:underline">Browse people</Link>
+        <Link href="/social-feed" className="text-sm text-[var(--accent-color)] hover:underline">Back to social feed</Link>
       </main>
     );
   }

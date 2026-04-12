@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import { CourseBuilder, SlideViewer, RichEditorV2, renderCourseMarkdown, deserializeCourse } from "./CourseBuilder";
 import { addInAppNotification } from "@/lib/price-alerts";
@@ -312,14 +313,14 @@ function StarRating({ rating, count }: { rating: number; count: number }) {
   );
 }
 
-function SellerAvatar({ seller }: { seller?: Seller | null }) {
+function SellerAvatar({ seller, sellerId }: { seller?: Seller | null; sellerId?: string }) {
   const initial = seller?.username?.[0]?.toUpperCase() ?? "?";
-  return (
+  const inner = (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--accent-color)]/20 text-[10px] font-semibold text-[var(--accent-color)]">
         {initial}
       </span>
-      <span className="text-xs text-zinc-400">{seller?.username ?? "Seller"}</span>
+      <span className="text-xs text-zinc-400 hover:text-zinc-200 transition-colors">{seller?.username ?? "Seller"}</span>
       {seller?.is_verified && (
         <span className="text-[var(--accent-color)]" title="Verified Trader">
           <I.Verified />
@@ -332,6 +333,8 @@ function SellerAvatar({ seller }: { seller?: Seller | null }) {
       )}
     </div>
   );
+  if (sellerId) return <Link href={`/u/${sellerId}`}>{inner}</Link>;
+  return inner;
 }
 
 function QualityBadges({ listing }: { listing: Listing }) {
@@ -421,7 +424,7 @@ function ListingCard({ listing, onClick, featured }: { listing: Listing; onClick
 
       {/* Seller */}
       <div className="mb-2">
-        <SellerAvatar seller={listing.seller} />
+        <SellerAvatar seller={listing.seller} sellerId={listing.seller_id} />
       </div>
 
       {/* Rating */}
@@ -641,7 +644,7 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
             </span>
             <h2 className="text-xl font-bold text-zinc-50">{listing.title}</h2>
             <div className="mt-2 flex items-center gap-3">
-              <SellerAvatar seller={listing.seller} />
+              <SellerAvatar seller={listing.seller} sellerId={listing.seller_id} />
               <StarRating rating={liveAvg} count={liveCount} />
               <span className="text-xs text-zinc-600">{listing.sales_count} sales</span>
             </div>
@@ -1218,7 +1221,7 @@ function ListingDetailModal({ listing, onClose, onPurchase, currentUsername, cur
             {/* About seller */}
             <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
               <h4 className="mb-3 text-xs font-semibold text-zinc-400">About the Seller</h4>
-              <SellerAvatar seller={listing.seller} />
+              <SellerAvatar seller={listing.seller} sellerId={listing.seller_id} />
               {listing.seller && (
                 <p className="mt-2 text-xs text-zinc-600">
                   {sellerTotalSales !== null ? sellerTotalSales : listing.seller.total_sales} total sales
@@ -2541,38 +2544,42 @@ export default function MarketplaceView() {
     <div className="space-y-6">
       {/* Seller banner */}
       {!bannerDismissed && (
-        <div className={`relative rounded-2xl border p-4 pr-10 ${isVerified ? "border-[var(--accent-color)]/30 bg-[var(--accent-color)]/5" : "border-white/10 bg-white/[0.03]"}`}>
-          <button onClick={() => setBannerDismissed(true)}
-            className="absolute right-3 top-3 text-zinc-600 hover:text-zinc-400">
-            <I.X />
-          </button>
-          <div className="flex items-center gap-4">
-            <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isVerified ? "bg-[var(--accent-color)]/10 text-[var(--accent-color)]" : "bg-white/5 text-zinc-500"}`}>
-              <I.Store />
-            </span>
-            {isVerified ? (
-              <>
+        <div className={`relative overflow-hidden rounded-2xl border ${isVerified ? "border-[var(--accent-color)]/30 bg-[var(--accent-color)]/5 p-4 pr-10" : "border-white/[0.07] bg-gradient-to-br from-zinc-900 to-zinc-950"}`}>
+          {!isVerified && <div className="h-px w-full bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />}
+          <div className={isVerified ? "" : "p-4 pr-10"}>
+            <button onClick={() => setBannerDismissed(true)}
+              className="absolute right-3 top-3 text-zinc-600 hover:text-zinc-400">
+              <I.X />
+            </button>
+            <div className="flex items-center gap-4">
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${isVerified ? "bg-[var(--accent-color)]/10 text-[var(--accent-color)]" : "bg-amber-400/10 text-amber-400"}`}>
+                <I.Store />
+              </span>
+              {isVerified ? (
+                <>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-zinc-200">
+                      Start selling your strategies and earn <span className="text-[var(--accent-color)]">80%</span> of every sale.
+                    </p>
+                    <p className="text-xs text-zinc-500 mt-0.5">Chart presets · Strategies · Indicators · Courses · Signal services</p>
+                  </div>
+                  <button onClick={() => setShowCreate(true)}
+                    className="flex shrink-0 items-center gap-2 rounded-xl border border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10 px-4 py-2 text-xs font-semibold text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20">
+                    Become a Seller <I.ArrowRight />
+                  </button>
+                </>
+              ) : (
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-zinc-200">
-                    Start selling your strategies and earn <span className="text-[var(--accent-color)]">80%</span> of every sale.
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-400/70">Want to Sell Here?</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-200">Apply for Verified status to list your strategies &amp; courses</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Anyone can browse and buy — to sell, apply for verification in{" "}
+                    <a href="/settings" className="text-amber-400/80 underline underline-offset-2 hover:text-amber-300">Settings</a>{" "}
+                    and earn 80% of every sale.
                   </p>
-                  <p className="text-xs text-zinc-500 mt-0.5">Chart presets · Strategies · Indicators · Courses · Signal services</p>
                 </div>
-                <button onClick={() => setShowCreate(true)}
-                  className="flex shrink-0 items-center gap-2 rounded-xl border border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10 px-4 py-2 text-xs font-semibold text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20">
-                  Become a Seller <I.ArrowRight />
-                </button>
-              </>
-            ) : (
-              <div className="flex-1">
-                <p className="text-sm font-medium text-zinc-300">Want to sell on the Marketplace?</p>
-                <p className="text-xs text-zinc-500 mt-0.5">
-                  Only <span className="font-medium text-zinc-400">Verified Traders</span> can list strategies, indicators, and courses.
-                  Build your track record and apply for verification in{" "}
-                  <a href="/settings" className="text-[var(--accent-color)] underline underline-offset-2">Settings</a>.
-                </p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}

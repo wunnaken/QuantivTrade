@@ -16,6 +16,7 @@ import {
   isTickerInWatchlist,
   removeFromWatchlistApi,
 } from "../../lib/watchlist-api";
+import { TypewriterText } from "../../components/TypewriterText";
 
 const CANVAS_W = 3000;
 const CANVAS_H = 2000;
@@ -1190,6 +1191,9 @@ function DetailPanel({
   const [stockSince, setStockSince] = useState<{ ok: boolean; percentChange?: number; startYear?: number } | null>(null);
   const [assessment, setAssessment] = useState<{ leadershipScore: number; scoreLabel: string; summary: string; strengths: string[]; watchPoints: string[]; longTermOutlook: string; investorVerdict: string } | null>(null);
   const [assessLoading, setAssessLoading] = useState(false);
+  const [assessStreaming, setAssessStreaming] = useState(false);
+  const [assessProgress, setAssessProgress] = useState(0);
+  const [animateAssess, setAnimateAssess] = useState(false);
   const [inWatchlist, setInWatchlist] = useState(false);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
   const [claudeProfile, setClaudeProfile] = useState<CeoClaudeProfile | null>(null);
@@ -1359,7 +1363,6 @@ Ticker: ${ceo.ticker}`;
   };
 
   const runAssessment = async () => {
-    setAssessLoading(true);
     const cacheKey = `ceo-assess-${ceo.id}`;
     try {
       const cached = typeof localStorage !== "undefined" ? localStorage.getItem(cacheKey) : null;
@@ -1367,11 +1370,13 @@ Ticker: ${ceo.ticker}`;
         const parsed = JSON.parse(cached);
         if (Date.now() - (parsed._ts ?? 0) < 24 * 60 * 60 * 1000) {
           delete parsed._ts;
+          setAnimateAssess(false);
           setAssessment(parsed);
-          setAssessLoading(false);
           return;
         }
       }
+      setAssessStreaming(true);
+      setAssessProgress(0);
       const res = await fetch("/api/ceo-assess", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1383,14 +1388,28 @@ Ticker: ${ceo.ticker}`;
           headlines: news.map((a) => a.title),
         }),
       });
-      if (!res.ok) throw new Error("Assessment failed");
-      const data = await res.json();
+      if (!res.ok || !res.body) throw new Error("Assessment failed");
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        setAssessProgress(accumulated.length);
+      }
+      const jsonStr = accumulated.replace(/^[\s\S]*?(\{[\s\S]*\})[\s\S]*$/, "$1").trim();
+      const data = JSON.parse(jsonStr);
+      if (typeof data.leadershipScore !== "number") data.leadershipScore = 5;
+      if (!Array.isArray(data.strengths)) data.strengths = [];
+      if (!Array.isArray(data.watchPoints)) data.watchPoints = [];
+      setAnimateAssess(true);
       setAssessment(data);
       if (typeof localStorage !== "undefined") localStorage.setItem(cacheKey, JSON.stringify({ ...data, _ts: Date.now() }));
     } catch {
       setAssessment(null);
     }
-    setAssessLoading(false);
+    setAssessStreaming(false);
   };
 
   const shownSentiment = newsOverallSentiment ?? ceo.sentiment;
@@ -1571,16 +1590,40 @@ Ticker: ${ceo.ticker}`;
           )}
         </div>
         <div>
-          {assessment ? (
+          {assessStreaming ? (
+            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+              <div className="flex items-center gap-2">
+                {[0,150,300].map((d) => (
+                  <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent-color)]" style={{ animationDelay: `${d}ms` }} />
+                ))}
+                <span className="text-xs text-zinc-400">Analyzing leadership…</span>
+              </div>
+              <div className="mt-2 h-0.5 w-full overflow-hidden rounded-full bg-zinc-800">
+                <div className="h-full rounded-full bg-[var(--accent-color)]/60 transition-all duration-300" style={{ width: `${Math.min(90, (assessProgress / 700) * 100)}%` }} />
+              </div>
+            </div>
+          ) : assessment ? (
             <div className="rounded-lg border border-white/10 bg-white/5 p-3">
               <p className="text-sm font-semibold text-zinc-200">Leadership assessment</p>
               <p className="mt-1 text-xs text-zinc-400">Score: {assessment.leadershipScore}/10 — {assessment.scoreLabel}</p>
-              <p className="mt-2 text-xs text-zinc-300">{assessment.summary}</p>
+              <p className="mt-2 text-xs text-zinc-300">
+                {animateAssess ? <TypewriterText text={assessment.summary} startDelay={0} /> : assessment.summary}
+              </p>
               <p className="mt-2 text-xs font-medium text-zinc-400">Strengths</p>
-              <ul className="list-disc pl-4 text-xs text-zinc-400">{assessment.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
+              <ul className="list-disc pl-4 text-xs text-zinc-400">
+                {assessment.strengths.map((s, i) => (
+                  <li key={i}>{animateAssess ? <TypewriterText text={s} startDelay={550 + i * 200} /> : s}</li>
+                ))}
+              </ul>
               <p className="mt-2 text-xs font-medium text-zinc-400">Watch points</p>
-              <ul className="list-disc pl-4 text-xs text-zinc-400">{assessment.watchPoints.map((s, i) => <li key={i}>{s}</li>)}</ul>
-              <p className="mt-2 text-xs text-zinc-300">{assessment.investorVerdict}</p>
+              <ul className="list-disc pl-4 text-xs text-zinc-400">
+                {assessment.watchPoints.map((s, i) => (
+                  <li key={i}>{animateAssess ? <TypewriterText text={s} startDelay={1150 + i * 200} /> : s}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-zinc-300">
+                {animateAssess ? <TypewriterText text={assessment.investorVerdict} startDelay={1600} /> : assessment.investorVerdict}
+              </p>
             </div>
           ) : (
             <button type="button" onClick={runAssessment} disabled={assessLoading} className="w-full rounded-lg bg-[var(--accent-color)] py-2 text-sm font-medium text-[#020308] hover:opacity-90 disabled:opacity-50">Leadership Report</button>

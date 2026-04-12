@@ -124,12 +124,18 @@ export default function LeaderboardPage() {
         </div>
 
         {tab === "verified" && !verified && (
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#3B82F6]/30 bg-[#3B82F6]/10 p-4">
-            <div>
-              <p className="font-bold text-white">You&apos;re not on this leaderboard yet</p>
-              <p className="mt-1 text-sm text-zinc-400">Verified traders get their own ranked leaderboard based on real win rate and performance.</p>
+          <div className="mb-6 overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-br from-zinc-900 to-zinc-950">
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+            <div className="flex flex-wrap items-center justify-between gap-4 p-5 sm:flex-nowrap">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-400/70">Verified Leaderboard</p>
+                <p className="mt-1.5 text-sm font-semibold text-zinc-100">Gain entry to the Verified Traders leaderboard</p>
+                <p className="mt-1 text-xs text-zinc-500">Ranked by real win rate, verified directly from your connected broker.</p>
+              </div>
+              <Link href="/verify" className="shrink-0 rounded-xl border border-amber-400/30 bg-amber-400/10 px-5 py-2.5 text-sm font-semibold text-amber-300 transition hover:border-amber-400/50 hover:bg-amber-400/15">
+                Apply for Access
+              </Link>
             </div>
-            <Link href="/verify" className="shrink-0 rounded-full bg-[#3B82F6] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3B82F6]/90">Join for $9/month →</Link>
           </div>
         )}
         {tab === "verified" ? (
@@ -153,7 +159,7 @@ export default function LeaderboardPage() {
                     <tr key={row.id} className={`border-b border-white/5 transition-colors hover:bg-white/5 ${isCurrentUser && verified ? "bg-[#3B82F6]/10" : ""}`}>
                       <td className="px-4 py-3">
                         <span className="text-zinc-500">{rank}</span>
-                        {rank <= 3 && <span className="ml-1 text-base" aria-hidden>👑</span>}
+                        {rank <= 3 && <svg className="ml-1 inline h-3.5 w-3.5 text-amber-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm0 2h14v2H5v-2z"/></svg>}
                       </td>
                       <td className="px-4 py-3">
                         <Link href={`/u/${row.id}`} className="flex items-center gap-2">
@@ -190,7 +196,7 @@ export default function LeaderboardPage() {
                   <tr key={row.id} className="border-b border-white/5 transition-colors hover:bg-white/5">
                     <td className="px-4 py-3">
                       <span className="text-zinc-500">{rank}</span>
-                      {rank <= 3 && <span className="ml-1 text-base" aria-hidden>👑</span>}
+                      {rank <= 3 && <svg className="ml-1 inline h-3.5 w-3.5 text-amber-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5zm0 2h14v2H5v-2z"/></svg>}
                     </td>
                     <td className="px-4 py-3">
                       <Link

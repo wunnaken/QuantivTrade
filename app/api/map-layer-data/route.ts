@@ -17,27 +17,31 @@ const wbCache = new Map<string, { data: Record<string, number>; ts: number }>();
 const wbHistoryCache = new Map<string, { data: Record<string, { year: string; value: number }[]>; ts: number }>();
 
 /** World Bank returns countryiso3code (e.g. USA). We normalize to lowercase to match our ISO3 map. */
-async function fetchWorldBankIndicator(indicator: string): Promise<Record<string, number>> {
+async function fetchWorldBankIndicator(indicator: string): Promise<{ data: Record<string, number>; latestYear: string }> {
   const key = `wb-${indicator}`;
   const hit = wbCache.get(key);
-  if (hit && Date.now() - hit.ts < CACHE_MS) return hit.data;
+  if (hit && Date.now() - hit.ts < CACHE_MS) return { data: hit.data, latestYear: (hit as { data: Record<string, number>; ts: number; latestYear?: string }).latestYear ?? "" };
   const url = `${WB_BASE}/${indicator}?format=json&per_page=300&mrv=1`;
   try {
     const res = await fetch(url, { next: { revalidate: 0 } });
-    if (!res.ok) return {};
+    if (!res.ok) return { data: {}, latestYear: "" };
     const data = await res.json();
-    if (!Array.isArray(data) || data.length < 2) return {};
-    const list = data[1] as Array<{ countryiso3code?: string; value?: number | null }>;
+    if (!Array.isArray(data) || data.length < 2) return { data: {}, latestYear: "" };
+    const list = data[1] as Array<{ countryiso3code?: string; value?: number | null; date?: string }>;
     const out: Record<string, number> = {};
+    let latestYear = "";
     for (const row of list ?? []) {
       const iso3 = row.countryiso3code?.toLowerCase();
       const val = row.value;
-      if (iso3 && typeof val === "number" && !Number.isNaN(val)) out[iso3] = val;
+      if (iso3 && typeof val === "number" && !Number.isNaN(val)) {
+        out[iso3] = val;
+        if (row.date && row.date > latestYear) latestYear = row.date;
+      }
     }
-    wbCache.set(key, { data: out, ts: Date.now() });
-    return out;
+    (wbCache as Map<string, { data: Record<string, number>; ts: number; latestYear?: string }>).set(key, { data: out, ts: Date.now(), latestYear });
+    return { data: out, latestYear };
   } catch {
-    return hit?.data ?? {};
+    return { data: hit?.data ?? {}, latestYear: "" };
   }
 }
 
@@ -111,29 +115,30 @@ export async function GET(req: NextRequest) {
   }
 
   if (layerDef.wbIndicator) {
-    const [byIso3, history] = await Promise.all([
+    const [{ data: byIso3, latestYear }, history] = await Promise.all([
       fetchWorldBankIndicator(layerDef.wbIndicator),
       wantHistory && layerDef.sparklineIndicator
         ? fetchWorldBankHistory(layerDef.sparklineIndicator)
         : Promise.resolve(undefined),
     ]);
-    return NextResponse.json({ byIso3, byName: {}, history: history ?? undefined });
+    const dataAsOf = latestYear ? `World Bank ${latestYear}` : "World Bank";
+    return NextResponse.json({ byIso3, byName: {}, history: history ?? undefined, dataAsOf });
   }
 
   if (layer === "markets") {
-    return NextResponse.json({ byIso3: {}, byName: HARDCODED_MARKETS, history: undefined });
+    return NextResponse.json({ byIso3: {}, byName: HARDCODED_MARKETS, history: undefined, dataAsOf: "2024/2025 estimates" });
   }
   if (layer === "interest") {
-    return NextResponse.json({ byIso3: {}, byName: HARDCODED_INTEREST, history: undefined });
+    return NextResponse.json({ byIso3: {}, byName: HARDCODED_INTEREST, history: undefined, dataAsOf: "2024/2025 estimates" });
   }
   if (layer === "currency") {
-    return NextResponse.json({ byIso3: {}, byName: HARDCODED_CURRENCY, history: undefined });
+    return NextResponse.json({ byIso3: {}, byName: HARDCODED_CURRENCY, history: undefined, dataAsOf: "2024/2025 estimates" });
   }
   if (layer === "political") {
-    return NextResponse.json({ byIso3: {}, byName: HARDCODED_POLITICAL, history: undefined });
+    return NextResponse.json({ byIso3: {}, byName: HARDCODED_POLITICAL, history: undefined, dataAsOf: "2024/2025 estimates" });
   }
   if (layer === "sentiment") {
-    return NextResponse.json({ byIso3: {}, byName: HARDCODED_SENTIMENT, history: undefined });
+    return NextResponse.json({ byIso3: {}, byName: HARDCODED_SENTIMENT, history: undefined, dataAsOf: "2024/2025 estimates" });
   }
 
   return NextResponse.json({ byIso3: {}, byName: {}, history: undefined });

@@ -25,10 +25,6 @@ import { loadXP, getRankTitle } from "../../lib/engagement/xp";
 import { getOrCreateInviteCode, getInvitedCount } from "../../lib/engagement/invite";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { getTrades, computePnL, formatPercent } from "../../lib/journal";
-import { getPoints as getPredictPoints } from "../../lib/predict";
-import { getBrokerConnection, disconnectBroker, BROKER_TEAL } from "../../lib/broker-connection";
-import { ConnectBrokerModal } from "../../components/ConnectBrokerModal";
-import { TrackRecordVerifiedBadge } from "../../components/TrackRecordVerifiedBadge";
 
 const POSTS_KEY = "quantivtrade-demo-posts";
 const USERNAME_CHANGED_AT_KEY = (userId: string) => `quantivtrade-username-changed-at-${userId}`;
@@ -153,7 +149,7 @@ function BriefingPreferencesSection() {
   );
 }
 
-function ProfilePerformanceCard({ brokerConnected, brokerName, onConnectClick }: { brokerConnected?: boolean; brokerName?: string; onConnectClick?: () => void }) {
+function ProfilePerformanceCard() {
   const [timeframe, setTimeframe] = useState<Timeframe>("all");
   const stats = getPerformanceFromTrades(timeframe);
   const hasData = stats.total > 0;
@@ -162,10 +158,8 @@ function ProfilePerformanceCard({ brokerConnected, brokerName, onConnectClick }:
     <section className="mb-6 rounded-xl border-l-4 border-[#3B82F6] bg-[#3B82F6]/10 p-4" style={{ boxShadow: "0 0 24px rgba(59,130,246,0.15)" }} aria-label="Trader Performance">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-50">
-          <span aria-hidden>📊</span>
           Trader Performance
           <VerifiedBadge size={16} />
-          {brokerConnected && <TrackRecordVerifiedBadge size={14} showLabel />}
           <span className="text-xs font-normal text-zinc-400">Verified Stats</span>
         </h2>
         <div className="flex gap-1">
@@ -180,12 +174,6 @@ function ProfilePerformanceCard({ brokerConnected, brokerName, onConnectClick }:
         <p className="mt-3 text-sm text-zinc-500">Log trades in your journal to populate your performance card.</p>
       ) : (
         <>
-        {brokerConnected && <p className="mt-2 text-xs text-zinc-400">Source: {brokerName ?? "Connected broker"}</p>}
-        {!brokerConnected && (
-          <div className="mt-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-zinc-400">
-            These stats are self-reported. Connect your broker to get &quot;Track Record Verified&quot; badge.
-          </div>
-        )}
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="rounded-lg bg-black/20 p-3">
             <p className="text-xs text-zinc-400">Win Rate</p>
@@ -290,17 +278,6 @@ export default function ProfileView() {
       })
       .catch(() => {});
   }, []);
-  const [connectBrokerModalOpen, setConnectBrokerModalOpen] = useState(false);
-  const [brokerConnectionState, setBrokerConnectionState] = useState<ReturnType<typeof getBrokerConnection>>({ connected: false });
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setBrokerConnectionState(getBrokerConnection());
-    const onStorage = () => setBrokerConnectionState(getBrokerConnection());
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
   useEffect(() => {
     setStreakData(loadStreaks());
   }, []);
@@ -866,31 +843,39 @@ export default function ProfileView() {
                         <VerifiedBadge size={22} />
                       </span>
                     )}
-                    {brokerConnectionState.connected && (
-                      <span className="inline-flex items-center" title="Track record verified via connected brokerage">
-                        <TrackRecordVerifiedBadge size={20} showLabel />
-                      </span>
-                    )}
                     {user?.isFounder && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400" title="Joined QuantivTrade in the early days">
-                        ⭐ Early Member
+                        Early Member
                       </span>
                     )}
                     {typeof window !== "undefined" && window.localStorage.getItem("quantivtrade-top-trader-week") && (
                       <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-medium text-amber-400" title="Top Trader">
-                        🏆 Top Trader — Week of Mar 10
+                        Top Trader — Week of Mar 10
                       </span>
                     )}
                     {user?.isFounder && (
-                      <span
-                        className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-500/20 text-amber-400"
-                        title="Founder"
-                        aria-label="Founder"
-                      >
-                        <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-                          <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-                        </svg>
-                      </span>
+                      <>
+                        <style>{`
+                          @keyframes founder-shimmer {
+                            0%   { background-position: -200% center; }
+                            100% { background-position:  200% center; }
+                          }
+                          .founder-badge {
+                            background: linear-gradient(90deg, #92400e 0%, #d97706 25%, #fbbf24 45%, #fde68a 50%, #fbbf24 55%, #d97706 75%, #92400e 100%);
+                            background-size: 200% auto;
+                            -webkit-background-clip: text;
+                            background-clip: text;
+                            -webkit-text-fill-color: transparent;
+                            animation: founder-shimmer 2.8s linear infinite;
+                          }
+                        `}</style>
+                        <span
+                          className="founder-badge inline-flex items-center rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+                          title="Founder"
+                        >
+                          Founder
+                        </span>
+                      </>
                     )}
                   </div>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-zinc-400">
@@ -904,11 +889,6 @@ export default function ProfileView() {
                         <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                         {loadXP().total} XP
                       </span>
-                      {typeof window !== "undefined" && (
-                        <span className="inline-flex items-center gap-1 text-amber-400" title="Prediction Markets virtual points">
-                          · {getPredictPoints().toLocaleString()} Predict XP
-                        </span>
-                      )}
                     </p>
                     <p className="text-xs font-medium text-[var(--accent-color)]">{getRankTitle(loadXP().total)}</p>
                   {user.bio ? (
@@ -1070,20 +1050,20 @@ export default function ProfileView() {
 
           {/* Upgrade banner — only for non-verified users */}
           {!user?.isVerified && (
-            <section className="mt-6 rounded-xl border-l-4 border-[#3B82F6] bg-[#3B82F6]/10 p-4" aria-label="Become a Verified Trader">
-              <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-                <div className="flex-shrink-0">
-                  <VerifiedBadge size={48} />
+            <section className="mt-6 overflow-hidden rounded-2xl border border-white/[0.07] bg-gradient-to-br from-zinc-900 to-zinc-950" aria-label="Become a Verified Trader">
+              <div className="h-px w-full bg-gradient-to-r from-transparent via-amber-400/50 to-transparent" />
+              <div className="flex flex-wrap items-center justify-between gap-5 p-5 sm:flex-nowrap">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-amber-400/70">Member Access</p>
+                  <h3 className="mt-1.5 text-base font-semibold text-zinc-100">Unlock Verified Trader Status</h3>
+                  <p className="mt-1 text-sm text-zinc-500">Blue checkmark · Exclusive rooms · Performance card · Sell on Marketplace</p>
+                  <p className="mt-2 text-[11px] text-zinc-600">847 traders already verified</p>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-bold text-white">Become a Verified Trader</h3>
-                  <p className="mt-1 text-sm text-zinc-300">Get your blue checkmark, performance card, exclusive communities and the ability to monetize your own group.</p>
-                  <p className="mt-1.5 text-xs text-zinc-500">⭐ 847 traders already verified</p>
-                </div>
-                <div className="flex flex-shrink-0 flex-col items-end gap-2">
-                  <p className="text-2xl font-bold text-[#3B82F6]">$9/month</p>
-                  <Link href="/verify" className="rounded-full bg-[#3B82F6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#3B82F6]/90">Start 7-day free trial</Link>
-                  <Link href="/verify" className="text-xs text-[#3B82F6] hover:underline">Learn more →</Link>
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <Link href="/verify" className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-5 py-2.5 text-sm font-semibold text-amber-300 transition hover:border-amber-400/50 hover:bg-amber-400/15">
+                    Apply for Verification
+                  </Link>
+                  <p className="text-[11px] text-zinc-600">From $9/mo · Cancel anytime</p>
                 </div>
               </div>
             </section>
@@ -1095,21 +1075,30 @@ export default function ProfileView() {
 
         {/* Card wrapper for rest of profile — full rounded card with spacing from content above and footer */}
         <div className="mb-12 mt-8 rounded-2xl border px-6 pb-8 pt-6 transition-colors duration-300 sm:rounded-3xl sm:px-8" style={{ backgroundColor: "var(--app-card-alt)", borderColor: "var(--app-border)" }}>
-        {user?.isVerified && <ProfilePerformanceCard brokerConnected={brokerConnectionState.connected} brokerName={brokerConnectionState.brokerName} onConnectClick={() => setConnectBrokerModalOpen(true)} />}
+        {user?.isVerified && <ProfilePerformanceCard />}
         {user?.isVerified && <ProfileMonetizeSection />}
         {/* Your Streaks — aligned with this card, slightly bigger */}
           <section className="mb-6" aria-label="Your streaks">
             <h2 className="text-sm font-semibold text-zinc-50">Your Streaks</h2>
             <div className="mt-3 grid grid-cols-3 gap-4">
               {[
-                { emoji: "🔥", label: "Login", streak: streakData.loginStreak, best: streakData.bestLoginStreak, lastDate: streakData.lastLogin },
-                { emoji: "📓", label: "Journal", streak: streakData.journalStreak, best: streakData.bestJournalStreak, lastDate: streakData.lastJournal },
-                { emoji: "📋", label: "Briefing", streak: streakData.briefingStreak, best: streakData.bestBriefingStreak, lastDate: streakData.lastBriefing },
-              ].map(({ emoji, label, streak, best, lastDate }) => {
+                {
+                  icon: <svg className="h-5 w-5 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.5-6.5C12 5 13 7 13 7s1.5-2.5 3-3c.5 2 1 4 1 5 0 2-.5 4-3 6a5 5 0 003 1.5 4 4 0 01-6 2c-1 0-2-.5-3-1.5a6.5 6.5 0 01-1-2c0 1.5 1 3 2.5 4a8 8 0 007-7" /></svg>,
+                  label: "Login", streak: streakData.loginStreak, best: streakData.bestLoginStreak, lastDate: streakData.lastLogin
+                },
+                {
+                  icon: <svg className="h-5 w-5 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>,
+                  label: "Journal", streak: streakData.journalStreak, best: streakData.bestJournalStreak, lastDate: streakData.lastJournal
+                },
+                {
+                  icon: <svg className="h-5 w-5 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>,
+                  label: "Briefing", streak: streakData.briefingStreak, best: streakData.bestBriefingStreak, lastDate: streakData.lastBriefing
+                },
+              ].map(({ icon, label, streak, best, lastDate }) => {
                 const history = lastDate ? getSevenDayHistory(lastDate, streak) : [false, false, false, false, false, false, false];
                 return (
                 <div key={label} className="rounded-xl border border-white/10 bg-black/20 p-4 text-center">
-                  <span className="text-2xl" aria-hidden>{emoji}</span>
+                  <div className="flex justify-center" aria-hidden>{icon}</div>
                   <p className="mt-1.5 text-2xl font-bold text-[var(--accent-color)]">{streak}</p>
                   <p className="text-xs text-zinc-500">day streak</p>
                   <p className="mt-0.5 text-xs font-medium text-zinc-400">{label} Streak</p>
@@ -1136,66 +1125,6 @@ export default function ProfileView() {
               })}
             </div>
           </section>
-
-        {/* Connected Broker */}
-          <section className="mb-6 rounded-xl border px-4 py-4" style={{ borderColor: `${BROKER_TEAL}40`, backgroundColor: `${BROKER_TEAL}08` }} aria-label="Connected Broker">
-            <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-50">
-              <span aria-hidden>🔗</span>
-              Connected Broker
-            </h2>
-            <p className="mt-0.5 text-xs text-zinc-500">Verify your trades. Build real credibility.</p>
-            {brokerConnectionState.connected ? (
-              <div className="mt-4 space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                  </span>
-                  <span className="font-medium text-emerald-400">Broker Connected</span>
-                </div>
-                <p className="text-sm text-zinc-300">Connected: {brokerConnectionState.brokerName ?? "Broker"}</p>
-                <p className="text-xs text-zinc-500">Since {brokerConnectionState.connectedAt ? new Date(brokerConnectionState.connectedAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "—"}</p>
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-lg bg-black/20 p-2">
-                    <p className="text-[10px] text-zinc-500">Total Trades</p>
-                    <p className="text-sm font-bold text-zinc-200">{brokerConnectionState.totalTrades ?? 0}</p>
-                  </div>
-                  <div className="rounded-lg bg-black/20 p-2">
-                    <p className="text-[10px] text-zinc-500">Win Rate</p>
-                    <p className="text-sm font-bold text-zinc-200">{brokerConnectionState.winRate ?? 0}%</p>
-                  </div>
-                  <div className="rounded-lg bg-black/20 p-2">
-                    <p className="text-[10px] text-zinc-500">Avg Return</p>
-                    <p className="text-sm font-bold text-zinc-200">{brokerConnectionState.avgReturn ?? 0}%</p>
-                  </div>
-                </div>
-                <p className="text-xs" style={{ color: BROKER_TEAL }}><Link href="/profile" className="hover:underline">View full performance →</Link></p>
-                <button type="button" onClick={() => { disconnectBroker(); setBrokerConnectionState(getBrokerConnection()); }} className="text-xs text-zinc-500 hover:text-zinc-300 underline">Disconnect</button>
-              </div>
-            ) : (
-              <div className="mt-4">
-                <div className="flex items-center justify-center rounded-lg border border-dashed border-white/10 bg-black/20 py-6">
-                  <div className="text-center">
-                    <span className="text-3xl" aria-hidden>🔗</span>
-                    <p className="mt-2 text-sm font-medium text-zinc-300">No broker connected yet</p>
-                    <p className="mt-1 max-w-sm text-xs text-zinc-500">Connect your brokerage account to verify your trade history and unlock your real performance stats.</p>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {["Robinhood", "Webull", "TD Ameritrade", "Interactive Brokers", "Alpaca", "Tradier"].map((name) => (
-                    <span key={name} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-400">{name}</span>
-                  ))}
-                </div>
-                <button type="button" onClick={() => setConnectBrokerModalOpen(true)} className="mt-4 rounded-lg px-4 py-2 text-sm font-medium text-[#020308] transition hover:opacity-90" style={{ backgroundColor: BROKER_TEAL }}>Connect Broker</button>
-              </div>
-            )}
-          </section>
-
-          {connectBrokerModalOpen && (
-            <ConnectBrokerModal
-              onClose={() => { setConnectBrokerModalOpen(false); setBrokerConnectionState(getBrokerConnection()); }}
-              onConnect={() => setBrokerConnectionState(getBrokerConnection())}
-            />
-          )}
 
         {/* Connected Accounts */}
           <section className="mb-6 rounded-xl border border-white/10 px-4 py-4" aria-label="Connected Accounts">
@@ -1230,39 +1159,6 @@ export default function ProfileView() {
               </button>
             </div>
           </section>
-
-        {/* Accent Color (logged-in only; profile is own profile) */}
-          <div className="mt-6 pt-5 border-t border-white/10">
-            <h3 className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--app-text)" }}>
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-              </svg>
-              Accent Color
-            </h3>
-            <p className="mt-0.5 text-[11px]" style={{ color: "var(--app-text-muted)" }}>
-              Personalize your QuantivTrade experience
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {ACCENT_OPTIONS.map((opt) => {
-                const isSelected = accentColor.toLowerCase() === opt.hex.toLowerCase();
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    title={opt.name}
-                    onClick={() => setAccentColor(opt.hex)}
-                    onMouseEnter={() => previewAccentColor(opt.hex)}
-                    onMouseLeave={() => previewAccentColor(null)}
-                    className={`h-8 w-8 shrink-0 rounded-full transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[var(--app-card)] ${
-                      isSelected ? "ring-2 ring-white ring-offset-2 ring-offset-[var(--app-card)]" : "hover:scale-110"
-                    }`}
-                    style={{ backgroundColor: opt.hex }}
-                    aria-label={`${opt.name}${isSelected ? " (selected)" : ""}`}
-                  />
-                );
-              })}
-            </div>
-          </div>
 
           {/* Invite Friends */}
           <div className="mt-6 pt-5 border-t border-white/10">

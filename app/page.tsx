@@ -290,12 +290,50 @@ const BENTO_ITEMS = [
   { id: "screener",   label: "Stock Screener",            desc: "Filter 10,000+ stocks instantly",       content: <ScreenerRows /> },
 ];
 
+// Plain div card — hover via onMouseEnter/Leave inline styles only, no transforms.
+function BentoCard({ card, delay, inView }: { card: typeof BENTO_ITEMS[number]; delay: number; inView: boolean }) {
+  const [done, setDone] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  const baseStyle: React.CSSProperties = done
+    ? { opacity: 1 }
+    : inView
+    ? { animationDelay: `${delay}s` }
+    : { opacity: 0, animation: "none" };
+
+  const hoverStyle: React.CSSProperties = hovered
+    ? {
+        boxShadow: "0 0 48px 8px rgba(232,132,106,0.22)",
+        borderColor: "rgba(232,132,106,0.28)",
+        background: "var(--app-card-hover)",
+        zIndex: 10,
+      }
+    : {};
+
+  return (
+    <div
+      className={`glass-card rounded-2xl p-4 flex flex-col justify-between cursor-default${!done ? " bento-enter" : ""}`}
+      style={{ ...baseStyle, ...hoverStyle }}
+      onAnimationEnd={() => setDone(true)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <div className="flex-1 mb-2">{card.content}</div>
+      <div>
+        <p className="text-white font-semibold" style={{ fontSize: "11px" }}>{card.label}</p>
+        <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.28)" }}>{card.desc}</p>
+      </div>
+    </div>
+  );
+}
+
 function FeaturesSection() {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-80px" });
+  const [globeDone, setGlobeDone] = useState(false);
 
   return (
-    <section id="features" ref={ref} className="relative py-32 px-6" style={{ background: "var(--app-bg)" }}>
+    <section id="features" ref={ref} className="relative py-32 px-6" style={{ background: "var(--app-card)" }}>
       <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(232,132,106,0.04) 0%, transparent 70%)", pointerEvents: "none" }} />
       <div className="relative max-w-6xl mx-auto">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -308,19 +346,20 @@ function FeaturesSection() {
           <p style={{ color: "rgba(255,255,255,0.3)", fontSize: "15px" }}>27 pages of live intelligence. One platform.</p>
         </motion.div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 auto-rows-[148px]">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-px auto-rows-[148px]">
           {/* Globe — 2×2 */}
-          <motion.div
-            initial={{ opacity: 0, y: 18 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.55, delay: 0.05 }}
-            whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
-            className="glass-card rounded-2xl p-5 col-span-2 row-span-2 flex flex-col justify-between overflow-hidden relative cursor-default"
+          <div
+            className={`glass-card rounded-2xl p-5 col-span-2 row-span-2 flex flex-col justify-between relative cursor-default${!globeDone ? " bento-enter" : ""}`}
+            style={globeDone ? { opacity: 1 } : inView ? { animationDelay: "0.05s" } : { opacity: 0, animation: "none" }}
+            onAnimationEnd={() => setGlobeDone(true)}
           >
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="rounded-full" style={{
-                width: "240px", height: "240px", opacity: 0.1,
-                background: "radial-gradient(circle at 38% 38%, rgba(232,132,106,0.9), rgba(232,132,106,0.2), transparent 65%)",
-              }} />
+            <div className="absolute inset-0 rounded-2xl pointer-events-none">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="rounded-full" style={{
+                  width: "240px", height: "240px", opacity: 0.1,
+                  background: "radial-gradient(circle at 38% 38%, rgba(232,132,106,0.9), rgba(232,132,106,0.2), transparent 65%)",
+                }} />
+              </div>
             </div>
             <svg className="absolute inset-0 w-full h-full" style={{ opacity: 0.05, pointerEvents: "none" }}>
               {Array.from({ length: 6 }).map((_, i) => (
@@ -337,21 +376,10 @@ function FeaturesSection() {
             <p className="relative z-10 text-sm" style={{ color: "rgba(255,255,255,0.28)" }}>
               Live country-level data across 180+ nations
             </p>
-          </motion.div>
+          </div>
 
           {BENTO_ITEMS.map((card, i) => (
-            <motion.div key={card.id}
-              initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: 0.1 + i * 0.065 }}
-              whileHover={{ scale: 1.025, transition: { duration: 0.18 } }}
-              className="glass-card rounded-2xl p-4 flex flex-col justify-between overflow-hidden cursor-default"
-            >
-              <div className="flex-1 mb-2">{card.content}</div>
-              <div>
-                <p className="text-white font-semibold" style={{ fontSize: "11px" }}>{card.label}</p>
-                <p style={{ fontSize: "10px", color: "rgba(255,255,255,0.28)" }}>{card.desc}</p>
-              </div>
-            </motion.div>
+            <BentoCard key={card.id} card={card} delay={0.1 + i * 0.065} inView={inView} />
           ))}
         </div>
       </div>

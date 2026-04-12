@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { anthropicSSEToTextStream } from "@/lib/anthropicStream";
 
 const SYSTEM_PROMPT = `You are a financial analyst assistant for QuantivTrade, a social trading intelligence platform. When given a stock ticker or asset, provide a clear, structured analysis in this exact JSON format:
 {
@@ -52,12 +53,13 @@ export async function GET(request: Request) {
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 1024,
+        stream: true,
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: `Analyze this asset: ${ticker}` }],
       }),
     });
 
-    if (!res.ok) {
+    if (!res.ok || !res.body) {
       const err = await res.text();
       return NextResponse.json(
         { error: err || `Anthropic API error: ${res.status}` },
@@ -65,24 +67,11 @@ export async function GET(request: Request) {
       );
     }
 
-    const data = (await res.json()) as {
-      content?: Array<{ type: string; text?: string }>;
-    };
-    const text = data.content?.[0]?.text?.trim() ?? "";
-    if (!text) {
-      return NextResponse.json({ error: "Empty response from API" }, { status: 502 });
-    }
-
-    // Strip markdown code fence if present
-    const jsonStr = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/, "");
-    const parsed = JSON.parse(jsonStr) as AnalyzeTickerResponse;
-
-    return NextResponse.json(parsed);
+    return new Response(anthropicSSEToTextStream(res.body), {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

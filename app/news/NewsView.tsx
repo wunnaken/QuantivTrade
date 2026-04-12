@@ -164,7 +164,7 @@ function StoryCard({ article, onOpen, onSectorClick }: {
             <img src={`/api/news-image?url=${encodeURIComponent(article.urlToImage!)}`}
               alt="" className="h-full w-full object-cover" onError={() => setImgErr(true)} />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-2xl text-white/20">📰</div>
+            <div className="flex h-full w-full items-center justify-center text-white/20"><svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" /></svg></div>
           )}
         </div>
         <div className="min-w-0 flex-1">
@@ -519,7 +519,7 @@ export default function NewsView() {
                       alt="" className="h-full w-full object-cover blur-sm scale-105" onError={() => setFeaturedImgErr(true)} />
                   ) : (
                     <div className="flex h-full items-center justify-center bg-gradient-to-br from-[var(--app-bg)] to-zinc-900">
-                      <span className="text-4xl text-white/20">📰</span>
+                      <svg className="h-10 w-10 text-white/20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" /></svg>
                     </div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />

@@ -52,13 +52,14 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/predict", label: "Prediction Markets" },
   { href: "/watchlist", label: "My Watchlist" },
   { href: "/workspace", label: "Workspace" },
+  { href: "/taxes", label: "Taxes" },
 ];
 
 const SECTIONS: { id: string; label: string; hrefs: string[] }[] = [
   { id: "community", label: "Community", hrefs: ["/social-feed", "/communities", "/messages", "/trade-rooms"] },
   { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/dividends", "/forex", "/futures", "/crypto", "/market-relations", "/building-data", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
   { id: "analytics", label: "Analytics", hrefs: ["/ceos", "/calendar", "/screener", "/supply-chain", "/datahub", "/backtest"] },
-  { id: "personal", label: "Personal", hrefs: ["/journal", "/predict", "/watchlist", "/workspace"] },
+  { id: "personal", label: "Personal", hrefs: ["/journal", "/predict", "/watchlist", "/workspace", "/taxes"] },
 ];
 
 const MAIN_NAV_HREFS = MAIN_NAV.map((i) => i.href);

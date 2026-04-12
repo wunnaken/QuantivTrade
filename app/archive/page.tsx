@@ -27,7 +27,7 @@ export default function ArchivePage() {
           </p>
           <h1 className="mt-1 text-xl font-semibold tracking-tight text-zinc-50">Trading Archive</h1>
           <p className="mt-1 text-xs text-zinc-400">
-            The complete encyclopedia of trading — strategies, indicators, brokers, regulations, and more. Powered by AI for anything not yet covered.
+            The complete encyclopedia of trading — strategies, indicators, brokers, regulations, and more. Search anything not yet covered.
           </p>
         </div>
         <ArchiveView />

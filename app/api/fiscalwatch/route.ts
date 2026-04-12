@@ -23,8 +23,11 @@ function treasuryStartOfYearUrl(year: number): string {
 }
 
 async function fetchStartOfYearDebt(year: number): Promise<number> {
-  const res = await fetch(treasuryStartOfYearUrl(year), { next: { revalidate: 86400 } });
-  if (!res.ok) throw new Error("Start of year debt fetch failed");
+  const res = await fetch(treasuryStartOfYearUrl(year), {
+    headers: { "User-Agent": "QuantivTrade/1.0" },
+    next: { revalidate: 86400 },
+  });
+  if (!res.ok) throw new Error(`Start of year debt fetch failed: ${res.status}`);
   const json = (await res.json()) as { data?: { record_date: string; tot_pub_debt_out_amt: string }[] };
   const row = json.data?.[0];
   if (!row) throw new Error("No start of year data");
@@ -35,8 +38,11 @@ const USA_SPENDING_URL =
   "https://api.usaspending.gov/api/v2/search/spending_by_award/";
 
 async function fetchCurrentDebt(): Promise<{ currentDebt: number; debtDate: string }> {
-  const res = await fetch(TREASURY_DEBT_URL, { next: { revalidate: 21600 } });
-  if (!res.ok) throw new Error("Treasury debt fetch failed");
+  const res = await fetch(TREASURY_DEBT_URL, {
+    headers: { "User-Agent": "QuantivTrade/1.0" },
+    next: { revalidate: 21600 },
+  });
+  if (!res.ok) throw new Error(`Treasury debt fetch failed: ${res.status}`);
   const json = (await res.json()) as {
     data?: { record_date: string; tot_pub_debt_out_amt: string }[];
   };
@@ -65,9 +71,9 @@ async function fetchContracts(): Promise<FiscalContract[]> {
       "Award Amount",
       "Awarding Agency",
       "Description",
-      "Period of Performance Start Date",
+      "Start Date",
     ],
-    sort: "Period of Performance Start Date",
+    sort: "Award Amount",
     order: "desc",
     limit: 100,
     page: 1,
@@ -89,23 +95,16 @@ async function fetchContracts(): Promise<FiscalContract[]> {
       "Award Amount"?: number;
       "Awarding Agency"?: string;
       "Description"?: string;
-      "Period of Performance Start Date"?: string;
+      "Start Date"?: string;
     }>;
   };
 
-  // Sort by most recent date server-side (API sort may be inconsistent)
-  const sorted = [...(json.results ?? [])].sort((a, b) => {
-    const da = new Date(a["Period of Performance Start Date"] ?? "").getTime() || 0;
-    const db = new Date(b["Period of Performance Start Date"] ?? "").getTime() || 0;
-    return db - da;
-  });
-
-  return sorted.map((r, i) => ({
+  return (json.results ?? []).map((r, i) => ({
     id: r["Award ID"] ?? `award-${i}`,
     recipient: r["Recipient Name"] ?? "Unknown Recipient",
     amount: r["Award Amount"] ?? 0,
     agency: r["Awarding Agency"] ?? "Unknown Agency",
-    date: r["Period of Performance Start Date"] ?? "",
+    date: r["Start Date"] ?? "",
     description: (r["Description"] ?? "").slice(0, 100),
   }));
 }

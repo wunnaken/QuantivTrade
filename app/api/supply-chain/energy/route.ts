@@ -26,7 +26,7 @@ export async function GET() {
   try {
     const fredKey = process.env.FRED_API_KEY?.trim();
 
-    const [crudoRes, natGasRes, refineryRes] = await Promise.allSettled([
+    const [crudoRes, natGasRes, refineryRes, gasolineRes, distillateRes] = await Promise.allSettled([
       // U.S. total crude oil ending stocks (WCESTUS1 equivalent)
       fetchEIA(
         "/v2/petroleum/stoc/wstk/data/?frequency=weekly&data[0]=value&facets[duoarea][]=NUS&facets[product][]=EPC0&sort[0][column]=period&sort[0][direction]=desc&length=52",
@@ -44,6 +44,16 @@ export async function GET() {
             { next: { revalidate: 3600 } }
           ).then((r) => { if (!r.ok) throw new Error(`FRED WCRFPUS2 failed: ${r.status}`); return r.json(); })
         : Promise.reject(new Error("No FRED key")),
+      // Weekly U.S. regular gasoline retail prices ($/gallon)
+      fetchEIA(
+        "/v2/petroleum/pri/gnd/data/?frequency=weekly&data[0]=value&facets[duoarea][]=NUS&facets[product][]=EPM0&sort[0][column]=period&sort[0][direction]=desc&length=52",
+        key
+      ),
+      // Weekly U.S. distillate fuel oil stocks (thousand barrels)
+      fetchEIA(
+        "/v2/petroleum/stoc/wstk/data/?frequency=weekly&data[0]=value&facets[duoarea][]=NUS&facets[product][]=EPD0&sort[0][column]=period&sort[0][direction]=desc&length=52",
+        key
+      ),
     ]);
 
     // EIA parser — period field, descending order, deduplicate keeping national-total row
@@ -71,6 +81,8 @@ export async function GET() {
     const crudeOil = parseEIA(crudoRes);
     const natGas = parseEIA(natGasRes);
     const refinery = parseFRED(refineryRes);
+    const gasoline = parseEIA(gasolineRes);
+    const distillate = parseEIA(distillateRes);
 
     const last = <T extends { value: number }>(arr: T[] | null) => arr?.[arr.length - 1] ?? null;
     const avg5yr = (arr: { value: number }[] | null) => {
@@ -125,6 +137,25 @@ export async function GET() {
         unit: "percent of operable capacity",
         reportLabel: "EIA Weekly Petroleum Status Report",
         updateSchedule: "Weekly — delayed 1 week",
+      },
+      gasoline: {
+        history: gasoline,
+        latest: last(gasoline),
+        label: "US Regular Gasoline Retail Price",
+        unit: "dollars per gallon",
+        reportLabel: "EIA Weekly Retail Gasoline and Diesel Prices",
+        updateSchedule: "Every Monday",
+        note: "Retail regular gasoline price — key consumer cost signal and inflation input. Tracks closely with crude oil but includes refining margin and taxes.",
+      },
+      distillate: {
+        history: distillate,
+        latest: last(distillate),
+        fiveYearAvg: avg5yr(distillate) ? Math.round(avg5yr(distillate)!) : null,
+        label: "Distillate Fuel Oil Stocks",
+        unit: "thousand barrels",
+        reportLabel: "EIA Weekly Petroleum Status Report",
+        updateSchedule: "Every Wednesday 10:30 AM ET",
+        note: "Distillate stocks (diesel + heating oil). Low distillate inventories drive diesel price spikes, directly impacting trucking and heating costs.",
       },
     });
   } catch (e) {
