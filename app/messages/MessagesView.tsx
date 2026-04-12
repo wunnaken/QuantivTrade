@@ -747,7 +747,6 @@ function MessagesContent() {
     const data = await res.json() as { id: string };
     setStartingDm(null);
     setSearch("");
-    setPeopleResults([]);
     setActiveTab("direct");
     setSelectedId(data.id);
     void loadConversations();
