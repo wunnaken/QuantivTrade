@@ -562,7 +562,7 @@ export default function BrokersView() {
                     <div className="h-52 [&_svg]:!bg-transparent [&_.recharts-surface]:!bg-transparent">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie data={analyticsData.allocation} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
+                          <Pie data={analyticsData.allocation} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, percent }: { name: string; percent?: number }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false} fontSize={10}>
                             {analyticsData.allocation.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                           </Pie>
                           <Tooltip contentStyle={{ backgroundColor: "#18181b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }} formatter={(v: unknown) => [fmt$(Number(v)), "Value"]} />
