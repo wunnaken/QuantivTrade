@@ -140,7 +140,7 @@ export default function BrokersView() {
 
   // When switching to analytics/activity tab, ensure data is loaded
   useEffect(() => {
-    if (activeTab === "activity" || activeTab === "analytics") {
+    if (activeTab === "activity") {
       const targets = selectedTab === "all" ? accounts : accounts.filter((a) => a.id === selectedTab);
       targets.forEach((a) => fetchActivitiesForAccount(a.id));
     }
