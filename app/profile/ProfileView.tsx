@@ -21,7 +21,6 @@ import { BriefingPreferencesForm } from "../../components/BriefingPreferencesFor
 import { fetchBriefingPreferences, type BriefingPreferences } from "../../lib/briefing-preferences";
 import { loadStreaks } from "../../lib/engagement/streaks";
 import { STREAK_BADGES } from "../../lib/engagement/constants";
-import { loadXP, getRankTitle } from "../../lib/engagement/xp";
 import { getOrCreateInviteCode, getInvitedCount } from "../../lib/engagement/invite";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { getTrades, computePnL, formatPercent } from "../../lib/journal";
@@ -282,17 +281,6 @@ export default function ProfileView() {
     setStreakData(loadStreaks());
   }, []);
 
-  useEffect(() => {
-    if (!user?.id) return;
-    const xp = loadXP();
-    if (xp.total > 0) {
-      fetch("/api/profile/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ xp_total: xp.total }),
-      }).catch(() => {});
-    }
-  }, [user?.id]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -677,19 +665,7 @@ export default function ProfileView() {
       )}
     <div className="min-h-screen app-page font-[&quot;Times_New_Roman&quot;,serif]">
       <div className="mx-auto max-w-3xl px-0 sm:px-6 lg:px-8">
-        <div className="mb-4 flex justify-end px-6 sm:px-0">
-          <button
-            type="button"
-            onClick={async () => {
-              await signOut();
-              window.location.href = "/";
-            }}
-            className="rounded-full border border-white/15 px-4 py-1.5 text-xs font-medium text-zinc-200 transition-colors duration-200 hover:border-white/30 hover:bg-white/5 hover:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[var(--accent-color)]/50 focus:ring-offset-2 focus:ring-offset-[var(--app-bg)]"
-          >
-            Sign out
-          </button>
-        </div>
-
+        <div className="mb-4" />
         {/* Banner */}
         <section className="relative h-48 w-full overflow-hidden rounded-t-2xl sm:rounded-t-3xl">
           {user.bannerImage ? (
@@ -885,12 +861,7 @@ export default function ProfileView() {
                           <VerifiedBadge size={16} />
                         </span>
                       )}
-                      <span className="inline-flex items-center gap-1 text-[var(--accent-color)]" title="XP from activity">
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                        {loadXP().total} XP
-                      </span>
                     </p>
-                    <p className="text-xs font-medium text-[var(--accent-color)]">{getRankTitle(loadXP().total)}</p>
                   {user.bio ? (
                     <p className="mt-2 text-sm text-zinc-300">{user.bio}</p>
                   ) : (

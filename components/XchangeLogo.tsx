@@ -9,7 +9,7 @@ export function QuantivTradeLogo() {
       aria-label="QuantivTrade – Home"
     >
       <QuantivTradeLogoImage size={46} />
-      <span className="text-2xl font-semibold tracking-tight text-[var(--accent-color)]">
+      <span className="text-2xl font-semibold tracking-tight text-[var(--accent-color)]" style={{ fontFamily: "var(--font-lora), Georgia, serif" }}>
         QuantivTrade
       </span>
     </Link>

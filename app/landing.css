@@ -1,5 +1,10 @@
 /* ─── Landing page — grey background, salmon accent, Lora headlines ──────── */
 
+@keyframes logo-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 .landing-page {
   background: var(--app-bg);
   color: #ffffff;
@@ -146,6 +151,16 @@
   50%       { opacity: 0; }
 }
 .typewriter-cursor { animation: typewriter-cursor 1s ease-in-out infinite; }
+
+/* Ticker tape scrolling */
+@keyframes ticker-left {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes ticker-right {
+  0%   { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
 
 /* Bento card entry animation — applied via JS when section enters view */
 @keyframes bento-fade-up {

@@ -129,7 +129,6 @@ function BentoCard({ href, title, icon, children, loading=false, delay=0, classN
       onMouseLeave={() => setHovered(false)}
       onClick={customizeMode ? undefined : () => router.push(href)}
       style={{
-        willChange: "transform",
         boxShadow: hovered && !customizeMode
           ? "0 0 0 1px rgba(255,255,255,0.08), 0 0 16px color-mix(in srgb, var(--accent-color) 12%, transparent)"
           : "0 0 0 1px rgba(255,255,255,0.08)",

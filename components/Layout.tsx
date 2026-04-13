@@ -46,7 +46,6 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/brokers", label: "My Brokerages", icon: "briefcase" },
   { href: "/marketplace", label: "Marketplace", icon: "marketplace" },
   { href: "/archive", label: "Archive", icon: "archive" },
-  { href: "/datahub", label: "DataHub" },
   { href: "/backtest", label: "Backtest" },
   { href: "/journal", label: "Journal" },
   { href: "/predict", label: "Prediction Markets" },
@@ -58,7 +57,7 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
 const SECTIONS: { id: string; label: string; hrefs: string[] }[] = [
   { id: "community", label: "Community", hrefs: ["/social-feed", "/communities", "/messages", "/trade-rooms"] },
   { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/dividends", "/forex", "/futures", "/crypto", "/market-relations", "/building-data", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
-  { id: "analytics", label: "Analytics", hrefs: ["/ceos", "/calendar", "/screener", "/supply-chain", "/datahub", "/backtest"] },
+  { id: "analytics", label: "Analytics", hrefs: ["/ceos", "/calendar", "/screener", "/supply-chain", "/backtest"] },
   { id: "personal", label: "Personal", hrefs: ["/journal", "/predict", "/watchlist", "/workspace", "/taxes"] },
 ];
 
@@ -86,7 +85,7 @@ function SidebarLogo({ narrow }: { narrow: boolean }) {
     >
       <QuantivTradeLogoImage size={42} />
       {!narrow && (
-        <span className="text-xl font-semibold tracking-tight" style={{ color: "var(--accent-color)" }}>
+        <span className="text-xl font-semibold tracking-tight" style={{ color: "var(--accent-color)", fontFamily: "var(--font-lora), Georgia, serif" }}>
           QuantivTrade
         </span>
       )}
@@ -255,8 +254,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [prefs, setPrefs] = useState<SidebarPrefs>(() => ({
     order: [...MAIN_NAV_HREFS],
     hidden: [],
-    collapsed: true,
-    collapsedSections: [],
+    collapsed: false,
+    collapsedSections: ["community", "markets", "analytics", "personal"],
     sectionOrder: [],
   }));
   // drag-and-drop state — type: "item" drags a nav link, "section" drags a whole group
@@ -523,6 +522,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 onDragOver={customizeMode && dragType === "section" ? (e) => e.preventDefault() : undefined}
                 onDrop={customizeMode && dragType === "section" ? (e) => { e.preventDefault(); dropSection(section.id); } : undefined}
               >
+                {narrow && (
+                  <div className="mb-0.5 flex justify-center py-1" title={section.label} aria-hidden>
+                    <div className="h-px w-5 rounded-full bg-zinc-700" />
+                  </div>
+                )}
                 {!narrow && (
                   <div
                     className="mb-0.5 flex w-full items-center justify-between rounded px-2 py-1"
@@ -657,7 +661,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <div className="border-t border-white/10 p-3 space-y-0.5">
           {/* Plan badge */}
           {(() => {
-            const tier = (user as any)?.subscription_tier ?? "free";
+            const rawTier = (user as any)?.subscription_tier ?? "elite";
+            const tier = rawTier === "free" ? "elite" : rawTier;
             const tierLabel: Record<string, string> = { free: "Free", verified: "Verified", starter: "Starter", pro: "Pro", elite: "Elite" };
             const tierColor: Record<string, string> = { free: "text-zinc-500", verified: "text-blue-400", starter: "text-emerald-400", pro: "text-[var(--accent-color)]", elite: "text-amber-400" };
             const tierBg: Record<string, string> = { free: "bg-zinc-700/20", verified: "bg-blue-500/10", starter: "bg-emerald-500/10", pro: "bg-[var(--accent-color)]/10", elite: "bg-amber-500/10" };
