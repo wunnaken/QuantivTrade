@@ -721,7 +721,7 @@ const PLAN_FEATURES: { label: string; starter: string | boolean; pro: string | b
   { label: "Backtests per day",               starter: "10 / day",     pro: "Unlimited",         elite: "Unlimited" },
   { label: "Priority support",                starter: true,           pro: true,                elite: true },
   { label: "Host trade rooms",                starter: false,          pro: true,                elite: true },
-  { label: "Marketplace selling",             starter: false,          pro: "80% rev share",     elite: "80% rev share" },
+  { label: "Marketplace selling",             starter: false,          pro: "80% rev share",     elite: "90% rev share" },
   { label: "Verified Trader badge",           starter: false,          pro: true,                elite: "Auto-verified" },
   { label: "Marketplace discount",            starter: false,          pro: false,               elite: "25% off" },
   { label: "Full API access",                 starter: false,          pro: false,               elite: true },
@@ -731,7 +731,7 @@ const PLAN_FEATURES: { label: string; starter: string | boolean; pro: string | b
 const LANDING_PLANS = [
   { name: "Starter", tagline: "For the committed.",          price: 19,  glow: "rgba(232,132,106,0.12)", badge: null as string | null, highlight: false, key: "starter" as const },
   { name: "Pro",     tagline: "Serious edge. No excuses.",   price: 29,  glow: "rgba(232,132,106,0.18)", badge: "Most Popular",         highlight: true,  key: "pro"     as const },
-  { name: "Elite",   tagline: "Institutional. No compromises.", price: 89, glow: "rgba(232,132,106,0.12)", badge: null as string | null, highlight: false, key: "elite"   as const },
+  { name: "Elite",   tagline: "Built for serious traders.", price: 89, glow: "rgba(232,132,106,0.12)", badge: null as string | null, highlight: false, key: "elite"   as const },
 ] as const;
 
 function PricingPlans() {
@@ -750,13 +750,9 @@ function PricingPlans() {
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }}
         style={{ textAlign: "center", marginBottom: "48px" }}>
-        <p className="overline-label" style={{ marginBottom: "14px" }}>Pricing</p>
-        <h2 style={{ fontFamily: "var(--font-lora), Georgia, serif", fontSize: "clamp(26px, 3vw, 38px)", fontWeight: 600, color: "#fff", marginBottom: "12px", letterSpacing: "-0.01em" }}>
-          Choose your level.
+        <h2 style={{ fontFamily: "var(--font-lora), Georgia, serif", fontSize: "clamp(26px, 3vw, 38px)", fontWeight: 600, color: "#fff", marginBottom: "0", letterSpacing: "-0.01em" }}>
+          Pricing
         </h2>
-        <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.3)", maxWidth: "420px", margin: "0 auto", lineHeight: 1.8 }}>
-          Start lean, grow into it. Every tier unlocks more of the platform — more tools, more reach, more credibility.
-        </p>
       </motion.div>
 
       {/* Cards */}

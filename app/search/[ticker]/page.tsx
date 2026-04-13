@@ -19,6 +19,7 @@ import { usePriceContext } from "../../../lib/price-context";
 import { PriceDisplay } from "../../../components/PriceDisplay";
 import { CandlestickChart } from "../../../components/CandlestickChart";
 import { TypewriterText } from "../../../components/TypewriterText";
+import { TickerDetailSections } from "../../../components/ticker-detail/TickerDetailSections";
 
 const CARD_BG = "var(--app-card)";
 
@@ -430,6 +431,8 @@ export default function TickerPage() {
   const [chartLoading, setChartLoading] = useState(true);
   const [chartRange, setChartRange] = useState<ChartRangeKey>("1d");
   const chartRangeRef = useRef<ChartRangeKey>("1d");
+  const chartBoxRef = useRef<HTMLDivElement>(null);
+  const [chartBoxHeight, setChartBoxHeight] = useState(500);
   const watchingCount = useWatchingCount(ticker || "");
   const [alertModalOpen, setAlertModalOpen] = useState(false);
   const [alertRefresh, setAlertRefresh] = useState(0);
@@ -468,6 +471,17 @@ export default function TickerPage() {
   useEffect(() => {
     queueMicrotask(() => refreshWatchlist());
   }, [refreshWatchlist]);
+
+  useEffect(() => {
+    const el = chartBoxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.contentRect.height;
+      if (h && h > 0) setChartBoxHeight(h);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!ticker) return;
@@ -588,88 +602,180 @@ export default function TickerPage() {
     );
   }
 
+  // AI analysis slot — passed into the tabbed panel
+  const aiSlot = (
+    <>
+      {loading && <AIAnalysisSkeleton />}
+      {streaming && (
+        <div className="rounded-2xl border border-[var(--accent-color)]/30 bg-[var(--app-card)]/80 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <svg className="h-4 w-4 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+            <span className="text-sm font-semibold text-zinc-100">Market Analysis</span>
+          </div>
+          <div className="flex items-center gap-3 py-1">
+            {[0, 150, 300].map((d) => (
+              <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent-color)]" style={{ animationDelay: `${d}ms` }} />
+            ))}
+            <span className="text-sm text-zinc-400">Analyzing {ticker}…</span>
+          </div>
+          <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-zinc-800">
+            <div className="h-full rounded-full bg-[var(--accent-color)]/60 transition-all duration-300" style={{ width: `${Math.min(90, (streamProgress / 950) * 100)}%` }} />
+          </div>
+        </div>
+      )}
+      {error && (
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-300">
+          {error}
+          <button type="button" onClick={runAnalysis} className="mt-3 block rounded-full border border-white/10 px-4 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/5">Try again</button>
+        </div>
+      )}
+      {!loading && !streaming && !error && analysis && <AIAnalysisCard data={analysis} animate={animate} />}
+      {!loading && !streaming && !error && !analysis && (
+        <div className="rounded-2xl border border-white/10 bg-[var(--app-card)]/50 p-6 text-center">
+          <svg className="mx-auto h-9 w-9 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+          <h2 className="mt-3 text-sm font-semibold text-zinc-100">Market Analysis</h2>
+          <p className="mt-1.5 text-xs text-zinc-400">Risk rating, bull &amp; bear case, and key factors for {ticker}.</p>
+          <button type="button" onClick={runAnalysis} className="mt-4 rounded-full px-5 py-2 text-sm font-semibold text-[#020308] transition hover:opacity-90" style={{ backgroundColor: "var(--accent-color)" }}>
+            Analyze {ticker}
+          </button>
+          <p className="mt-2 text-[10px] text-zinc-600">Powered by Claude</p>
+        </div>
+      )}
+    </>
+  );
+
   return (
-    <div className="min-h-screen app-page font-[&quot;Times_New_Roman&quot;,serif]">
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        <div className="grid gap-8 lg:grid-cols-[1fr,1.1fr]">
-          <div
-            className="rounded-2xl border border-white/10 p-6 transition-colors"
-            style={{ backgroundColor: CARD_BG }}
-          >
-            <TickerDataPanel
-              ticker={ticker}
-              inWatchlist={inWatchlist}
-              onWatchlistChange={handleWatchlistToggle}
-              alertForTicker={alertForTicker ? { condition: alertForTicker.condition, targetPrice: alertForTicker.targetPrice } : null}
-              onSetAlertClick={() => setAlertModalOpen(true)}
-              watchingCount={watchingCount}
-              quote={quote}
-              quoteLoading={quoteLoading}
-              chartData={chartData}
-              chartLoading={chartLoading}
-              chartRange={chartRange}
-              onChartRangeChange={setChartRange}
-              isLive={showLive}
-              watchlistSaving={watchlistSaving}
-            />
-            {watchlistSyncIssue && (
-              <p className="mt-3 text-xs text-amber-400">Sync issue: watchlist is currently using local backup.</p>
+    <div className="app-page min-h-screen">
+      <div className="mx-auto w-full max-w-[1600px] px-4 py-4 flex flex-col" style={{ minHeight: "calc(100vh - 56px)" }}>
+
+        {/* ── Compact header ── */}
+        <div className="flex items-center justify-between gap-4 mb-3 shrink-0 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-xl font-bold tracking-tight text-zinc-100">{ticker}</h1>
+            {quoteLoading ? (
+              <div className="h-6 w-20 animate-pulse rounded bg-white/10" />
+            ) : (
+              <PriceDisplay
+                price={quote?.price ?? null}
+                change={quote?.change ?? null}
+                changePercent={quote?.changePercent ?? null}
+                symbol={ticker}
+                showChange
+                className="text-base font-semibold text-zinc-100"
+                priceClassName="text-base font-semibold text-zinc-100"
+                changeClassName={(quote?.changePercent ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}
+              />
             )}
+            {showLive && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-400">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 sonar-dot" /> Live
+              </span>
+            )}
+            <span className="text-xs text-zinc-600">👁 {watchingCount} watching</span>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button
+              type="button"
+              disabled={watchlistSaving}
+              onClick={handleWatchlistToggle}
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-colors ${
+                inWatchlist
+                  ? "border border-red-500/50 bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                  : "bg-[var(--accent-color)] text-[#020308] hover:opacity-90"
+              } disabled:opacity-60`}
+            >
+              {watchlistSaving ? (inWatchlist ? "Removing…" : "Adding…") : inWatchlist ? "Remove" : "+ Watchlist"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAlertModalOpen(true)}
+              className={`flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-xs font-medium transition-colors ${
+                alertForTicker
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                  : "border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10"
+              }`}
+            >
+              <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              {alertForTicker ? `Alert set` : "Set Alert"}
+            </button>
+          </div>
+        </div>
+
+        {watchlistSyncIssue && (
+          <p className="mb-2 text-xs text-amber-400 shrink-0">Sync issue: watchlist is using local backup.</p>
+        )}
+
+        {/* ── Main 2-col layout ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-[3fr,2fr] gap-3 flex-1" style={{ minHeight: "calc(100vh - 160px)" }}>
+
+          {/* Left: chart panel */}
+          <div
+            className="rounded-2xl border border-white/10 p-4 flex flex-col"
+            style={{ backgroundColor: CARD_BG, height: "calc(100vh - 160px)" }}
+          >
+            {/* Range buttons */}
+            <div className="flex flex-wrap gap-1 mb-3 shrink-0">
+              {CHART_RANGES.map((label) => {
+                const value = (
+                  label === "1H" ? "1h" : label === "1D" ? "1d" : label === "1W" ? "1w" : label === "1M" ? "1m" :
+                  label === "3M" ? "3m" : label === "6M" ? "6m" : label === "1Y" ? "1y" : label === "5Y" ? "5y" : "10m"
+                ) as ChartRangeKey;
+                const active = chartRange === value;
+                return (
+                  <button key={label} type="button" onClick={() => setChartRange(value)}
+                    className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${active ? "bg-white/15 text-zinc-100" : "text-zinc-500 hover:bg-white/5 hover:text-zinc-300"}`}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Chart — ref measures real pixel height, passed directly to chart */}
+            <div ref={chartBoxRef} className="flex-1 min-h-0 rounded-xl border border-white/8 overflow-hidden" style={{ backgroundColor: CARD_BG }}>
+              {chartLoading ? (
+                <div className="flex h-full w-full items-center justify-center">
+                  <p className="text-sm text-zinc-500">Loading chart…</p>
+                </div>
+              ) : (() => {
+                const hasPrice = (quote?.price ?? null) != null;
+                const effectiveData = chartData.length > 0 ? chartData
+                  : (hasPrice && typeof quote?.price === "number" && quote.price > 0)
+                    ? buildFallbackChartFromPrice(quote.price)
+                    : [];
+                return effectiveData.length > 0 ? (
+                  <CandlestickChart data={effectiveData} showVolume={effectiveData.some((d) => d.volume > 0)} height={chartBoxHeight} />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <p className="text-sm text-zinc-500">Chart data unavailable</p>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Stats row */}
+            <div className="flex gap-3 mt-3 shrink-0">
+              {[
+                { label: "Vol", value: quote?.volume != null ? (quote.volume >= 1e6 ? `${(quote.volume / 1e6).toFixed(1)}M` : `${(quote.volume / 1e3).toFixed(1)}K`) : "—" },
+                { label: "High", value: quote?.high != null ? `$${quote.high.toFixed(2)}` : "—" },
+                { label: "Low", value: quote?.low != null ? `$${quote.low.toFixed(2)}` : "—" },
+                { label: "Open", value: (quote as { open?: number } | null)?.open != null ? `$${((quote as { open?: number })?.open ?? 0).toFixed(2)}` : "—" },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex gap-1.5 items-center">
+                  <span className="text-[10px] text-zinc-600">{label}</span>
+                  <span className="text-xs font-medium text-zinc-300">{value}</span>
+                </div>
+              ))}
+            </div>
           </div>
 
-          <div>
-            {loading && <AIAnalysisSkeleton />}
-            {streaming && (
-              <div className="rounded-2xl border border-[var(--accent-color)]/30 bg-[var(--app-card)]/80 p-6">
-                <div className="mb-4 flex items-center gap-2">
-                  <svg className="h-5 w-5 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                  <h2 className="text-lg font-semibold text-zinc-100">Market Analysis</h2>
-                </div>
-                <div className="flex items-center gap-3 py-1">
-                  {[0, 150, 300].map((d) => (
-                    <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent-color)]" style={{ animationDelay: `${d}ms` }} />
-                  ))}
-                  <span className="text-sm text-zinc-400">Analyzing {ticker}…</span>
-                </div>
-                <div className="mt-3 h-0.5 w-full overflow-hidden rounded-full bg-zinc-800">
-                  <div
-                    className="h-full rounded-full bg-[var(--accent-color)]/60 transition-all duration-300"
-                    style={{ width: `${Math.min(90, (streamProgress / 950) * 100)}%` }}
-                  />
-                </div>
-              </div>
-            )}
-            {error && (
-              <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-300">
-                {error}
-                <button
-                  type="button"
-                  onClick={runAnalysis}
-                  className="mt-3 block rounded-full border border-white/10 px-4 py-1.5 text-xs font-medium text-zinc-300 hover:bg-white/5"
-                >
-                  Try again
-                </button>
-              </div>
-            )}
-            {!loading && !streaming && !error && analysis && <AIAnalysisCard data={analysis} animate={animate} />}
-            {!loading && !streaming && !error && !analysis && (
-              <div className="rounded-2xl border border-white/10 bg-[var(--app-card)]/80 p-6 text-center">
-                <svg className="mx-auto h-10 w-10 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                <h2 className="mt-3 text-base font-semibold text-zinc-100">Market Analysis</h2>
-                <p className="mt-2 text-sm text-zinc-400">
-                  Get a breakdown of {ticker} — risk rating, bull &amp; bear case, and key factors.
-                </p>
-                <button
-                  type="button"
-                  onClick={runAnalysis}
-                  className="mt-4 rounded-full px-6 py-2.5 text-sm font-semibold text-[#020308] transition hover:opacity-90"
-                  style={{ backgroundColor: "var(--accent-color)" }}
-                >
-                  Analyze {ticker}
-                </button>
-                <p className="mt-3 text-xs text-zinc-600">Powered by Claude</p>
-              </div>
-            )}
+          {/* Right: scrollable panel */}
+          <div
+            className="rounded-2xl border border-white/10 overflow-hidden flex flex-col"
+            style={{ backgroundColor: CARD_BG, height: "calc(100vh - 160px)" }}
+          >
+            <TickerDetailSections ticker={ticker} aiSlot={aiSlot} />
           </div>
         </div>
       </div>

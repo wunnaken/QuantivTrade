@@ -11,13 +11,14 @@ export type FiscalContract = {
   description: string;
 };
 
+const TREASURY_BASE = "https://api.fiscaldata.treasury.gov/services/api/v1/accounting/od/debt_to_penny";
+
 const TREASURY_DEBT_URL =
-  "https://api.fiscaldata.treasury.gov/services/api/v1/accounting/od/debt_to_penny" +
-  "?fields=record_date,tot_pub_debt_out_amt&sort=-record_date&limit=1";
+  TREASURY_BASE + "?fields=record_date,tot_pub_debt_out_amt&sort=-record_date&limit=1";
 
 function treasuryStartOfYearUrl(year: number): string {
   return (
-    "https://api.fiscaldata.treasury.gov/services/api/v1/accounting/od/debt_to_penny" +
+    TREASURY_BASE +
     `?fields=record_date,tot_pub_debt_out_amt&filter=record_date:gte:${year}-01-01,record_date:lte:${year}-01-10&sort=record_date&limit=1`
   );
 }
@@ -26,8 +27,8 @@ async function fetchStartOfYearDebt(year: number): Promise<number> {
   const res = await fetch(treasuryStartOfYearUrl(year), {
     headers: { "User-Agent": "QuantivTrade/1.0" },
     next: { revalidate: 86400 },
-  });
-  if (!res.ok) throw new Error(`Start of year debt fetch failed: ${res.status}`);
+  }).catch(() => null);
+  if (!res?.ok) throw new Error(`Start of year debt fetch failed: ${res?.status ?? "network error"}`);
   const json = (await res.json()) as { data?: { record_date: string; tot_pub_debt_out_amt: string }[] };
   const row = json.data?.[0];
   if (!row) throw new Error("No start of year data");
@@ -41,8 +42,8 @@ async function fetchCurrentDebt(): Promise<{ currentDebt: number; debtDate: stri
   const res = await fetch(TREASURY_DEBT_URL, {
     headers: { "User-Agent": "QuantivTrade/1.0" },
     next: { revalidate: 21600 },
-  });
-  if (!res.ok) throw new Error(`Treasury debt fetch failed: ${res.status}`);
+  }).catch(() => null);
+  if (!res?.ok) throw new Error(`Treasury debt fetch failed: ${res?.status ?? "network error"}`);
   const json = (await res.json()) as {
     data?: { record_date: string; tot_pub_debt_out_amt: string }[];
   };
@@ -131,15 +132,7 @@ export async function GET() {
   const contracts =
     contractsResult.status === "fulfilled" ? contractsResult.value : [];
 
-  if (debtResult.status === "rejected") {
-    console.error("[fiscalwatch] debt fetch error:", debtResult.reason);
-  }
-  if (startYearResult.status === "rejected") {
-    console.error("[fiscalwatch] start-of-year debt error:", startYearResult.reason);
-  }
-  if (contractsResult.status === "rejected") {
-    console.error("[fiscalwatch] contracts error:", contractsResult.reason);
-  }
+  // Silently fall back — Treasury API occasionally returns 404 when data isn't yet published (weekends, holidays)
 
   return NextResponse.json({ currentDebt, debtDate, debtThisYear, startOfYearDebt, contracts });
 }

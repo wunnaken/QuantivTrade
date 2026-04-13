@@ -54,12 +54,12 @@ export function CandlestickChart({
 
     cleanupRef.current?.();
     const container = containerRef.current;
-
     const w = container.clientWidth || 400;
     const h = height;
+
     const chart = createChart(container, {
       layout: {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- lightweight-charts ColorType accepts "solid" at runtime
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         background: { type: "solid", color: CHART_BG } as any,
         textColor: TEXT_COLOR,
         fontFamily: "system-ui, sans-serif",
@@ -96,9 +96,9 @@ export function CandlestickChart({
       borderVisible: true,
       wickVisible: true,
     });
+
     candleSeriesRef.current = candleSeries as unknown as { setData: (d: CandlePoint[]) => void };
     candleSeries.setData(toCandleData(data) as never);
-
     chart.timeScale().fitContent();
 
     const handleResize = () => {
@@ -117,9 +117,7 @@ export function CandlestickChart({
       cleanupRef.current = null;
     };
 
-    return () => {
-      cleanupRef.current?.();
-    };
+    return () => { cleanupRef.current?.(); };
   }, [data.length, height]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -134,7 +132,7 @@ export function CandlestickChart({
     <div
       ref={containerRef}
       className={className}
-      style={{ minHeight: `${height}px`, height: `${height}px`, width: "100%", position: "relative" }}
+      style={{ width: "100%", height: `${height}px`, position: "relative" }}
     />
   );
 }
