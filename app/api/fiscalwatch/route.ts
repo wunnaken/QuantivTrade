@@ -76,7 +76,7 @@ async function fetchContracts(): Promise<FiscalContract[]> {
     ],
     sort: "Award Amount",
     order: "desc",
-    limit: 100,
+    limit: 50,
     page: 1,
   };
 

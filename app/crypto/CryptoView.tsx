@@ -388,7 +388,7 @@ function DeFiTab({ protocols, history }: { protocols: DefiProtocol[]; history: D
             <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#71717a" }} tickLine={false} axisLine={false} interval={14} />
             <YAxis tick={{ fontSize: 9, fill: "#71717a" }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v.toFixed(0)}B`} />
             <Tooltip
-              contentStyle={{ background: "#0a0b14", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 11 }}
+              contentStyle={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, fontSize: 11 }}
               formatter={(v) => [`$${(v as number).toFixed(2)}B`, "TVL"]}
             />
             <Area type="monotone" dataKey="tvl" stroke="var(--accent-color)" fill="url(#defiGrad)" strokeWidth={1.5} dot={false} />
@@ -486,7 +486,7 @@ function DominanceTab({
                 tickFormatter={(v) => `$${(v / 1e12).toFixed(2)}T`}
               />
               <Tooltip
-                contentStyle={{ background: "#0a0b14", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 11 }}
+                contentStyle={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, fontSize: 11 }}
                 formatter={(v) => [`$${((v as number) / 1e12).toFixed(3)}T`, "Market Cap"]}
               />
               <Area type="monotone" dataKey="value" stroke="var(--accent-color)" fill="url(#domGrad)" strokeWidth={1.5} dot={false} />
@@ -509,7 +509,7 @@ function DominanceTab({
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{ background: "#0a0b14", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 11 }}
+                contentStyle={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, fontSize: 11 }}
                 formatter={(v) => [`${v}%`, ""]}
               />
             </PieChart>
@@ -553,7 +553,7 @@ function DominanceTab({
               }}
             />
             <Tooltip
-              contentStyle={{ background: "#0a0b14", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 11 }}
+              contentStyle={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, fontSize: 11 }}
               formatter={(v) => {
                 const n = v as number;
                 const abs = Math.abs(n);

@@ -19,23 +19,34 @@ import {
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
-type StrategyType = "ma_crossover" | "rsi" | "breakout" | "options" | "portfolio_optimizer" | "custom";
+type StrategyType =
+  | "ma_crossover" | "rsi" | "breakout" | "macd" | "bollinger_bands"
+  | "stochastic" | "cci" | "williams_r" | "adx" | "parabolic_sar"
+  | "volume" | "ichimoku" | "orderflow" | "options" | "portfolio_optimizer" | "custom";
 
 type Setup = {
   ticker: string;
-  tickers: string; // comma-separated for portfolio optimizer
+  tickers: string;
   assetType: string;
   startDate: string;
   endDate: string;
   initialCapital: number;
   commission: number;
+  slippage: number;
+  timeframe: string;
+  direction: "long" | "short" | "both";
+  leverage: number;
+  positionSizingType: "pct" | "fixed_dollar" | "kelly";
+  fixedDollarSize: number;
 };
+
+type TPTarget = { pct: number; size: number };
 
 type Params = {
   // MA Crossover
   fastPeriod: number;
   slowPeriod: number;
-  maType: "sma" | "ema";
+  maType: "sma" | "ema" | "wma" | "dema" | "tema";
   // RSI
   rsiPeriod: number;
   oversold: number;
@@ -44,15 +55,53 @@ type Params = {
   lookbackPeriod: number;
   volumeConfirmation: boolean;
   atrMultiplier: number;
+  // MACD
+  macdFast: number;
+  macdSlow: number;
+  macdSignal: number;
+  // Bollinger Bands
+  bbPeriod: number;
+  bbStdDev: number;
+  // Stochastic
+  stochK: number;
+  stochD: number;
+  stochOverbought: number;
+  stochOversold: number;
+  // CCI
+  cciPeriod: number;
+  cciOverbought: number;
+  cciOversold: number;
+  // Williams %R
+  williamsRPeriod: number;
+  williamsROverbought: number;
+  williamsROversold: number;
+  // ADX
+  adxPeriod: number;
+  adxThreshold: number;
+  // Parabolic SAR
+  sarStep: number;
+  sarMax: number;
+  // Ichimoku
+  ichimokuTenkan: number;
+  ichimokuKijun: number;
+  ichimokuSenkou: number;
+  // Volume / Order Flow
+  vwapPeriod: number;
+  obvMaPeriod: number;
+  orderFlowThreshold: number;
   // Options
   optionStrategy: string;
   expiryDays: number;
   deltaTarget: number;
   // Risk management
   useStopLoss: boolean;
+  stopLossType: "fixed" | "trailing" | "atr";
   stopLossPct: number;
+  stopLossAtrMultiplier: number;
   useTakeProfit: boolean;
   takeProfitPct: number;
+  useMultipleTP: boolean;
+  takeProfitTargets: TPTarget[];
   // Advanced
   walkForward: boolean;
   monteCarlo: boolean;
@@ -67,6 +116,7 @@ type Trade = {
   exit_price: number;
   return_pct: number;
   hold_days: number;
+  direction?: "long" | "short";
 };
 
 type BacktestMetrics = {
@@ -87,6 +137,10 @@ type BacktestMetrics = {
   avg_hold_time_days: number;
   beta: number;
   alpha: number;
+  expectancy?: number;
+  var_95?: number;
+  max_consecutive_wins?: number;
+  max_consecutive_losses?: number;
   monthly_returns: Record<string, number>;
   equity_curve: { date: string; value: number }[];
   drawdown_curve: { date: string; drawdown: number }[];
@@ -117,6 +171,16 @@ type BacktestResult = {
   error?: string;
 };
 
+type SavedStrategy = {
+  id: string;
+  name: string;
+  strategyType: StrategyType;
+  setup: Setup;
+  params: Params;
+  result: BacktestResult | null;
+  savedAt: string;
+};
+
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_SETUP: Setup = {
@@ -127,6 +191,12 @@ const DEFAULT_SETUP: Setup = {
   endDate: "2024-12-31",
   initialCapital: 10000,
   commission: 0.1,
+  slippage: 5,
+  timeframe: "1d",
+  direction: "long",
+  leverage: 1,
+  positionSizingType: "pct",
+  fixedDollarSize: 1000,
 };
 
 const DEFAULT_PARAMS: Params = {
@@ -139,79 +209,93 @@ const DEFAULT_PARAMS: Params = {
   lookbackPeriod: 20,
   volumeConfirmation: true,
   atrMultiplier: 1.5,
+  macdFast: 12,
+  macdSlow: 26,
+  macdSignal: 9,
+  bbPeriod: 20,
+  bbStdDev: 2,
+  stochK: 14,
+  stochD: 3,
+  stochOverbought: 80,
+  stochOversold: 20,
+  cciPeriod: 20,
+  cciOverbought: 100,
+  cciOversold: -100,
+  williamsRPeriod: 14,
+  williamsROverbought: -20,
+  williamsROversold: -80,
+  adxPeriod: 14,
+  adxThreshold: 25,
+  sarStep: 0.02,
+  sarMax: 0.2,
+  ichimokuTenkan: 9,
+  ichimokuKijun: 26,
+  ichimokuSenkou: 52,
+  vwapPeriod: 20,
+  obvMaPeriod: 20,
+  orderFlowThreshold: 0.6,
   optionStrategy: "covered_call",
   expiryDays: 30,
   deltaTarget: 0.30,
   useStopLoss: false,
+  stopLossType: "fixed",
   stopLossPct: 5,
+  stopLossAtrMultiplier: 2,
   useTakeProfit: false,
   takeProfitPct: 10,
+  useMultipleTP: false,
+  takeProfitTargets: [
+    { pct: 5, size: 50 },
+    { pct: 10, size: 30 },
+    { pct: 20, size: 20 },
+  ],
   walkForward: false,
   monteCarlo: false,
   monteCarloRuns: 1000,
   positionSize: 0.95,
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Strategy catalogue ───────────────────────────────────────────────────────
 
-function fmtPct(n: number | undefined | null, decimals = 1): string {
-  if (n == null) return "—";
-  const v = n.toFixed(decimals);
-  return n >= 0 ? `+${v}%` : `${v}%`;
-}
+const STRATEGIES: { type: StrategyType; name: string; desc: string; icon: string; category: string }[] = [
+  { type: "ma_crossover",     name: "MA Crossover",      desc: "SMA/EMA/WMA/DEMA/TEMA fast/slow crossover signals",       icon: "📈", category: "Trend" },
+  { type: "macd",             name: "MACD",              desc: "Signal line crossover and histogram momentum shifts",       icon: "〰️", category: "Trend" },
+  { type: "ichimoku",         name: "Ichimoku Cloud",    desc: "Tenkan/Kijun cross with cloud support & resistance",       icon: "☁️", category: "Trend" },
+  { type: "parabolic_sar",    name: "Parabolic SAR",     desc: "Trailing stop-and-reverse for trend following entries",    icon: "🔄", category: "Trend" },
+  { type: "adx",              name: "ADX / DI",          desc: "Enter trending markets using ADX strength + DI crossover", icon: "💹", category: "Trend" },
+  { type: "rsi",              name: "RSI",               desc: "Buy oversold, sell overbought with divergence detection",  icon: "📊", category: "Momentum" },
+  { type: "stochastic",       name: "Stochastic",        desc: "%K/%D crossover in oversold/overbought zones",            icon: "🔀", category: "Momentum" },
+  { type: "cci",              name: "CCI",               desc: "Commodity Channel Index mean-reversion strategy",          icon: "🌀", category: "Momentum" },
+  { type: "williams_r",       name: "Williams %R",       desc: "Fast momentum oscillator overbought/oversold reversals",  icon: "⚡", category: "Momentum" },
+  { type: "bollinger_bands",  name: "Bollinger Bands",   desc: "Mean-reversion entries on band touch with squeeze filter", icon: "🎯", category: "Volatility" },
+  { type: "breakout",         name: "Breakout + ATR",    desc: "Price breakout with volume confirmation and ATR sizing",   icon: "🚀", category: "Volatility" },
+  { type: "volume",           name: "Volume / VWAP",     desc: "OBV trend + VWAP deviation momentum entries",             icon: "📦", category: "Volume" },
+  { type: "orderflow",        name: "Order Flow",        desc: "CVD, volume delta & VWAP pressure proxies from OHLCV",    icon: "🌊", category: "Volume" },
+  { type: "options",          name: "Options",           desc: "Covered calls, spreads, straddles with Black-Scholes",    icon: "⚙️", category: "Derivatives" },
+  { type: "portfolio_optimizer", name: "Portfolio Optimizer", desc: "Modern portfolio theory optimal weight allocation", icon: "🎲", category: "Portfolio" },
+  { type: "custom",           name: "Custom",            desc: "Combine multiple indicators with AND/OR logic",           icon: "🔧", category: "Custom" },
+];
 
-function fmtNum(n: number | undefined | null, decimals = 2): string {
-  if (n == null) return "—";
-  return n.toFixed(decimals);
-}
+const TICKER_PRESETS: { label: string; tickers: string }[] = [
+  { label: "Mag 7",        tickers: "AAPL,MSFT,GOOGL,AMZN,NVDA,META,TSLA" },
+  { label: "S&P Leaders",  tickers: "SPY,QQQ,IWM,DIA,VTI" },
+  { label: "Financials",   tickers: "JPM,GS,BAC,WFC,MS,C" },
+  { label: "Energy",       tickers: "XOM,CVX,COP,SLB,PSX" },
+  { label: "Crypto",       tickers: "BTC-USD,ETH-USD,SOL-USD,BNB-USD" },
+  { label: "FAANG+",       tickers: "META,AAPL,AMZN,NFLX,GOOGL,MSFT" },
+];
 
-function fmtDollars(n: number): string {
-  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
-  return `$${n.toFixed(0)}`;
-}
+const TIMEFRAMES = [
+  { value: "1m",  label: "1 Min" },
+  { value: "5m",  label: "5 Min" },
+  { value: "15m", label: "15 Min" },
+  { value: "1h",  label: "1 Hour" },
+  { value: "4h",  label: "4 Hour" },
+  { value: "1d",  label: "Daily" },
+  { value: "1wk", label: "Weekly" },
+];
 
-function retColor(n: number | null | undefined): string {
-  if (n == null) return "text-zinc-400";
-  if (n > 0) return "text-emerald-400";
-  if (n < 0) return "text-red-400";
-  return "text-zinc-400";
-}
-
-function gradeFromMetrics(m: BacktestMetrics): { grade: string; color: string } {
-  let score = 0;
-  if (m.total_return > 50) score += 25;
-  else if (m.total_return > 20) score += 18;
-  else if (m.total_return > 5) score += 12;
-  else if (m.total_return > 0) score += 6;
-
-  if (m.sharpe_ratio > 2) score += 30;
-  else if (m.sharpe_ratio > 1.5) score += 24;
-  else if (m.sharpe_ratio > 1) score += 18;
-  else if (m.sharpe_ratio > 0.5) score += 10;
-
-  if (m.win_rate > 70) score += 25;
-  else if (m.win_rate > 60) score += 20;
-  else if (m.win_rate > 50) score += 14;
-  else if (m.win_rate > 40) score += 8;
-
-  const dd = Math.abs(m.max_drawdown);
-  if (dd < 10) score += 20;
-  else if (dd < 15) score += 15;
-  else if (dd < 20) score += 10;
-  else if (dd < 30) score += 5;
-
-  if (score >= 85) return { grade: "A+", color: "text-emerald-400 border-emerald-400/40 bg-emerald-400/10" };
-  if (score >= 75) return { grade: "A", color: "text-emerald-400 border-emerald-400/40 bg-emerald-400/10" };
-  if (score >= 65) return { grade: "B+", color: "text-[var(--accent-color)] border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10" };
-  if (score >= 55) return { grade: "B", color: "text-[var(--accent-color)] border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10" };
-  if (score >= 45) return { grade: "B-", color: "text-[var(--accent-color)] border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10" };
-  if (score >= 35) return { grade: "C+", color: "text-amber-400 border-amber-400/40 bg-amber-400/10" };
-  if (score >= 25) return { grade: "C", color: "text-amber-400 border-amber-400/40 bg-amber-400/10" };
-  return { grade: "F", color: "text-red-400 border-red-400/40 bg-red-400/10" };
-}
-
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const STATUS_MESSAGES = [
   "Fetching historical data…",
@@ -221,7 +305,46 @@ const STATUS_MESSAGES = [
   "Running AI analysis…",
 ];
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmtPct(n: number | undefined | null, decimals = 1): string {
+  if (n == null) return "—";
+  const v = n.toFixed(decimals);
+  return n >= 0 ? `+${v}%` : `${v}%`;
+}
+function fmtNum(n: number | undefined | null, decimals = 2): string {
+  if (n == null) return "—";
+  return n.toFixed(decimals);
+}
+function fmtDollars(n: number): string {
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(2)}M`;
+  if (n >= 1e3) return `$${(n / 1e3).toFixed(1)}K`;
+  return `$${n.toFixed(0)}`;
+}
+function retColor(n: number | null | undefined): string {
+  if (n == null) return "text-zinc-400";
+  if (n > 0) return "text-emerald-400";
+  if (n < 0) return "text-red-400";
+  return "text-zinc-400";
+}
+function gradeFromMetrics(m: BacktestMetrics): { grade: string; color: string } {
+  let score = 0;
+  if (m.total_return > 50) score += 25; else if (m.total_return > 20) score += 18; else if (m.total_return > 5) score += 12; else if (m.total_return > 0) score += 6;
+  if (m.sharpe_ratio > 2) score += 30; else if (m.sharpe_ratio > 1.5) score += 24; else if (m.sharpe_ratio > 1) score += 18; else if (m.sharpe_ratio > 0.5) score += 10;
+  if (m.win_rate > 70) score += 25; else if (m.win_rate > 60) score += 20; else if (m.win_rate > 50) score += 14; else if (m.win_rate > 40) score += 8;
+  const dd = Math.abs(m.max_drawdown);
+  if (dd < 10) score += 20; else if (dd < 15) score += 15; else if (dd < 20) score += 10; else if (dd < 30) score += 5;
+  if (score >= 85) return { grade: "A+", color: "text-emerald-400 border-emerald-400/40 bg-emerald-400/10" };
+  if (score >= 75) return { grade: "A",  color: "text-emerald-400 border-emerald-400/40 bg-emerald-400/10" };
+  if (score >= 65) return { grade: "B+", color: "text-[var(--accent-color)] border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10" };
+  if (score >= 55) return { grade: "B",  color: "text-[var(--accent-color)] border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10" };
+  if (score >= 45) return { grade: "B-", color: "text-[var(--accent-color)] border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10" };
+  if (score >= 35) return { grade: "C+", color: "text-amber-400 border-amber-400/40 bg-amber-400/10" };
+  if (score >= 25) return { grade: "C",  color: "text-amber-400 border-amber-400/40 bg-amber-400/10" };
+  return { grade: "F", color: "text-red-400 border-red-400/40 bg-red-400/10" };
+}
+
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StepBar({ step }: { step: Step }) {
   const labels = ["Setup", "Strategy", "Parameters", "Running", "Results"];
@@ -240,14 +363,9 @@ function StepBar({ step }: { step: Step }) {
             }`}>
               {done ? "✓" : n}
             </div>
-            {!active && done ? null : (
-              <span className={`hidden text-xs sm:block ${active ? "text-zinc-200 font-medium" : done ? "text-zinc-500" : "text-zinc-600"}`}>
-                {label}
-              </span>
-            )}
-            {done && !active && (
-              <span className="hidden text-xs text-zinc-500 sm:block">{label}</span>
-            )}
+            <span className={`hidden text-xs sm:block ${active ? "text-zinc-200 font-medium" : done ? "text-zinc-500" : "text-zinc-600"}`}>
+              {label}
+            </span>
             {i < 4 && <div className={`h-px w-6 ${done ? "bg-[var(--accent-color)]/50" : "bg-white/10"}`} />}
           </div>
         );
@@ -255,19 +373,6 @@ function StepBar({ step }: { step: Step }) {
     </div>
   );
 }
-
-// ─── Strategy cards ───────────────────────────────────────────────────────────
-
-const STRATEGIES: { type: StrategyType; name: string; desc: string; icon: string }[] = [
-  { type: "ma_crossover", name: "MA Crossover", desc: "Buy when fast MA crosses above slow MA", icon: "📈" },
-  { type: "rsi", name: "RSI Strategy", desc: "Buy oversold, sell overbought conditions", icon: "📊" },
-  { type: "breakout", name: "Breakout", desc: "Enter on price breakouts with volume confirmation", icon: "🚀" },
-  { type: "options", name: "Options", desc: "Simulate options strategies with Black-Scholes pricing", icon: "⚡" },
-  { type: "portfolio_optimizer", name: "Portfolio Optimizer", desc: "Find optimal weights across multiple assets", icon: "🎯" },
-  { type: "custom", name: "Custom", desc: "Define your own entry/exit conditions", icon: "🔧" },
-];
-
-// ─── Toggle ───────────────────────────────────────────────────────────────────
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -284,11 +389,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   );
 }
 
-// ─── Number input ─────────────────────────────────────────────────────────────
-
-function NumInput({
-  label, value, onChange, min, max, step = 1, suffix,
-}: {
+function NumInput({ label, value, onChange, min, max, step = 1, suffix }: {
   label: string; value: number; onChange: (v: number) => void;
   min?: number; max?: number; step?: number; suffix?: string;
 }) {
@@ -300,9 +401,7 @@ function NumInput({
           type="number"
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          min={min}
-          max={max}
-          step={step}
+          min={min} max={max} step={step}
           className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
         />
         {suffix && <span className="text-xs text-zinc-500">{suffix}</span>}
@@ -311,12 +410,9 @@ function NumInput({
   );
 }
 
-// ─── Typewriter ───────────────────────────────────────────────────────────────
-
 function Typewriter({ text }: { text: string }) {
   const [displayed, setDisplayed] = useState("");
   const idx = useRef(0);
-
   useEffect(() => {
     idx.current = 0;
     setDisplayed("");
@@ -327,11 +423,8 @@ function Typewriter({ text }: { text: string }) {
     }, 12);
     return () => clearInterval(interval);
   }, [text]);
-
   return <span>{displayed}</span>;
 }
-
-// ─── Chart tooltip ────────────────────────────────────────────────────────────
 
 function ChartTooltipContent({ active, payload, label }: { active?: boolean; payload?: { value: number; name: string; color: string }[]; label?: string }) {
   if (!active || !payload?.length) return null;
@@ -355,14 +448,29 @@ export default function BacktestView() {
   const [strategy, setStrategy] = useState<StrategyType>("ma_crossover");
   const [params, setParams] = useState<Params>(DEFAULT_PARAMS);
   const [result, setResult] = useState<BacktestResult | null>(null);
+  const [compareResult, setCompareResult] = useState<BacktestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentPrice, setCurrentPrice] = useState<number | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(false);
   const [statusIdx, setStatusIdx] = useState(0);
   const [progress, setProgress] = useState(0);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [riskOpen, setRiskOpen] = useState(true);
+  const [savedStrategies, setSavedStrategies] = useState<SavedStrategy[]>([]);
+  const [saveModalOpen, setSaveModalOpen] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [showSaved, setShowSaved] = useState(false);
+  const [stratCategory, setStratCategory] = useState<string>("All");
 
-  // ── Live price fetch on ticker blur ──
+  // Load saved strategies from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("bt_saved_strategies");
+      if (raw) setSavedStrategies(JSON.parse(raw) as SavedStrategy[]);
+    } catch { /* ignore */ }
+  }, []);
+
+  // ── Live price fetch ──
   const fetchPrice = useCallback(async (ticker: string) => {
     if (!ticker.trim()) return;
     setLoadingPrice(true);
@@ -370,61 +478,71 @@ export default function BacktestView() {
       const res = await fetch(`/api/backtest/data/price?ticker=${encodeURIComponent(ticker)}&period=5d`);
       if (res.ok) {
         const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          setCurrentPrice(data[data.length - 1].close);
-        }
+        if (Array.isArray(data) && data.length > 0) setCurrentPrice(data[data.length - 1].close);
       }
-    } catch {
-      // ignore
-    } finally {
-      setLoadingPrice(false);
-    }
+    } catch { /* ignore */ } finally { setLoadingPrice(false); }
   }, []);
 
   // ── Loading animation ──
   useEffect(() => {
     if (step !== 4) return;
-    setProgress(0);
-    setStatusIdx(0);
-    const progInterval = setInterval(() => {
-      setProgress((p) => Math.min(p + 0.8, 95));
-    }, 400);
-    const msgInterval = setInterval(() => {
-      setStatusIdx((i) => Math.min(i + 1, STATUS_MESSAGES.length - 1));
-    }, 6000);
-    return () => {
-      clearInterval(progInterval);
-      clearInterval(msgInterval);
-    };
+    setProgress(0); setStatusIdx(0);
+    const progInterval = setInterval(() => setProgress((p) => Math.min(p + 0.8, 95)), 400);
+    const msgInterval = setInterval(() => setStatusIdx((i) => Math.min(i + 1, STATUS_MESSAGES.length - 1)), 6000);
+    return () => { clearInterval(progInterval); clearInterval(msgInterval); };
   }, [step]);
 
-  // ── Submit backtest ──
-  async function runBacktest() {
-    setStep(4);
-    setError(null);
-    setResult(null);
+  // ── Build strategy params for API ──
+  function buildStrategyParams(): Record<string, unknown> {
+    const p = params;
+    switch (strategy) {
+      case "ma_crossover":   return { fast_period: p.fastPeriod, slow_period: p.slowPeriod, ma_type: p.maType };
+      case "rsi":            return { rsi_period: p.rsiPeriod, oversold: p.oversold, overbought: p.overbought };
+      case "breakout":       return { lookback_period: p.lookbackPeriod, volume_confirmation: p.volumeConfirmation, atr_multiplier: p.atrMultiplier };
+      case "macd":           return { fast_period: p.macdFast, slow_period: p.macdSlow, signal_period: p.macdSignal };
+      case "bollinger_bands":return { period: p.bbPeriod, std_dev: p.bbStdDev };
+      case "stochastic":     return { k_period: p.stochK, d_period: p.stochD, overbought: p.stochOverbought, oversold: p.stochOversold };
+      case "cci":            return { period: p.cciPeriod, overbought: p.cciOverbought, oversold: p.cciOversold };
+      case "williams_r":     return { period: p.williamsRPeriod, overbought: p.williamsROverbought, oversold: p.williamsROversold };
+      case "adx":            return { period: p.adxPeriod, threshold: p.adxThreshold };
+      case "parabolic_sar":  return { step: p.sarStep, max_step: p.sarMax };
+      case "ichimoku":       return { tenkan_period: p.ichimokuTenkan, kijun_period: p.ichimokuKijun, senkou_period: p.ichimokuSenkou };
+      case "volume":         return { vwap_period: p.vwapPeriod, obv_ma_period: p.obvMaPeriod };
+      case "orderflow":      return { threshold: p.orderFlowThreshold, vwap_period: p.vwapPeriod };
+      case "options":        return { strategy_type: p.optionStrategy, expiry_days: p.expiryDays, delta_target: p.deltaTarget };
+      default:               return { fast_period: p.fastPeriod, slow_period: p.slowPeriod, ma_type: p.maType };
+    }
+  }
 
+  // ── Run backtest ──
+  async function runBacktest() {
+    setStep(4); setError(null); setResult(null);
     const isPortfolio = strategy === "portfolio_optimizer";
-    const isCustom = strategy === "custom";
 
     const body = isPortfolio
-      ? {
-          tickers: setup.tickers.split(",").map((t) => t.trim().toUpperCase()),
-          start_date: setup.startDate,
-          end_date: setup.endDate,
-        }
+      ? { tickers: setup.tickers.split(",").map((t) => t.trim().toUpperCase()), start_date: setup.startDate, end_date: setup.endDate }
       : {
           ticker: setup.ticker.toUpperCase(),
           start_date: setup.startDate,
           end_date: setup.endDate,
           initial_capital: setup.initialCapital,
-          strategy_type: isCustom ? "ma_crossover" : strategy,
+          strategy_type: strategy === "custom" ? "ma_crossover" : strategy,
           commission: setup.commission / 100,
+          slippage: setup.slippage / 10000,
+          timeframe: setup.timeframe,
+          direction: setup.direction,
+          leverage: setup.leverage,
+          position_sizing_type: setup.positionSizingType,
+          fixed_dollar_size: setup.fixedDollarSize,
           position_size: params.positionSize,
           use_stop_loss: params.useStopLoss,
+          stop_loss_type: params.stopLossType,
           stop_loss_pct: params.stopLossPct / 100,
+          stop_loss_atr_multiplier: params.stopLossAtrMultiplier,
           use_take_profit: params.useTakeProfit,
           take_profit_pct: params.takeProfitPct / 100,
+          use_multiple_tp: params.useMultipleTP,
+          take_profit_targets: params.takeProfitTargets,
           walk_forward: params.walkForward,
           monte_carlo: params.monteCarlo,
           monte_carlo_runs: params.monteCarloRuns,
@@ -434,17 +552,9 @@ export default function BacktestView() {
     const endpoint = isPortfolio ? "/api/backtest/optimize" : "/api/backtest/run";
 
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok || data.error) {
-        setError(data.error ?? "Backtest failed");
-        setStep(3);
-        return;
-      }
+      if (!res.ok || data.error) { setError(data.error ?? "Backtest failed"); setStep(3); return; }
       setResult(data);
       setProgress(100);
       setTimeout(() => setStep(5), 300);
@@ -454,148 +564,254 @@ export default function BacktestView() {
     }
   }
 
-  function buildStrategyParams(): Record<string, unknown> {
-    if (strategy === "ma_crossover") {
-      return { fast_period: params.fastPeriod, slow_period: params.slowPeriod, ma_type: params.maType };
-    }
-    if (strategy === "rsi") {
-      return { rsi_period: params.rsiPeriod, oversold: params.oversold, overbought: params.overbought };
-    }
-    if (strategy === "breakout") {
-      return {
-        lookback_period: params.lookbackPeriod,
-        volume_confirmation: params.volumeConfirmation,
-        atr_multiplier: params.atrMultiplier,
-      };
-    }
-    if (strategy === "options") {
-      return {
-        strategy_type: params.optionStrategy,
-        expiry_days: params.expiryDays,
-        delta_target: params.deltaTarget,
-      };
-    }
-    return {};
+  // ── Save strategy ──
+  function saveStrategy() {
+    if (!saveName.trim() || !result) return;
+    const entry: SavedStrategy = {
+      id: Date.now().toString(),
+      name: saveName.trim(),
+      strategyType: strategy,
+      setup,
+      params,
+      result,
+      savedAt: new Date().toISOString(),
+    };
+    const updated = [entry, ...savedStrategies].slice(0, 20);
+    setSavedStrategies(updated);
+    try { localStorage.setItem("bt_saved_strategies", JSON.stringify(updated)); } catch { /* ignore */ }
+    setSaveModalOpen(false);
+    setSaveName("");
   }
 
-  function exportResults() {
+  // ── Load saved strategy ──
+  function loadSaved(s: SavedStrategy) {
+    setStrategy(s.strategyType);
+    setSetup(s.setup);
+    setParams(s.params);
+    setResult(s.result);
+    setShowSaved(false);
+    if (s.result) setStep(5); else setStep(1);
+  }
+
+  function deleteSaved(id: string) {
+    const updated = savedStrategies.filter((s) => s.id !== id);
+    setSavedStrategies(updated);
+    try { localStorage.setItem("bt_saved_strategies", JSON.stringify(updated)); } catch { /* ignore */ }
+  }
+
+  // ── Export CSV ──
+  function exportCSV() {
+    if (!result?.metrics.trades?.length) return;
+    const headers = ["Entry Date","Exit Date","Entry Price","Exit Price","Return %","Hold Days","Direction"];
+    const rows = result.metrics.trades.map((t) =>
+      [t.entry_date, t.exit_date, t.entry_price, t.exit_price, t.return_pct.toFixed(2), t.hold_days, t.direction ?? "long"].join(",")
+    );
+    const csv = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `backtest_${result.ticker}_${result.strategy_type}_trades.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Export JSON ──
+  function exportJSON() {
     if (!result) return;
     const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `backtest_${result.ticker}_${result.strategy_type}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `backtest_${result.ticker}_${result.strategy_type}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
-  // ─── Step 1: Setup ─────────────────────────────────────────────────────────
+  // ─── Step 1: Setup ──────────────────────────────────────────────────────────
 
   function renderStep1() {
     return (
       <div className="space-y-6">
-        <div>
-          <h2 className="text-base font-semibold text-zinc-100">Strategy Setup</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">Configure your backtest parameters.</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-zinc-100">Strategy Setup</h2>
+            <p className="mt-0.5 text-xs text-zinc-500">Configure instrument, dates, and execution model.</p>
+          </div>
+          {savedStrategies.length > 0 && (
+            <button
+              onClick={() => setShowSaved(!showSaved)}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-400 hover:bg-white/10 transition"
+            >
+              📂 Saved ({savedStrategies.length})
+            </button>
+          )}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {/* Ticker */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-400">Ticker Symbol</label>
-            <div className="relative">
-              <input
-                type="text"
-                value={setup.ticker}
-                onChange={(e) => setSetup({ ...setup, ticker: e.target.value.toUpperCase() })}
-                onBlur={() => fetchPrice(setup.ticker)}
-                placeholder="AAPL"
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 pr-20 text-sm text-zinc-200 uppercase focus:border-[var(--accent-color)]/50 focus:outline-none"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">
-                {loadingPrice ? "…" : currentPrice ? `$${currentPrice.toFixed(2)}` : ""}
-              </span>
+        {showSaved && (
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Saved Strategies</p>
+            {savedStrategies.map((s) => (
+              <div key={s.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 px-3 py-2">
+                <div>
+                  <p className="text-sm text-zinc-200">{s.name}</p>
+                  <p className="text-[10px] text-zinc-500">{s.strategyType} · {s.setup.ticker} · saved {new Date(s.savedAt).toLocaleDateString()}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => loadSaved(s)} className="rounded border border-[var(--accent-color)]/30 px-2 py-1 text-[10px] text-[var(--accent-color)] hover:bg-[var(--accent-color)]/10 transition">Load</button>
+                  <button onClick={() => deleteSaved(s.id)} className="rounded border border-red-500/30 px-2 py-1 text-[10px] text-red-400 hover:bg-red-500/10 transition">Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Instrument */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Instrument</p>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-400">Ticker Symbol</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={setup.ticker}
+                  onChange={(e) => setSetup({ ...setup, ticker: e.target.value.toUpperCase() })}
+                  onBlur={() => fetchPrice(setup.ticker)}
+                  placeholder="AAPL"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 pr-20 text-sm text-zinc-200 uppercase focus:border-[var(--accent-color)]/50 focus:outline-none"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">
+                  {loadingPrice ? "…" : currentPrice ? `$${currentPrice.toFixed(2)}` : ""}
+                </span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-400">Asset Type</label>
+              <select value={setup.assetType} onChange={(e) => setSetup({ ...setup, assetType: e.target.value })}
+                className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none">
+                <option value="stock">Stock / Equity</option>
+                <option value="etf">ETF</option>
+                <option value="crypto">Crypto</option>
+                <option value="index">Index</option>
+                <option value="forex">Forex</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-400">Timeframe</label>
+              <select value={setup.timeframe} onChange={(e) => setSetup({ ...setup, timeframe: e.target.value })}
+                className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none">
+                {TIMEFRAMES.map((tf) => <option key={tf.value} value={tf.value}>{tf.label}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Dates */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Date Range</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-400">Start Date</label>
+              <input type="date" value={setup.startDate} onChange={(e) => setSetup({ ...setup, startDate: e.target.value })}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none [color-scheme:dark]" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-400">End Date</label>
+              <input type="date" value={setup.endDate} onChange={(e) => setSetup({ ...setup, endDate: e.target.value })}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none [color-scheme:dark]" />
+            </div>
+          </div>
+        </div>
+
+        {/* Capital & Direction */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Capital & Execution</p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-400">Initial Capital</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
+                <input type="number" value={setup.initialCapital} onChange={(e) => setSetup({ ...setup, initialCapital: Number(e.target.value) })} min={100} step={1000}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-7 pr-3 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none" />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-400">Direction</label>
+              <select value={setup.direction} onChange={(e) => setSetup({ ...setup, direction: e.target.value as Setup["direction"] })}
+                className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none">
+                <option value="long">Long Only</option>
+                <option value="short">Short Only</option>
+                <option value="both">Long & Short</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-400">Leverage</label>
+              <div className="relative">
+                <input type="number" value={setup.leverage} onChange={(e) => setSetup({ ...setup, leverage: Math.max(1, Number(e.target.value)) })} min={1} max={20} step={0.5}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 pr-7 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">×</span>
+              </div>
             </div>
           </div>
 
-          {/* Asset type auto-label */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-400">Asset Type</label>
-            <select
-              value={setup.assetType}
-              onChange={(e) => setSetup({ ...setup, assetType: e.target.value })}
-              className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
-            >
-              <option value="stock">Stock / Equity</option>
-              <option value="etf">ETF</option>
-              <option value="crypto">Crypto</option>
-              <option value="index">Index</option>
-              <option value="forex">Forex</option>
-            </select>
-          </div>
-
-          {/* Start date */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-400">Start Date</label>
-            <input
-              type="date"
-              value={setup.startDate}
-              onChange={(e) => setSetup({ ...setup, startDate: e.target.value })}
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none [color-scheme:dark]"
-            />
-          </div>
-
-          {/* End date */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-400">End Date</label>
-            <input
-              type="date"
-              value={setup.endDate}
-              onChange={(e) => setSetup({ ...setup, endDate: e.target.value })}
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none [color-scheme:dark]"
-            />
-          </div>
-
-          {/* Capital */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-400">Initial Capital</label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
-              <input
-                type="number"
-                value={setup.initialCapital}
-                onChange={(e) => setSetup({ ...setup, initialCapital: Number(e.target.value) })}
-                min={100}
-                step={1000}
-                className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-7 pr-3 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
-              />
+          {/* Position sizing */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-400">Position Sizing</label>
+              <select value={setup.positionSizingType} onChange={(e) => setSetup({ ...setup, positionSizingType: e.target.value as Setup["positionSizingType"] })}
+                className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none">
+                <option value="pct">% of Portfolio</option>
+                <option value="fixed_dollar">Fixed Dollar Amount</option>
+                <option value="kelly">Kelly Criterion</option>
+              </select>
             </div>
+            {setup.positionSizingType === "pct" && (
+              <NumInput label="Position Size %" value={Math.round(params.positionSize * 100)}
+                onChange={(v) => setParams({ ...params, positionSize: v / 100 })} min={5} max={100} step={5} suffix="%" />
+            )}
+            {setup.positionSizingType === "fixed_dollar" && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-zinc-400">Fixed $ Per Trade</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500">$</span>
+                  <input type="number" value={setup.fixedDollarSize} onChange={(e) => setSetup({ ...setup, fixedDollarSize: Number(e.target.value) })} min={100} step={100}
+                    className="w-full rounded-lg border border-white/10 bg-white/5 py-2 pl-7 pr-3 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none" />
+                </div>
+              </div>
+            )}
+            {setup.positionSizingType === "kelly" && (
+              <p className="flex items-end text-xs text-zinc-500 pb-2">Kelly fraction calculated from win rate and avg win/loss of the selected strategy.</p>
+            )}
           </div>
+        </div>
 
-          {/* Commission */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-zinc-400">Commission per Trade</label>
-            <div className="relative">
-              <input
-                type="number"
-                value={setup.commission}
-                onChange={(e) => setSetup({ ...setup, commission: Number(e.target.value) })}
-                min={0}
-                max={5}
-                step={0.01}
-                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 pr-7 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">%</span>
+        {/* Cost modeling */}
+        <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Cost Modeling</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-400">Commission per Trade</label>
+              <div className="relative">
+                <input type="number" value={setup.commission} onChange={(e) => setSetup({ ...setup, commission: Number(e.target.value) })} min={0} max={5} step={0.01}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 pr-7 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">%</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-zinc-400">Slippage</label>
+              <div className="relative">
+                <input type="number" value={setup.slippage} onChange={(e) => setSetup({ ...setup, slippage: Number(e.target.value) })} min={0} max={100} step={1}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 pr-10 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">bps</span>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="flex justify-end">
-          <button
-            onClick={() => setStep(2)}
-            disabled={!setup.ticker.trim()}
-            className="rounded-lg bg-[var(--accent-color)] px-5 py-2 text-sm font-semibold text-[#020308] transition hover:opacity-90 disabled:opacity-40"
-          >
+          <button onClick={() => setStep(2)} disabled={!setup.ticker.trim()}
+            className="rounded-lg bg-[var(--accent-color)] px-5 py-2 text-sm font-semibold text-[#020308] transition hover:opacity-90 disabled:opacity-40">
             Continue →
           </button>
         </div>
@@ -603,95 +819,106 @@ export default function BacktestView() {
     );
   }
 
-  // ─── Step 2: Strategy selection ────────────────────────────────────────────
+  // ─── Step 2: Strategy ───────────────────────────────────────────────────────
 
   function renderStep2() {
+    const categories = ["All", ...Array.from(new Set(STRATEGIES.map((s) => s.category)))];
+    const filtered = stratCategory === "All" ? STRATEGIES : STRATEGIES.filter((s) => s.category === stratCategory);
     return (
       <div className="space-y-6">
         <div>
           <h2 className="text-base font-semibold text-zinc-100">Select Strategy</h2>
-          <p className="mt-0.5 text-xs text-zinc-500">Choose the trading strategy to backtest.</p>
+          <p className="mt-0.5 text-xs text-zinc-500">Choose the trading logic to backtest.</p>
+        </div>
+
+        {/* Category filter */}
+        <div className="flex flex-wrap gap-2">
+          {categories.map((cat) => (
+            <button key={cat} onClick={() => setStratCategory(cat)}
+              className={`rounded-full border px-3 py-1 text-xs transition ${
+                stratCategory === cat ? "border-[var(--accent-color)]/60 bg-[var(--accent-color)]/10 text-[var(--accent-color)]" : "border-white/10 text-zinc-500 hover:border-white/20 hover:text-zinc-300"
+              }`}>
+              {cat}
+            </button>
+          ))}
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {STRATEGIES.map((s) => (
-            <button
-              key={s.type}
-              onClick={() => setStrategy(s.type)}
+          {filtered.map((s) => (
+            <button key={s.type} onClick={() => setStrategy(s.type)}
               className={`flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition hover:border-[var(--accent-color)]/40 ${
-                strategy === s.type
-                  ? "border-[var(--accent-color)]/60 bg-[var(--accent-color)]/5"
-                  : "border-white/10 bg-white/5"
-              }`}
-            >
-              <span className="text-2xl">{s.icon}</span>
+                strategy === s.type ? "border-[var(--accent-color)]/60 bg-[var(--accent-color)]/5" : "border-white/10 bg-white/5"
+              }`}>
+              <div className="flex w-full items-center justify-between">
+                <span className="text-xl">{s.icon}</span>
+                <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[9px] text-zinc-500">{s.category}</span>
+              </div>
               <div>
-                <p className={`text-sm font-semibold ${strategy === s.type ? "text-[var(--accent-color)]" : "text-zinc-200"}`}>
-                  {s.name}
-                </p>
+                <p className={`text-sm font-semibold ${strategy === s.type ? "text-[var(--accent-color)]" : "text-zinc-200"}`}>{s.name}</p>
                 <p className="mt-0.5 text-xs text-zinc-500 leading-relaxed">{s.desc}</p>
               </div>
               {strategy === s.type && (
-                <span className="text-[10px] font-bold text-[var(--accent-color)] border border-[var(--accent-color)]/30 rounded-full px-2 py-0.5">
-                  SELECTED
-                </span>
+                <span className="text-[10px] font-bold text-[var(--accent-color)] border border-[var(--accent-color)]/30 rounded-full px-2 py-0.5">SELECTED</span>
               )}
             </button>
           ))}
         </div>
 
+        {/* Portfolio tickers / presets */}
         {strategy === "portfolio_optimizer" && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-            <label className="text-xs text-zinc-400">Tickers (comma-separated)</label>
-            <input
-              type="text"
-              value={setup.tickers}
-              onChange={(e) => setSetup({ ...setup, tickers: e.target.value.toUpperCase() })}
+          <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Portfolio Tickers</p>
+            <div className="flex flex-wrap gap-2">
+              {TICKER_PRESETS.map((preset) => (
+                <button key={preset.label} onClick={() => setSetup({ ...setup, tickers: preset.tickers })}
+                  className="rounded-full border border-white/10 px-3 py-1 text-xs text-zinc-400 hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)] transition">
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <input type="text" value={setup.tickers} onChange={(e) => setSetup({ ...setup, tickers: e.target.value.toUpperCase() })}
               placeholder="AAPL, MSFT, GOOGL, AMZN"
-              className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
-            />
-            <p className="mt-1 text-xs text-zinc-600">Enter 2–10 tickers to find optimal allocation weights.</p>
+              className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none" />
+            <p className="text-xs text-zinc-600">Enter 2–10 tickers. Modern portfolio theory finds optimal allocation weights.</p>
+          </div>
+        )}
+
+        {strategy === "orderflow" && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+            <p className="text-xs text-amber-400 font-medium">OHLCV-based proxies</p>
+            <p className="text-xs text-zinc-500 mt-0.5">True Level 2 tape data is unavailable for backtesting. This strategy approximates order flow using volume delta, CVD, and VWAP deviation derived from daily/hourly OHLCV candles.</p>
           </div>
         )}
 
         <div className="flex items-center justify-between">
-          <button onClick={() => setStep(1)} className="text-xs text-zinc-500 hover:text-zinc-300 transition">
-            ← Back
-          </button>
-          <button
-            onClick={() => setStep(3)}
-            className="rounded-lg bg-[var(--accent-color)] px-5 py-2 text-sm font-semibold text-[#020308] transition hover:opacity-90"
-          >
-            Continue →
-          </button>
+          <button onClick={() => setStep(1)} className="text-xs text-zinc-500 hover:text-zinc-300 transition">← Back</button>
+          <button onClick={() => setStep(3)} className="rounded-lg bg-[var(--accent-color)] px-5 py-2 text-sm font-semibold text-[#020308] transition hover:opacity-90">Continue →</button>
         </div>
       </div>
     );
   }
 
-  // ─── Step 3: Parameters ────────────────────────────────────────────────────
+  // ─── Step 3: Parameters ─────────────────────────────────────────────────────
 
   function renderStep3() {
     const p = params;
     const set = (updates: Partial<Params>) => setParams({ ...p, ...updates });
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-5">
         <div>
           <h2 className="text-base font-semibold text-zinc-100">Strategy Parameters</h2>
           <p className="mt-0.5 text-xs text-zinc-500">Fine-tune your strategy settings.</p>
         </div>
 
         {error && (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-            {error}
-          </div>
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>
         )}
 
         {/* Strategy-specific params */}
         <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-4">
           <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">
-            {STRATEGIES.find((s) => s.type === strategy)?.name ?? strategy} Parameters
+            {STRATEGIES.find((s) => s.type === strategy)?.name} Parameters
           </p>
 
           {strategy === "ma_crossover" && (
@@ -700,13 +927,13 @@ export default function BacktestView() {
               <NumInput label="Slow Period" value={p.slowPeriod} onChange={(v) => set({ slowPeriod: v })} min={10} max={200} />
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-zinc-400">MA Type</label>
-                <select
-                  value={p.maType}
-                  onChange={(e) => set({ maType: e.target.value as "sma" | "ema" })}
-                  className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
-                >
+                <select value={p.maType} onChange={(e) => set({ maType: e.target.value as Params["maType"] })}
+                  className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none">
                   <option value="sma">SMA</option>
                   <option value="ema">EMA</option>
+                  <option value="wma">WMA</option>
+                  <option value="dema">DEMA</option>
+                  <option value="tema">TEMA</option>
                 </select>
               </div>
             </div>
@@ -717,6 +944,82 @@ export default function BacktestView() {
               <NumInput label="RSI Period" value={p.rsiPeriod} onChange={(v) => set({ rsiPeriod: v })} min={5} max={30} />
               <NumInput label="Oversold Level" value={p.oversold} onChange={(v) => set({ oversold: v })} min={20} max={40} />
               <NumInput label="Overbought Level" value={p.overbought} onChange={(v) => set({ overbought: v })} min={60} max={80} />
+            </div>
+          )}
+
+          {strategy === "macd" && (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <NumInput label="Fast Period" value={p.macdFast} onChange={(v) => set({ macdFast: v })} min={5} max={50} />
+              <NumInput label="Slow Period" value={p.macdSlow} onChange={(v) => set({ macdSlow: v })} min={10} max={100} />
+              <NumInput label="Signal Period" value={p.macdSignal} onChange={(v) => set({ macdSignal: v })} min={3} max={20} />
+            </div>
+          )}
+
+          {strategy === "bollinger_bands" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <NumInput label="Period" value={p.bbPeriod} onChange={(v) => set({ bbPeriod: v })} min={5} max={50} />
+              <NumInput label="Std Deviation" value={p.bbStdDev} onChange={(v) => set({ bbStdDev: v })} min={1} max={4} step={0.1} />
+            </div>
+          )}
+
+          {strategy === "stochastic" && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <NumInput label="%K Period" value={p.stochK} onChange={(v) => set({ stochK: v })} min={5} max={30} />
+              <NumInput label="%D Smoothing" value={p.stochD} onChange={(v) => set({ stochD: v })} min={1} max={10} />
+              <NumInput label="Overbought" value={p.stochOverbought} onChange={(v) => set({ stochOverbought: v })} min={70} max={90} />
+              <NumInput label="Oversold" value={p.stochOversold} onChange={(v) => set({ stochOversold: v })} min={10} max={30} />
+            </div>
+          )}
+
+          {strategy === "cci" && (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <NumInput label="Period" value={p.cciPeriod} onChange={(v) => set({ cciPeriod: v })} min={10} max={50} />
+              <NumInput label="Overbought" value={p.cciOverbought} onChange={(v) => set({ cciOverbought: v })} min={80} max={200} />
+              <NumInput label="Oversold" value={p.cciOversold} onChange={(v) => set({ cciOversold: v })} min={-200} max={-80} />
+            </div>
+          )}
+
+          {strategy === "williams_r" && (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <NumInput label="Period" value={p.williamsRPeriod} onChange={(v) => set({ williamsRPeriod: v })} min={5} max={30} />
+              <NumInput label="Overbought" value={p.williamsROverbought} onChange={(v) => set({ williamsROverbought: v })} min={-30} max={-5} />
+              <NumInput label="Oversold" value={p.williamsROversold} onChange={(v) => set({ williamsROversold: v })} min={-95} max={-70} />
+            </div>
+          )}
+
+          {strategy === "adx" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <NumInput label="ADX Period" value={p.adxPeriod} onChange={(v) => set({ adxPeriod: v })} min={7} max={30} />
+              <NumInput label="ADX Threshold" value={p.adxThreshold} onChange={(v) => set({ adxThreshold: v })} min={15} max={50} />
+            </div>
+          )}
+
+          {strategy === "parabolic_sar" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <NumInput label="Acceleration Step" value={p.sarStep} onChange={(v) => set({ sarStep: v })} min={0.01} max={0.1} step={0.01} />
+              <NumInput label="Max Acceleration" value={p.sarMax} onChange={(v) => set({ sarMax: v })} min={0.1} max={0.5} step={0.05} />
+            </div>
+          )}
+
+          {strategy === "ichimoku" && (
+            <div className="grid gap-4 sm:grid-cols-3">
+              <NumInput label="Tenkan (Conversion)" value={p.ichimokuTenkan} onChange={(v) => set({ ichimokuTenkan: v })} min={5} max={20} />
+              <NumInput label="Kijun (Base)" value={p.ichimokuKijun} onChange={(v) => set({ ichimokuKijun: v })} min={20} max={60} />
+              <NumInput label="Senkou Span B" value={p.ichimokuSenkou} onChange={(v) => set({ ichimokuSenkou: v })} min={40} max={100} />
+            </div>
+          )}
+
+          {strategy === "volume" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <NumInput label="VWAP Lookback Period" value={p.vwapPeriod} onChange={(v) => set({ vwapPeriod: v })} min={5} max={50} />
+              <NumInput label="OBV MA Period" value={p.obvMaPeriod} onChange={(v) => set({ obvMaPeriod: v })} min={5} max={50} />
+            </div>
+          )}
+
+          {strategy === "orderflow" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <NumInput label="Volume Delta Threshold" value={p.orderFlowThreshold} onChange={(v) => set({ orderFlowThreshold: v })} min={0.1} max={1} step={0.05} />
+              <NumInput label="VWAP Period" value={p.vwapPeriod} onChange={(v) => set({ vwapPeriod: v })} min={5} max={50} />
             </div>
           )}
 
@@ -738,17 +1041,16 @@ export default function BacktestView() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-zinc-400">Options Strategy</label>
-                <select
-                  value={p.optionStrategy}
-                  onChange={(e) => set({ optionStrategy: e.target.value })}
-                  className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
-                >
+                <select value={p.optionStrategy} onChange={(e) => set({ optionStrategy: e.target.value })}
+                  className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none">
                   <option value="covered_call">Covered Call</option>
                   <option value="cash_secured_put">Cash Secured Put</option>
                   <option value="bull_call_spread">Bull Call Spread</option>
                   <option value="bear_put_spread">Bear Put Spread</option>
                   <option value="iron_condor">Iron Condor</option>
                   <option value="straddle">Straddle</option>
+                  <option value="strangle">Strangle</option>
+                  <option value="butterfly">Butterfly Spread</option>
                 </select>
               </div>
               <NumInput label="Expiry Days" value={p.expiryDays} onChange={(v) => set({ expiryDays: v })} min={7} max={180} />
@@ -757,97 +1059,147 @@ export default function BacktestView() {
           )}
 
           {strategy === "portfolio_optimizer" && (
-            <p className="text-xs text-zinc-500">
-              Portfolio optimization uses modern portfolio theory to find efficient allocations. No additional parameters needed — configure your tickers in Step 2.
-            </p>
+            <p className="text-xs text-zinc-500">Portfolio optimization uses modern portfolio theory. Configure your tickers in Step 2.</p>
           )}
 
           {strategy === "custom" && (
-            <p className="text-xs text-zinc-500">
-              Custom strategies currently use MA Crossover as the execution engine. Full custom condition building coming soon.
-            </p>
+            <p className="text-xs text-zinc-500">Custom strategies use MA Crossover as the execution engine. Full condition builder coming soon.</p>
           )}
         </div>
 
         {/* Risk management */}
         {strategy !== "portfolio_optimizer" && (
-          <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Risk Management</p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs text-zinc-400">Stop Loss</label>
-                  <Toggle value={p.useStopLoss} onChange={(v) => set({ useStopLoss: v })} />
+          <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+            <button onClick={() => setRiskOpen(!riskOpen)} className="flex w-full items-center justify-between p-4 text-left">
+              <span className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Risk Management</span>
+              <svg className={`h-4 w-4 text-zinc-500 transition-transform ${riskOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {riskOpen && (
+              <div className="border-t border-white/10 p-4 space-y-5">
+                {/* Stop Loss */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-zinc-300 font-medium">Stop Loss</label>
+                    <Toggle value={p.useStopLoss} onChange={(v) => set({ useStopLoss: v })} />
+                  </div>
+                  {p.useStopLoss && (
+                    <div className="space-y-3 pl-2 border-l border-white/10">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-xs text-zinc-400">Stop Loss Type</label>
+                        <select value={p.stopLossType} onChange={(e) => set({ stopLossType: e.target.value as Params["stopLossType"] })}
+                          className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none">
+                          <option value="fixed">Fixed %</option>
+                          <option value="trailing">Trailing %</option>
+                          <option value="atr">ATR-Based</option>
+                        </select>
+                      </div>
+                      {(p.stopLossType === "fixed" || p.stopLossType === "trailing") && (
+                        <NumInput label={p.stopLossType === "trailing" ? "Trailing Stop %" : "Stop Loss %"} value={p.stopLossPct}
+                          onChange={(v) => set({ stopLossPct: v })} min={0.5} max={50} step={0.5} suffix="%" />
+                      )}
+                      {p.stopLossType === "atr" && (
+                        <NumInput label="ATR Multiplier" value={p.stopLossAtrMultiplier}
+                          onChange={(v) => set({ stopLossAtrMultiplier: v })} min={0.5} max={8} step={0.25} />
+                      )}
+                    </div>
+                  )}
                 </div>
-                {p.useStopLoss && (
-                  <NumInput label="Stop Loss %" value={p.stopLossPct} onChange={(v) => set({ stopLossPct: v })} min={0.5} max={50} step={0.5} suffix="%" />
-                )}
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs text-zinc-400">Take Profit</label>
-                  <Toggle value={p.useTakeProfit} onChange={(v) => set({ useTakeProfit: v })} />
+
+                {/* Take Profit */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs text-zinc-300 font-medium">Take Profit</label>
+                    <Toggle value={p.useTakeProfit} onChange={(v) => set({ useTakeProfit: v })} />
+                  </div>
+                  {p.useTakeProfit && (
+                    <div className="space-y-3 pl-2 border-l border-white/10">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-400">Multiple Targets</span>
+                        <Toggle value={p.useMultipleTP} onChange={(v) => set({ useMultipleTP: v })} />
+                      </div>
+                      {!p.useMultipleTP && (
+                        <NumInput label="Take Profit %" value={p.takeProfitPct} onChange={(v) => set({ takeProfitPct: v })} min={1} max={500} step={1} suffix="%" />
+                      )}
+                      {p.useMultipleTP && (
+                        <div className="space-y-2">
+                          <p className="text-[10px] text-zinc-600">Target % / Size to exit (sizes must total 100%)</p>
+                          {p.takeProfitTargets.map((t, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                              <input type="number" value={t.pct} onChange={(e) => {
+                                const tgts = [...p.takeProfitTargets];
+                                tgts[i] = { ...t, pct: Number(e.target.value) };
+                                set({ takeProfitTargets: tgts });
+                              }} min={1} placeholder="%" className="w-20 rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-200" />
+                              <span className="text-xs text-zinc-600">%</span>
+                              <input type="number" value={t.size} onChange={(e) => {
+                                const tgts = [...p.takeProfitTargets];
+                                tgts[i] = { ...t, size: Number(e.target.value) };
+                                set({ takeProfitTargets: tgts });
+                              }} min={1} max={100} placeholder="size%" className="w-20 rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-200" />
+                              <span className="text-xs text-zinc-600">% exit</span>
+                              {p.takeProfitTargets.length > 1 && (
+                                <button onClick={() => set({ takeProfitTargets: p.takeProfitTargets.filter((_, j) => j !== i) })}
+                                  className="text-xs text-red-400 hover:text-red-300">✕</button>
+                              )}
+                            </div>
+                          ))}
+                          {p.takeProfitTargets.length < 5 && (
+                            <button onClick={() => set({ takeProfitTargets: [...p.takeProfitTargets, { pct: 15, size: 25 }] })}
+                              className="text-xs text-[var(--accent-color)] hover:opacity-80">+ Add target</button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {p.useTakeProfit && (
-                  <NumInput label="Take Profit %" value={p.takeProfitPct} onChange={(v) => set({ takeProfitPct: v })} min={1} max={200} step={1} suffix="%" />
-                )}
               </div>
-            </div>
+            )}
           </div>
         )}
 
-        {/* Advanced options */}
+        {/* Advanced */}
         <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
-          <button
-            onClick={() => setAdvancedOpen(!advancedOpen)}
-            className="flex w-full items-center justify-between p-4 text-left"
-          >
+          <button onClick={() => setAdvancedOpen(!advancedOpen)} className="flex w-full items-center justify-between p-4 text-left">
             <span className="text-xs font-semibold uppercase tracking-widest text-zinc-500">Advanced Options</span>
-            <svg
-              className={`h-4 w-4 text-zinc-500 transition-transform ${advancedOpen ? "rotate-180" : ""}`}
-              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-            >
+            <svg className={`h-4 w-4 text-zinc-500 transition-transform ${advancedOpen ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
           {advancedOpen && (
             <div className="border-t border-white/10 p-4 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs text-zinc-300">Walk-Forward Analysis</p>
-                      <p className="text-[10px] text-zinc-600">Tests for overfitting using in/out-of-sample windows</p>
+                      <p className="text-[10px] text-zinc-600">In/out-of-sample overfitting detection</p>
                     </div>
                     <Toggle value={p.walkForward} onChange={(v) => set({ walkForward: v })} />
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-xs text-zinc-300">Monte Carlo Simulation</p>
-                      <p className="text-[10px] text-zinc-600">Resample trade returns to estimate outcome distribution</p>
+                      <p className="text-[10px] text-zinc-600">Resample trades to estimate outcome range</p>
                     </div>
                     <Toggle value={p.monteCarlo} onChange={(v) => set({ monteCarlo: v })} />
                   </div>
                   {p.monteCarlo && (
-                    <NumInput label="Simulation Runs" value={p.monteCarloRuns} onChange={(v) => set({ monteCarloRuns: Math.min(5000, Math.max(100, v)) })} min={100} max={5000} step={100} />
+                    <NumInput label="Simulation Runs" value={p.monteCarloRuns}
+                      onChange={(v) => set({ monteCarloRuns: Math.min(5000, Math.max(100, v)) })} min={100} max={5000} step={100} />
                   )}
                 </div>
               </div>
-              <NumInput label="Position Size (% of capital)" value={Math.round(p.positionSize * 100)} onChange={(v) => set({ positionSize: v / 100 })} min={10} max={100} step={5} suffix="%" />
             </div>
           )}
         </div>
 
         <div className="flex items-center justify-between">
-          <button onClick={() => setStep(2)} className="text-xs text-zinc-500 hover:text-zinc-300 transition">
-            ← Back
-          </button>
-          <button
-            onClick={runBacktest}
-            className="rounded-lg bg-[var(--accent-color)] px-6 py-2 text-sm font-semibold text-[#020308] transition hover:opacity-90"
-          >
+          <button onClick={() => setStep(2)} className="text-xs text-zinc-500 hover:text-zinc-300 transition">← Back</button>
+          <button onClick={runBacktest} className="rounded-lg bg-[var(--accent-color)] px-6 py-2 text-sm font-semibold text-[#020308] transition hover:opacity-90">
             Run Backtest →
           </button>
         </div>
@@ -855,24 +1207,19 @@ export default function BacktestView() {
     );
   }
 
-  // ─── Step 4: Loading ───────────────────────────────────────────────────────
+  // ─── Step 4: Loading ────────────────────────────────────────────────────────
 
   function renderStep4() {
     return (
       <div className="flex flex-col items-center justify-center gap-8 py-20">
         <div className="relative">
           <div className="h-20 w-20 rounded-full border-2 border-[var(--accent-color)]/20 border-t-[var(--accent-color)] animate-spin" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-2xl">📊</span>
-          </div>
+          <div className="absolute inset-0 flex items-center justify-center"><span className="text-2xl">📊</span></div>
         </div>
         <div className="w-full max-w-sm space-y-3 text-center">
           <p className="text-sm font-medium text-zinc-200">{STATUS_MESSAGES[statusIdx]}</p>
           <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-[var(--accent-color)] transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
+            <div className="h-full rounded-full bg-[var(--accent-color)] transition-all duration-500" style={{ width: `${progress}%` }} />
           </div>
           <p className="text-xs text-zinc-600">{Math.round(progress)}% complete</p>
         </div>
@@ -883,27 +1230,22 @@ export default function BacktestView() {
     );
   }
 
-  // ─── Step 5: Results ───────────────────────────────────────────────────────
+  // ─── Step 5: Results ────────────────────────────────────────────────────────
 
   function renderStep5() {
     if (!result) return null;
     const m = result.metrics;
     const { grade, color: gradeColor } = gradeFromMetrics(m);
 
-    // Drawdown reference areas (consecutive negative periods)
+    // Drawdown reference areas
     const ddAreas: { x1: string; x2: string }[] = [];
-    if (m.equity_curve?.length) {
-      let ddStart: string | null = null;
-      m.drawdown_curve?.forEach((d) => {
-        if (d.drawdown < -2 && !ddStart) ddStart = d.date;
-        if (d.drawdown >= -2 && ddStart) {
-          ddAreas.push({ x1: ddStart, x2: d.date });
-          ddStart = null;
-        }
-      });
-    }
+    let ddStart: string | null = null;
+    m.drawdown_curve?.forEach((d) => {
+      if (d.drawdown < -2 && !ddStart) ddStart = d.date;
+      if (d.drawdown >= -2 && ddStart) { ddAreas.push({ x1: ddStart, x2: d.date }); ddStart = null; }
+    });
 
-    // Monthly returns grid
+    // Monthly heatmap
     const monthlyYears: Record<string, Record<number, number>> = {};
     Object.entries(m.monthly_returns ?? {}).forEach(([key, val]) => {
       const [year, mon] = key.split("-");
@@ -912,56 +1254,85 @@ export default function BacktestView() {
     });
     const years = Object.keys(monthlyYears).sort();
 
-    // Build benchmark merge for chart
-    const chartData = (m.equity_curve ?? []).map((pt) => ({
-      date: pt.date,
-      Portfolio: pt.value,
-    }));
+    const chartData = (m.equity_curve ?? []).map((pt) => ({ date: pt.date, Portfolio: pt.value }));
+    const compareChartData = compareResult?.metrics.equity_curve?.map((pt) => ({ date: pt.date, Compare: pt.value })) ?? [];
 
-    // Monte Carlo chart data
+    // Merge compare overlay
+    const mergedChart = chartData.map((pt) => {
+      const cmp = compareChartData.find((c) => c.date === pt.date);
+      return { ...pt, ...(cmp ?? {}) };
+    });
+
     const mcData = result.monte_carlo?.trade_labels.map((i) => {
       const obj: Record<string, unknown> = { trade: i };
-      Object.entries(result.monte_carlo!.percentile_curves).forEach(([k, arr]) => {
-        obj[k] = arr[i];
-      });
+      Object.entries(result.monte_carlo!.percentile_curves).forEach(([k, arr]) => { obj[k] = arr[i]; });
       return obj;
     }) ?? [];
 
+    // Compute expectancy if not from backend
+    const expectancy = m.expectancy ?? (
+      m.win_rate != null && m.avg_win != null && m.avg_loss != null
+        ? (m.win_rate / 100) * m.avg_win - (1 - m.win_rate / 100) * Math.abs(m.avg_loss)
+        : null
+    );
+
     return (
-      <div className="space-y-6">
-        {/* ── Header row ── */}
+      <div className="space-y-5">
+
+        {/* Save modal */}
+        {saveModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-6 shadow-2xl">
+              <p className="mb-4 text-sm font-semibold text-zinc-100">Save Strategy</p>
+              <input
+                type="text"
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="e.g. AAPL MACD Bull Run"
+                className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                onKeyDown={(e) => { if (e.key === "Enter") saveStrategy(); }}
+                autoFocus
+              />
+              <div className="mt-4 flex gap-3">
+                <button onClick={() => setSaveModalOpen(false)} className="flex-1 rounded-lg border border-white/10 py-2 text-sm text-zinc-400 hover:bg-white/5 transition">Cancel</button>
+                <button onClick={saveStrategy} disabled={!saveName.trim()} className="flex-1 rounded-lg bg-[var(--accent-color)] py-2 text-sm font-semibold text-[#020308] hover:opacity-90 transition disabled:opacity-40">Save</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Header */}
         <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5">
           <div>
-            <p className="text-xs text-zinc-500 uppercase tracking-widest">{result.ticker} · {result.strategy_type.replace("_", " ")}</p>
-            <p className={`mt-1 text-4xl font-bold ${retColor(m.total_return)}`}>
-              {fmtPct(m.total_return, 1)}
+            <p className="text-xs text-zinc-500 uppercase tracking-widest">
+              {result.ticker} · {result.strategy_type.replace(/_/g, " ")} · {setup.timeframe} · {setup.direction}
             </p>
-            <p className="mt-1 text-xs text-zinc-500">
-              {setup.startDate} → {setup.endDate}
-            </p>
+            <p className={`mt-1 text-4xl font-bold ${retColor(m.total_return)}`}>{fmtPct(m.total_return, 1)}</p>
+            <p className="mt-1 text-xs text-zinc-500">{setup.startDate} → {setup.endDate}</p>
           </div>
           <div className="ml-4 flex flex-col gap-1">
-            <span className="text-xs text-zinc-500">vs Buy & Hold</span>
-            <span className={`text-lg font-semibold ${retColor((m.total_return ?? 0) - 0)}`}>
-              {m.alpha != null ? `${m.alpha >= 0 ? "+" : ""}${m.alpha.toFixed(1)}% alpha` : "—"}
+            <span className="text-xs text-zinc-500">Alpha vs SPY</span>
+            <span className={`text-lg font-semibold ${retColor(m.alpha)}`}>
+              {m.alpha != null ? `${m.alpha >= 0 ? "+" : ""}${m.alpha.toFixed(1)}%` : "—"}
             </span>
+            {m.beta != null && <span className="text-xs text-zinc-600">β {m.beta.toFixed(2)}</span>}
           </div>
           <div className={`ml-auto flex h-16 w-16 items-center justify-center rounded-full border-2 text-2xl font-black ${gradeColor}`}>
             {grade}
           </div>
         </div>
 
-        {/* ── Metrics grid ── */}
+        {/* Core metrics */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { label: "Annualized Return", value: fmtPct(m.annualized_return), color: retColor(m.annualized_return) },
-            { label: "Sharpe Ratio", value: fmtNum(m.sharpe_ratio), color: m.sharpe_ratio > 1 ? "text-emerald-400" : m.sharpe_ratio > 0 ? "text-amber-400" : "text-red-400" },
-            { label: "Max Drawdown", value: fmtPct(m.max_drawdown), color: "text-red-400" },
-            { label: "Win Rate", value: m.win_rate != null ? `${m.win_rate.toFixed(1)}%` : "—", color: m.win_rate > 50 ? "text-emerald-400" : "text-red-400" },
-            { label: "Profit Factor", value: fmtNum(m.profit_factor), color: m.profit_factor > 1 ? "text-emerald-400" : "text-red-400" },
-            { label: "Total Trades", value: m.total_trades?.toString() ?? "—", color: "text-zinc-200" },
-            { label: "Avg Hold Time", value: m.avg_hold_time_days != null ? `${m.avg_hold_time_days.toFixed(1)}d` : "—", color: "text-zinc-200" },
-            { label: "Calmar Ratio", value: fmtNum(m.calmar_ratio), color: m.calmar_ratio > 1 ? "text-emerald-400" : m.calmar_ratio > 0 ? "text-amber-400" : "text-red-400" },
+            { label: "Sharpe Ratio",      value: fmtNum(m.sharpe_ratio),      color: m.sharpe_ratio > 1 ? "text-emerald-400" : m.sharpe_ratio > 0 ? "text-amber-400" : "text-red-400" },
+            { label: "Sortino Ratio",     value: fmtNum(m.sortino_ratio),     color: m.sortino_ratio > 1 ? "text-emerald-400" : m.sortino_ratio > 0 ? "text-amber-400" : "text-red-400" },
+            { label: "Calmar Ratio",      value: fmtNum(m.calmar_ratio),      color: m.calmar_ratio > 1 ? "text-emerald-400" : m.calmar_ratio > 0 ? "text-amber-400" : "text-red-400" },
+            { label: "Max Drawdown",      value: fmtPct(m.max_drawdown),      color: "text-red-400" },
+            { label: "Win Rate",          value: m.win_rate != null ? `${m.win_rate.toFixed(1)}%` : "—", color: m.win_rate > 50 ? "text-emerald-400" : "text-red-400" },
+            { label: "Profit Factor",     value: fmtNum(m.profit_factor),     color: m.profit_factor > 1 ? "text-emerald-400" : "text-red-400" },
+            { label: "Expectancy",        value: expectancy != null ? fmtPct(expectancy) : "—", color: retColor(expectancy) },
           ].map((item) => (
             <div key={item.label} className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3">
               <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{item.label}</p>
@@ -970,41 +1341,73 @@ export default function BacktestView() {
           ))}
         </div>
 
-        {/* ── Equity curve ── */}
+        {/* Secondary metrics */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "Total Trades",    value: m.total_trades?.toString() ?? "—",    color: "text-zinc-200" },
+            { label: "Avg Hold Time",   value: m.avg_hold_time_days != null ? `${m.avg_hold_time_days.toFixed(1)}d` : "—", color: "text-zinc-200" },
+            { label: "Avg Win",         value: fmtPct(m.avg_win),                    color: "text-emerald-400" },
+            { label: "Avg Loss",        value: fmtPct(m.avg_loss),                   color: "text-red-400" },
+            { label: "Best Trade",      value: fmtPct(m.best_trade),                 color: "text-emerald-400" },
+            { label: "Worst Trade",     value: fmtPct(m.worst_trade),                color: "text-red-400" },
+            { label: "Max Consec. Wins",  value: m.max_consecutive_wins?.toString() ?? "—",   color: "text-emerald-400" },
+            { label: "Max Consec. Losses", value: m.max_consecutive_losses?.toString() ?? "—", color: "text-red-400" },
+          ].map((item) => (
+            <div key={item.label} className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3">
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{item.label}</p>
+              <p className={`mt-1 text-base font-semibold ${item.color}`}>{item.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Risk metrics */}
+        {(m.var_95 != null || m.max_drawdown_duration_days != null) && (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {m.var_95 != null && (
+              <div className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Value at Risk (95%)</p>
+                <p className="mt-1 text-base font-semibold text-red-400">{fmtPct(m.var_95)}</p>
+              </div>
+            )}
+            {m.max_drawdown_duration_days != null && (
+              <div className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider">Max DD Duration</p>
+                <p className="mt-1 text-base font-semibold text-amber-400">{m.max_drawdown_duration_days}d</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Equity curve */}
         {chartData.length > 0 && (
           <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
-            <p className="mb-4 text-sm font-semibold text-zinc-200">Equity Curve</p>
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-semibold text-zinc-200">Equity Curve</p>
+              {compareResult && (
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-4 rounded bg-[var(--accent-color)]" />
+                  <span className="text-xs text-zinc-500">{result.ticker}</span>
+                  <span className="h-2 w-4 rounded bg-amber-400" />
+                  <span className="text-xs text-zinc-500">{compareResult.ticker}</span>
+                  <button onClick={() => setCompareResult(null)} className="text-xs text-red-400 hover:text-red-300">✕ Clear</button>
+                </div>
+              )}
+            </div>
             <ResponsiveContainer width="100%" height={280}>
-              <LineChart data={chartData}>
+              <LineChart data={mergedChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fill: "#52525b", fontSize: 10 }}
-                  tickFormatter={(v: string) => v?.slice(0, 7) ?? ""}
-                  interval="preserveStartEnd"
-                />
-                <YAxis
-                  tick={{ fill: "#52525b", fontSize: 10 }}
-                  tickFormatter={(v: number) => fmtDollars(v)}
-                  width={60}
-                />
+                <XAxis dataKey="date" tick={{ fill: "#52525b", fontSize: 10 }} tickFormatter={(v: string) => v?.slice(0, 7) ?? ""} interval="preserveStartEnd" />
+                <YAxis tick={{ fill: "#52525b", fontSize: 10 }} tickFormatter={(v: number) => fmtDollars(v)} width={60} />
                 <Tooltip content={<ChartTooltipContent />} />
-                {ddAreas.map((a, i) => (
-                  <ReferenceArea key={i} x1={a.x1} x2={a.x2} fill="rgba(239,68,68,0.08)" />
-                ))}
-                <Line
-                  type="monotone"
-                  dataKey="Portfolio"
-                  stroke="var(--accent-color)"
-                  dot={false}
-                  strokeWidth={2}
-                />
+                {ddAreas.map((a, i) => <ReferenceArea key={i} x1={a.x1} x2={a.x2} fill="rgba(239,68,68,0.08)" />)}
+                <Line type="monotone" dataKey="Portfolio" stroke="var(--accent-color)" dot={false} strokeWidth={2} />
+                {compareResult && <Line type="monotone" dataKey="Compare" stroke="#f59e0b" dot={false} strokeWidth={2} strokeDasharray="4 2" />}
               </LineChart>
             </ResponsiveContainer>
           </div>
         )}
 
-        {/* ── Drawdown chart ── */}
+        {/* Drawdown */}
         {m.drawdown_curve?.length > 0 && (
           <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
             <p className="mb-4 text-sm font-semibold text-zinc-200">Drawdown</p>
@@ -1013,21 +1416,19 @@ export default function BacktestView() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                 <XAxis dataKey="date" tick={{ fill: "#52525b", fontSize: 10 }} tickFormatter={(v: string) => v?.slice(0, 7) ?? ""} interval="preserveStartEnd" />
                 <YAxis tick={{ fill: "#52525b", fontSize: 10 }} tickFormatter={(v: number) => v.toFixed(0) + "%"} width={40} />
-                <Tooltip
-                  formatter={(v: unknown) => [typeof v === "number" ? v.toFixed(2) + "%" : String(v), "Drawdown"] as [string, string]}
+                <Tooltip formatter={(v: unknown) => [typeof v === "number" ? v.toFixed(2) + "%" : String(v), "Drawdown"] as [string, string]}
                   contentStyle={{ background: "var(--app-card-alt)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
-                  labelStyle={{ color: "#71717a" }}
-                />
+                  labelStyle={{ color: "#71717a" }} />
                 <Area type="monotone" dataKey="drawdown" stroke="#ef4444" fill="rgba(239,68,68,0.2)" dot={false} strokeWidth={1} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         )}
 
-        {/* ── Monthly returns heatmap ── */}
+        {/* Monthly heatmap */}
         {years.length > 0 && (
           <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
-            <p className="mb-4 text-sm font-semibold text-zinc-200">Monthly Returns</p>
+            <p className="mb-4 text-sm font-semibold text-zinc-200">Monthly Returns Heatmap</p>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-center text-[10px]">
                 <thead>
@@ -1057,9 +1458,7 @@ export default function BacktestView() {
                             </td>
                           );
                         })}
-                        <td className={`py-1 px-1 font-semibold ${retColor(yearTotal)}`}>
-                          {yearTotal.toFixed(1)}%
-                        </td>
+                        <td className={`py-1 px-1 font-semibold ${retColor(yearTotal)}`}>{yearTotal.toFixed(1)}%</td>
                       </tr>
                     );
                   })}
@@ -1069,12 +1468,12 @@ export default function BacktestView() {
           </div>
         )}
 
-        {/* ── Trade list ── */}
+        {/* Trade log */}
         {m.trades?.length > 0 && (
           <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
-            <p className="mb-4 text-sm font-semibold text-zinc-200">Trade History ({m.trades.length} trades)</p>
+            <p className="mb-4 text-sm font-semibold text-zinc-200">Trade Log ({m.trades.length} trades)</p>
             <div className="overflow-x-auto max-h-72 overflow-y-auto">
-              <table className="w-full min-w-[560px] text-xs">
+              <table className="w-full min-w-[580px] text-xs">
                 <thead className="sticky top-0 bg-[var(--app-card-alt)]">
                   <tr className="border-b border-white/10 text-left">
                     <th className="pb-2 pr-4 font-medium text-zinc-500">Entry</th>
@@ -1082,7 +1481,8 @@ export default function BacktestView() {
                     <th className="pb-2 pr-4 font-medium text-zinc-500">Entry $</th>
                     <th className="pb-2 pr-4 font-medium text-zinc-500">Exit $</th>
                     <th className="pb-2 pr-4 font-medium text-zinc-500">Return</th>
-                    <th className="pb-2 font-medium text-zinc-500">Hold</th>
+                    <th className="pb-2 pr-4 font-medium text-zinc-500">Hold</th>
+                    <th className="pb-2 font-medium text-zinc-500">Dir</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1092,10 +1492,9 @@ export default function BacktestView() {
                       <td className="py-1.5 pr-4 text-zinc-400">{t.exit_date}</td>
                       <td className="py-1.5 pr-4 text-zinc-300">${t.entry_price?.toFixed(2)}</td>
                       <td className="py-1.5 pr-4 text-zinc-300">${t.exit_price?.toFixed(2)}</td>
-                      <td className={`py-1.5 pr-4 font-medium ${t.return_pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                        {fmtPct(t.return_pct, 2)}
-                      </td>
-                      <td className="py-1.5 text-zinc-500">{t.hold_days}d</td>
+                      <td className={`py-1.5 pr-4 font-medium ${t.return_pct >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmtPct(t.return_pct, 2)}</td>
+                      <td className="py-1.5 pr-4 text-zinc-500">{t.hold_days}d</td>
+                      <td className={`py-1.5 text-[10px] font-medium ${t.direction === "short" ? "text-red-400" : "text-emerald-400"}`}>{t.direction ?? "L"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1104,7 +1503,7 @@ export default function BacktestView() {
           </div>
         )}
 
-        {/* ── Walk-forward ── */}
+        {/* Walk-forward */}
         {result.walk_forward && (
           <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
             <p className="mb-1 text-sm font-semibold text-zinc-200">Walk-Forward Analysis</p>
@@ -1116,10 +1515,7 @@ export default function BacktestView() {
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                 <XAxis dataKey="split" tick={{ fill: "#52525b", fontSize: 10 }} />
                 <YAxis tick={{ fill: "#52525b", fontSize: 10 }} />
-                <Tooltip
-                  contentStyle={{ background: "var(--app-card-alt)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
-                  labelStyle={{ color: "#71717a" }}
-                />
+                <Tooltip contentStyle={{ background: "var(--app-card-alt)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} labelStyle={{ color: "#71717a" }} />
                 <Legend wrapperStyle={{ fontSize: 11, color: "#71717a" }} />
                 <Line type="monotone" dataKey="in_sample_sharpe" name="In-Sample Sharpe" stroke="var(--accent-color)" dot strokeWidth={2} />
                 <Line type="monotone" dataKey="oos_sharpe" name="Out-of-Sample Sharpe" stroke="#ef4444" dot strokeWidth={2} />
@@ -1144,21 +1540,17 @@ export default function BacktestView() {
           </div>
         )}
 
-        {/* ── Monte Carlo ── */}
+        {/* Monte Carlo */}
         {result.monte_carlo && mcData.length > 0 && (
           <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
             <p className="mb-1 text-sm font-semibold text-zinc-200">Monte Carlo Simulation</p>
-            <p className="mb-4 text-xs text-zinc-500">{result.monte_carlo.n_runs.toLocaleString()} simulations of {result.monte_carlo.n_trades} trades</p>
+            <p className="mb-4 text-xs text-zinc-500">{result.monte_carlo.n_runs.toLocaleString()} simulations · {result.monte_carlo.n_trades} trades</p>
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={mcData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                 <XAxis dataKey="trade" tick={{ fill: "#52525b", fontSize: 10 }} />
                 <YAxis tick={{ fill: "#52525b", fontSize: 10 }} tickFormatter={(v: number) => fmtDollars(v)} width={60} />
-                <Tooltip
-                  contentStyle={{ background: "var(--app-card-alt)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
-                  labelStyle={{ color: "#71717a" }}
-                  formatter={(v: unknown) => typeof v === "number" ? fmtDollars(v) : String(v)}
-                />
+                <Tooltip contentStyle={{ background: "var(--app-card-alt)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }} labelStyle={{ color: "#71717a" }} formatter={(v: unknown) => typeof v === "number" ? fmtDollars(v) : String(v)} />
                 <Area type="monotone" dataKey="p95" name="95th %ile" stroke="rgba(255,255,255,0.1)" fill="rgba(255,255,255,0.04)" dot={false} />
                 <Area type="monotone" dataKey="p75" name="75th %ile" stroke="rgba(255,255,255,0.15)" fill="rgba(255,255,255,0.05)" dot={false} />
                 <Area type="monotone" dataKey="p50" name="Median" stroke="var(--accent-color)" fill="rgba(var(--accent-rgb),0.1)" strokeWidth={2} dot={false} />
@@ -1168,10 +1560,10 @@ export default function BacktestView() {
             </ResponsiveContainer>
             <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 text-center">
               {[
-                { label: "Prob. Profit", value: `${result.monte_carlo.probability_metrics.prob_profit}%`, color: "text-emerald-400" },
-                { label: "Prob. -10%", value: `${result.monte_carlo.probability_metrics.prob_loss_10pct}%`, color: "text-amber-400" },
-                { label: "Prob. -25%", value: `${result.monte_carlo.probability_metrics.prob_loss_25pct}%`, color: "text-red-400" },
-                { label: "Prob. 2×", value: `${result.monte_carlo.probability_metrics.prob_double}%`, color: "text-emerald-400" },
+                { label: "Prob. Profit",  value: `${result.monte_carlo.probability_metrics.prob_profit}%`,      color: "text-emerald-400" },
+                { label: "Prob. -10%",    value: `${result.monte_carlo.probability_metrics.prob_loss_10pct}%`,  color: "text-amber-400" },
+                { label: "Prob. -25%",    value: `${result.monte_carlo.probability_metrics.prob_loss_25pct}%`,  color: "text-red-400" },
+                { label: "Prob. 2×",      value: `${result.monte_carlo.probability_metrics.prob_double}%`,      color: "text-emerald-400" },
               ].map((item) => (
                 <div key={item.label} className="rounded-xl border border-white/10 p-2">
                   <p className="text-[10px] text-zinc-500">{item.label}</p>
@@ -1182,15 +1574,13 @@ export default function BacktestView() {
           </div>
         )}
 
-        {/* ── AI Analysis ── */}
+        {/* AI Analysis */}
         {result.ai_analysis && (
           <div className="rounded-2xl border border-[var(--accent-color)]/20 bg-[var(--accent-color)]/5 p-5">
             <div className="mb-3 flex items-center gap-2">
               <span className="text-lg">🤖</span>
               <p className="text-sm font-semibold text-zinc-200">AI Strategy Analysis</p>
-              <span className="rounded-full border border-[var(--accent-color)]/30 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-color)]">
-                Claude AI
-              </span>
+              <span className="rounded-full border border-[var(--accent-color)]/30 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-color)]">Claude AI</span>
             </div>
             <div className="text-sm leading-relaxed text-zinc-300 whitespace-pre-wrap">
               <Typewriter text={result.ai_analysis} />
@@ -1198,18 +1588,22 @@ export default function BacktestView() {
           </div>
         )}
 
-        {/* ── Action buttons ── */}
+        {/* Action bar */}
         <div className="flex flex-wrap gap-3">
-          <button
-            onClick={() => { setStep(1); setResult(null); setError(null); }}
-            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10"
-          >
+          <button onClick={() => { setStep(1); setResult(null); setError(null); }}
+            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10">
             ↩ Run Again
           </button>
-          <button
-            onClick={exportResults}
-            className="rounded-lg border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-4 py-2 text-sm font-medium text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20"
-          >
+          <button onClick={() => setSaveModalOpen(true)}
+            className="rounded-lg border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-4 py-2 text-sm font-medium text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20">
+            💾 Save Strategy
+          </button>
+          <button onClick={exportCSV}
+            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10">
+            ↓ Export CSV
+          </button>
+          <button onClick={exportJSON}
+            className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10">
             ↓ Export JSON
           </button>
         </div>
@@ -1217,7 +1611,7 @@ export default function BacktestView() {
     );
   }
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="mx-auto max-w-4xl">

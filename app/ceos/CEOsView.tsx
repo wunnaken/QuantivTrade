@@ -758,7 +758,7 @@ function CEOGraph({
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full overflow-hidden"
+      className="relative h-full w-full overflow-hidden force-dark-text"
       style={{ background: "#050B1A" }}
       onWheel={(e) => e.stopPropagation()}
     >

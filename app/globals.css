@@ -62,17 +62,81 @@ html {
 }
 
 html[data-theme="light"] {
-  --app-bg: #f4f6fa;
-  --app-card: #ffffff;
-  --app-card-alt: #ffffff;
+  --app-bg: #bcc5d8;
+  --app-card: #f2f5fb;
+  --app-card-alt: #e4e9f5;
+  --app-card-hover: #d8deee;
   --app-text: #0d1420;
   --app-text-muted: #52525b;
-  --app-border: rgba(0, 0, 0, 0.08);
-  --app-navbar-bg: #ffffff;
-  --app-navbar-border: rgba(0, 0, 0, 0.08);
+  --app-border: rgba(0, 0, 0, 0.12);
+  --app-navbar-bg: #f2f5fb;
+  --app-navbar-border: rgba(0, 0, 0, 0.10);
   --app-navbar-text: #0d1420;
   --app-navbar-text-muted: #71717a;
+  --app-sidebar-bg: #f2f5fb;
 }
+
+/* ── Light mode: remap dark-assumed Tailwind utilities ───────────────────── */
+
+/* bg-white/* → subtle dark tint so overlays are visible on light backgrounds */
+html[data-theme="light"] .bg-white\/5    { background-color: rgba(0,0,0,0.04) !important; }
+html[data-theme="light"] .bg-white\/8    { background-color: rgba(0,0,0,0.06) !important; }
+html[data-theme="light"] .bg-white\/10   { background-color: rgba(0,0,0,0.07) !important; }
+html[data-theme="light"] .bg-white\/15   { background-color: rgba(0,0,0,0.09) !important; }
+html[data-theme="light"] .bg-white\/20   { background-color: rgba(0,0,0,0.11) !important; }
+html[data-theme="light"] .bg-white\/25   { background-color: rgba(0,0,0,0.13) !important; }
+html[data-theme="light"] .bg-white\/30   { background-color: rgba(0,0,0,0.15) !important; }
+
+/* hover:bg-white/* */
+html[data-theme="light"] .hover\:bg-white\/5:hover   { background-color: rgba(0,0,0,0.06) !important; }
+html[data-theme="light"] .hover\:bg-white\/10:hover  { background-color: rgba(0,0,0,0.08) !important; }
+html[data-theme="light"] .hover\:bg-white\/15:hover  { background-color: rgba(0,0,0,0.10) !important; }
+
+/* border-white/* → dark border tint */
+html[data-theme="light"] .border-white\/5    { border-color: rgba(0,0,0,0.07) !important; }
+html[data-theme="light"] .border-white\/8    { border-color: rgba(0,0,0,0.09) !important; }
+html[data-theme="light"] .border-white\/10   { border-color: rgba(0,0,0,0.11) !important; }
+html[data-theme="light"] .border-white\/15   { border-color: rgba(0,0,0,0.13) !important; }
+html[data-theme="light"] .border-white\/20   { border-color: rgba(0,0,0,0.15) !important; }
+
+/* divide-white/* */
+html[data-theme="light"] .divide-white\/10 > * + * { border-color: rgba(0,0,0,0.11) !important; }
+
+/* Hardcoded dark card bg classes used in various components */
+html[data-theme="light"] .bg-\[\#080d14\]  { background-color: var(--app-bg)         !important; }
+html[data-theme="light"] .bg-\[\#0d1420\]  { background-color: var(--app-card)       !important; }
+html[data-theme="light"] .bg-\[\#060a10\]  { background-color: var(--app-card-alt)   !important; }
+html[data-theme="light"] .bg-\[\#111a28\]  { background-color: var(--app-card-hover) !important; }
+/* Audit: additional hardcoded dark backgrounds across pages */
+html[data-theme="light"] .bg-\[\#0a0f1a\]  { background-color: var(--app-card)       !important; }
+html[data-theme="light"] .bg-\[\#070b16\]  { background-color: var(--app-card)       !important; }
+html[data-theme="light"] .bg-\[\#060B14\]  { background-color: var(--app-card-alt)   !important; }
+html[data-theme="light"] .bg-\[\#0d1120\]  { background-color: var(--app-card)       !important; }
+html[data-theme="light"] .bg-\[\#0c1222\]  { background-color: var(--app-card)       !important; }
+html[data-theme="light"] .bg-\[\#080B14\]  { background-color: var(--app-card)       !important; }
+html[data-theme="light"] .bg-\[\#0a0b14\]  { background-color: var(--app-card)       !important; }
+
+/* zinc text: keep muted tones readable on light backgrounds */
+html[data-theme="light"] .text-zinc-600,
+html[data-theme="light"] .text-zinc-700 { color: #3f3f46 !important; }
+
+/* force-dark-text: for intentionally dark containers that must keep light text in light mode */
+html[data-theme="light"] .force-dark-text,
+html[data-theme="light"] .force-dark-text * {
+  color: inherit;
+}
+html[data-theme="light"] .force-dark-text {
+  color: #e8e8ec !important;
+  --app-text: #e8e8ec;
+  --app-text-muted: #7a8090;
+}
+html[data-theme="light"] .force-dark-text .text-zinc-100 { color: #f4f4f5 !important; }
+html[data-theme="light"] .force-dark-text .text-zinc-200 { color: #e4e4e7 !important; }
+html[data-theme="light"] .force-dark-text .text-zinc-300 { color: #d4d4d8 !important; }
+html[data-theme="light"] .force-dark-text .text-zinc-400 { color: #a1a1aa !important; }
+html[data-theme="light"] .force-dark-text .text-zinc-500 { color: #71717a !important; }
+html[data-theme="light"] .force-dark-text .text-zinc-600 { color: #52525b !important; }
+html[data-theme="light"] .force-dark-text .text-zinc-700 { color: #3f3f46 !important; }
 
 html {
   scroll-behavior: smooth;

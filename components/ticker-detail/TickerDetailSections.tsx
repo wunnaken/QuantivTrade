@@ -298,23 +298,6 @@ function CompanyOverviewSection({ detail, ticker }: { detail: DetailData; ticker
           <DataRow key={label} label={label} value={value} />
         ))}
       </div>
-      <div className="mt-4 space-y-2">
-        <p className="text-xs text-zinc-600 font-medium uppercase tracking-wider">Identifiers</p>
-        <UnavailablePlaceholder
-          label="ISIN / CUSIP / FIGI"
-          reason="ISIN and CUSIP are not available via Finnhub free tier. FIGI requires OpenFIGI API (free, separate integration)."
-          provider="openfigi.com"
-        />
-        <UnavailablePlaceholder
-          label="Glassdoor Rating & Job Posting Growth"
-          reason="Glassdoor does not provide a public API. Job posting growth requires Burning Glass or LinkedIn API."
-          provider="glassdoor.com"
-        />
-        <UnavailablePlaceholder
-          label="CEO Name & HQ Location"
-          reason="Not included in Finnhub free tier. Available via Finnhub premium or a financial data vendor."
-        />
-      </div>
     </div>
   );
 }
@@ -1227,6 +1210,33 @@ export function TickerDetailSections({ ticker, aiSlot }: { ticker: string; aiSlo
       <SectionDivider label="Overview" />
       {loading ? <Skeleton /> : <CompanyOverviewSection detail={detail ?? {}} ticker={ticker} />}
 
+      <SectionDivider label="Options & Derivatives" />
+      {loading ? <Skeleton /> : <OptionsSection unavailableItems={options?.unavailableItems ?? []} />}
+
+      <SectionDivider label="Identifiers" />
+      <div className="space-y-2">
+        <UnavailablePlaceholder
+          label="ISIN / CUSIP"
+          reason="Requires Refinitiv (now LSEG) or Bloomberg Terminal API. No affordable retail-tier equivalent."
+          provider="lseg.com/en/data-analytics"
+        />
+        <UnavailablePlaceholder
+          label="FIGI (Financial Instrument Global Identifier)"
+          reason="Available free via OpenFIGI API — separate integration not yet built."
+          provider="openfigi.com"
+        />
+        <UnavailablePlaceholder
+          label="Glassdoor Rating & Job Posting Growth"
+          reason="Glassdoor has no public API. Job posting data requires Burning Glass Technologies or LinkedIn Talent Insights."
+          provider="burningglasstech.com"
+        />
+        <UnavailablePlaceholder
+          label="CEO Name & HQ Location"
+          reason="Requires Finnhub Premium (~$50/mo) or a financial data vendor such as Intrinio."
+          provider="finnhub.io/pricing"
+        />
+      </div>
+
       <SectionDivider label="Financials" />
       {loading ? <Skeleton /> : <FinancialsSection detail={detail ?? {}} tech={tech} />}
 
@@ -1235,9 +1245,6 @@ export function TickerDetailSections({ ticker, aiSlot }: { ticker: string; aiSlo
 
       <SectionDivider label="Technicals" />
       {loading || !tech ? <Skeleton lines={6} /> : <TechnicalsSection tech={tech} ticker={ticker} />}
-
-      <SectionDivider label="Options & Derivatives" />
-      {loading ? <Skeleton /> : <OptionsSection unavailableItems={options?.unavailableItems ?? []} />}
 
       <SectionDivider label="Sentiment & Social" />
       {loading ? <Skeleton /> : <SentimentSection sentiment={sentiment} watchlistCount={community?.watchlistCount ?? 0} news={news} />}

@@ -78,10 +78,15 @@ export async function GET(request: NextRequest) {
   }
 
   // sort=amount: awards endpoint sorted by total contract value
+  // Use a 2-year window so we catch genuinely new large contracts
+  const twoYearsAgo = new Date(Date.now() - 2 * 365 * 86_400_000);
+  const twoYearCutoff = fmt(twoYearsAgo);
+  const twoYearPeriod = [{ start_date: twoYearCutoff, end_date: fmt(today) }];
+
   const body = {
     filters: {
       award_type_codes: ["A", "B", "C", "D"],
-      time_period: timePeriod,
+      time_period: twoYearPeriod,
       award_amounts: [{ lower_bound: 10_000_000 }],
     },
     fields: [
@@ -90,11 +95,12 @@ export async function GET(request: NextRequest) {
       "Award Amount",
       "Awarding Agency",
       "Description",
+      "Action Date",
       "Period of Performance Start Date",
     ],
     sort: "Award Amount",
     order: "desc",
-    limit: 50,
+    limit: 200,
     page: 1,
   };
 
@@ -103,6 +109,7 @@ export async function GET(request: NextRequest) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      cache: "no-store",
     });
 
     if (!res.ok) {
@@ -118,18 +125,26 @@ export async function GET(request: NextRequest) {
         "Award Amount"?: number;
         "Awarding Agency"?: string;
         "Description"?: string;
-        "Period of Performance Start Date"?: string;
+        "Action Date"?: string | null;
+        "Period of Performance Start Date"?: string | null;
       }>;
     };
 
-    const contracts: FiscalContract[] = (json.results ?? []).map((r, i) => ({
-      id: r["Award ID"] ?? `award-${i}`,
-      recipient: r["Recipient Name"] ?? "Unknown Recipient",
-      amount: r["Award Amount"] ?? 0,
-      agency: r["Awarding Agency"] ?? "Unknown Agency",
-      date: r["Period of Performance Start Date"] ?? "",
-      description: (r["Description"] ?? "").slice(0, 100),
-    }));
+    // time_period filters by action date — old contracts with recent amendments pass through.
+    // Exclude any contract whose period of performance started before the 2-year cutoff.
+    const contracts: FiscalContract[] = (json.results ?? [])
+      .filter((r) => {
+        const start = r["Period of Performance Start Date"] ?? "";
+        return !start || start >= twoYearCutoff;
+      })
+      .map((r, i) => ({
+        id: r["Award ID"] ?? `award-${i}`,
+        recipient: r["Recipient Name"] ?? "Unknown Recipient",
+        amount: r["Award Amount"] ?? 0,
+        agency: r["Awarding Agency"] ?? "Unknown Agency",
+        date: r["Action Date"] ?? r["Period of Performance Start Date"] ?? "",
+        description: (r["Description"] ?? "").slice(0, 100),
+      }));
 
     return NextResponse.json({ contracts });
   } catch (err) {

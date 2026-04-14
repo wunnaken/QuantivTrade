@@ -345,8 +345,8 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#0a0f1a",
-                      border: "1px solid rgba(255,255,255,0.12)",
+                      backgroundColor: "var(--app-card)",
+                      border: "1px solid var(--app-border)",
                       borderRadius: 8,
                       fontSize: 12,
                     }}

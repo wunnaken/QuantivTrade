@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { SiteFooter } from "../../components/SiteFooter";
 import { useSearchHistory } from "../../hooks/useSearchHistory";
 import { useAuth } from "../../components/AuthContext";
+import { useTheme } from "../../components/ThemeContext";
 import { getCachedBriefing, getBriefingDate, setBriefingSeen } from "../../lib/briefing";
 import { isLikelyTicker } from "../../lib/isLikelyTicker";
 import { getFuzzyTickerSuggestions, type TickerSuggestion } from "../../lib/ticker-suggestions";
@@ -120,6 +121,8 @@ function BentoCard({ href, title, icon, children, loading=false, delay=0, classN
   const router = useRouter();
   const customizeMode = useContext(CustomizeModeContext);
   const [hovered, setHovered] = useState(false);
+  const { theme } = useTheme();
+  const isLight = theme === "light";
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
@@ -130,8 +133,12 @@ function BentoCard({ href, title, icon, children, loading=false, delay=0, classN
       onClick={customizeMode ? undefined : () => router.push(href)}
       style={{
         boxShadow: hovered && !customizeMode
-          ? "0 0 0 1px rgba(255,255,255,0.08), 0 0 16px color-mix(in srgb, var(--accent-color) 12%, transparent)"
-          : "0 0 0 1px rgba(255,255,255,0.08)",
+          ? isLight
+            ? "0 0 0 1px rgba(0,0,0,0.12), 0 4px 20px rgba(0,0,0,0.12)"
+            : "0 0 0 1px rgba(255,255,255,0.08), 0 0 16px color-mix(in srgb, var(--accent-color) 12%, transparent)"
+          : isLight
+            ? "0 2px 10px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.07)"
+            : "0 0 0 1px rgba(255,255,255,0.08)",
         transition: "box-shadow 0.15s ease",
       }}
       className={`h-full overflow-visible rounded-2xl bg-[var(--app-card-alt)] ${customizeMode ? "" : "cursor-pointer"} ${className}`}
@@ -1014,29 +1021,86 @@ function CEOAlertsCard({delay}:{delay:number}) {
 
 // ── LEFT: Social Feed (recent posts) ─────────────────────────────────────────
 
+const FEED_REACTIONS = [
+  { key: "bullish", emoji: "📈", label: "Bullish" },
+  { key: "bearish", emoji: "📉", label: "Bearish" },
+  { key: "informative", emoji: "💡", label: "Informative" },
+  { key: "risky", emoji: "⚠️", label: "Risky" },
+  { key: "interesting", emoji: "⭐", label: "Interesting" },
+] as const;
+
 function SocialFeedCard({delay}:{delay:number}) {
+  const { user } = useAuth();
   const [posts,setPosts] = useState<any[]>([]);
+  const [reactionCounts,setReactionCounts] = useState<Record<string,Record<string,number>>>({});
   const [loading,setLoading] = useState(true);
+
   useEffect(()=>{
     fetch("/api/posts?limit=10").then(r=>r.json()).then(d=>{
       const items=Array.isArray(d)?d:d?.posts??[];
       setPosts(items.slice(0,10));
+      setReactionCounts(d?.reactionCounts??{});
     }).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
+
   return (
     <BentoCard href="/social-feed" title="Social Feed" icon={I.chat} delay={delay} loading={loading} className="min-h-[700px]">
-      {posts.length===0?<p className="pt-1 text-xs text-zinc-600">No recent posts</p>:(
+      {posts.length===0 ? <p className="pt-1 text-xs text-zinc-600">No recent posts</p> : (
         <ul className="space-y-3 pt-1">
-          {posts.map((p,i)=>(
-            <li key={i} className="border-b border-white/5 pb-3 last:border-0 last:pb-0">
-              <p className="line-clamp-3 text-xs text-zinc-300 leading-relaxed">{p.content}</p>
-              <div className="mt-1 flex items-center gap-2 text-[10px] text-zinc-600">
-                <span className="font-medium text-zinc-500">@{p.author?.handle??p.username??"trader"}</span>
-                <span>·</span>
-                <span>{timeAgo(p.timestamp??p.created_at??"")}</span>
-              </div>
-            </li>
-          ))}
+          {posts.map((p,i)=>{
+            const isMe = !!user?.id && p.author_id === user.id;
+            const verified = isMe ? (user?.isVerified ?? p.author?.verified ?? false) : (p.author?.verified ?? false);
+            const rc = reactionCounts[p.id] ?? {};
+            return (
+              <li key={p.id??i} className="relative border-b border-white/5 pb-3 last:border-0 last:pb-0">
+                {/* Ticker badge */}
+                {p.ticker && (
+                  <a
+                    href={`/search/${p.ticker}`}
+                    onClick={(e)=>e.stopPropagation()}
+                    className="absolute right-0 top-0 rounded-full border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--accent-color)] hover:bg-[var(--accent-color)]/20"
+                  >
+                    ${p.ticker}
+                  </a>
+                )}
+                {/* Author */}
+                <div className="mb-1 flex items-center gap-1.5">
+                  <span className="text-[11px] font-medium text-zinc-400">@{p.author?.handle??p.username??"trader"}</span>
+                  {verified && (
+                    <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-bold text-blue-400">✓ Verified</span>
+                  )}
+                  <span className="text-[10px] text-zinc-600">· {timeAgo(p.timestamp??p.created_at??"")}</span>
+                </div>
+                {/* Content with $TICKER links */}
+                <p className="line-clamp-3 text-xs text-zinc-300 leading-relaxed">
+                  {String(p.content??"").split(/(\$[A-Z]{1,6})/g).map((part:string,j:number)=>
+                    /^\$[A-Z]{1,6}$/.test(part)
+                      ? <a key={j} href={`/search/${part.slice(1)}`} onClick={(e)=>e.stopPropagation()} className="font-semibold text-[var(--accent-color)] hover:underline">{part}</a>
+                      : part
+                  )}
+                </p>
+                {/* Image */}
+                {p.image && (
+                  <div className="mt-2 overflow-hidden rounded-lg border border-white/10">
+                    <img src={p.image} alt="" className="max-h-40 w-full object-cover" />
+                  </div>
+                )}
+                {/* Reactions + comments */}
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {FEED_REACTIONS.map(({key,emoji,label})=>{
+                    const count = rc[key]??0;
+                    if (count===0) return null;
+                    return (
+                      <span key={key} title={label} className="flex items-center gap-0.5 rounded-full border border-white/10 bg-black/20 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                        {emoji} {count}
+                      </span>
+                    );
+                  })}
+                  <span className="text-[11px] text-zinc-500">💬 {p.comments??0} Comments</span>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </BentoCard>
@@ -1641,14 +1705,9 @@ function PredictionMarketsCard({delay}:{delay:number}) {
   const [preds,setPreds] = useState<any[]>([]);
   const [loading,setLoading] = useState(true);
   useEffect(()=>{
-    fetch("/api/posts?limit=6").then(r=>r.json()).then(d=>{
-      const items:any[]=Array.isArray(d)?d:d?.posts??[];
-      const counts:Record<string,any>=d?.reactionCounts??{};
-      const mapped=items.slice(0,6).map((p:any)=>{
-        const rc=counts[p.id]??{};
-        return {question:p.content??"Prediction",yes:rc.bullish??0,no:rc.bearish??0};
-      }).filter(p=>p.yes>0||p.no>0).slice(0,3);
-      setPreds(mapped.length>0?mapped:items.slice(0,3).map((p:any)=>({question:p.content??"—",yes:0,no:0})));
+    fetch("/api/predict/markets").then(r=>r.json()).then(d=>{
+      const items:any[]=Array.isArray(d)?d:d?.markets??[];
+      setPreds(items.slice(0,3).map((m:any)=>({question:m.question??"—",yes:m.yesPrice??m.probability??0,no:m.noPrice??(100-(m.probability??50))})));
     }).catch(()=>{}).finally(()=>setLoading(false));
   },[]);
   return (
@@ -2330,7 +2389,7 @@ export default function BentoDashboardView() {
   };
 
   return (
-    <div className="relative overflow-x-hidden" style={{ backgroundColor: "#070B14" }}>
+    <div className="relative overflow-x-hidden" style={{ backgroundColor: "var(--app-bg)" }}>
       <ParallaxGrid />
       <AmbientParticles />
       <div className="relative z-[1] p-4 pb-8 md:p-6 md:pb-10">

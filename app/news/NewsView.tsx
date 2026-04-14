@@ -532,7 +532,7 @@ export default function NewsView() {
                       </span>
                     </div>
                     <h2 className="text-xl font-semibold leading-tight text-white sm:text-2xl">{featured.title}</h2>
-                    <p className="mt-1 text-xs text-zinc-300">{formatTimeAgo(featured.publishedAt)}</p>
+                    <p className="mt-1 text-xs text-white/70">{formatTimeAgo(featured.publishedAt)}</p>
                   </div>
                 </div>
                 <div className="p-6 pb-3">

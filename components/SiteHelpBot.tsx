@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 type Message = { role: "user" | "assistant"; content: string };
 
 const PAGE_LABELS: Record<string, string> = {
+  "/feedback": "Help Center & Feedback",
   "/feed": "Home Feed",
   "/social-feed": "Social Feed",
   "/communities": "Communities",
@@ -59,12 +60,23 @@ const BASE_SUGGESTIONS = [
   "What is the chat assistant for?",
 ];
 
+const HELP_SUGGESTIONS = [
+  "What features does QuantivTrade have?",
+  "How do I set up my profile?",
+  "What are the different plan tiers?",
+  "How does the backtester work?",
+  "How do I join or create a community?",
+  "What is the social feed for?",
+  "How do prediction markets work?",
+  "Where can I track my portfolio?",
+];
+
 export function SiteHelpBot() {
   const pathname = usePathname();
   const pageLabel = getPageLabel(pathname);
   const isWhiteboard = pathname === "/whiteboard" || pathname.startsWith("/whiteboard/");
 
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(pathname === "/feedback");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -78,6 +90,8 @@ export function SiteHelpBot() {
       prevPathRef.current = pathname;
       setMessages([]);
       setInput("");
+      if (pathname === "/feedback") setOpen(true);
+      else setOpen(false);
     }
   }, [pathname]);
 
@@ -186,7 +200,7 @@ export function SiteHelpBot() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {BASE_SUGGESTIONS.map((s) => (
+                  {(pathname === "/feedback" ? HELP_SUGGESTIONS : BASE_SUGGESTIONS).map((s) => (
                     <button
                       key={s}
                       onClick={() => send(s === "Explain this page" ? `Explain the ${pageLabel} page` : s)}

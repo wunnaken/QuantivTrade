@@ -62,7 +62,7 @@ export function EarningsDetailModal({ ticker, companyName, onClose }: Props) {
   const EarningsTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; fill?: string }>; label?: string }) => {
     if (!active || !payload?.length) return null;
     return (
-      <div style={{ backgroundColor: "#0a0f1a", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
+      <div style={{ backgroundColor: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
         <p style={{ color: "#a1a1aa", marginBottom: 4 }}>{label}</p>
         {payload.map((entry, i) => (
           <p key={i} style={{ color: entry.name === "actual" ? (entry.value >= 0 ? "#10b981" : "#ef4444") : "#71717a", margin: "2px 0" }}>

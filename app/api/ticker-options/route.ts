@@ -39,33 +39,33 @@ export async function GET(req: NextRequest) {
     unavailableItems: [
       {
         label: "Options flow & unusual activity",
-        reason: "Requires Unusual Whales API (~$50/mo)",
+        reason: "Subscription required: Unusual Whales (~$50/mo) — real-time options flow, sweeps, and block trades.",
         provider: "unusualwhales.com",
       },
       {
         label: "Dark pool volume %",
-        reason: "Requires Unusual Whales or FINRA ATS data",
-        provider: "finra.org/finra-data/fintech/ats",
+        reason: "Subscription required: Unusual Whales (~$50/mo) covers dark pool prints. Free alternative: FINRA ATS data (delayed).",
+        provider: "unusualwhales.com",
       },
       {
         label: "Short interest % float & days to cover",
-        reason: "Requires FINRA REGSHO or a premium data vendor",
-        provider: "finra.org",
+        reason: "Subscription required: Ortex (~$49/mo) or S3 Partners for real-time short interest. FINRA REGSHO is free but bi-weekly delayed.",
+        provider: "ortex.com",
       },
       {
-        label: "Borrow rate",
-        reason: "Requires Interactive Brokers API or similar prime brokerage data",
-        provider: "interactivebrokers.com",
+        label: "Borrow rate (cost to short)",
+        reason: "Subscription required: Ortex (~$49/mo) or Interactive Brokers API (free with IB brokerage account).",
+        provider: "ortex.com",
       },
       {
         label: "IV rank / IV percentile",
-        reason: "Requires full options chain data (CBOE DataShop or Tradier)",
-        provider: "cboe.com",
+        reason: "Subscription required: Tradier brokerage API (free with account) or Polygon.io Options add-on (~$79/mo).",
+        provider: "polygon.io",
       },
       {
         label: "Put/call ratio over time",
-        reason: "Requires CBOE options data subscription",
-        provider: "cboe.com",
+        reason: "Subscription required: CBOE DataShop or Polygon.io Options add-on (~$79/mo). Put/call ratio by ticker requires full chain data.",
+        provider: "polygon.io",
       },
     ],
   });

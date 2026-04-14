@@ -970,10 +970,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </button>
                 {profileOpen && (
                   <div
-                    className="absolute right-0 top-full z-50 mt-1 min-w-[220px] animate-[fadeIn_0.15s_ease-out] rounded-xl border border-white/10 py-2 shadow-xl"
+                    className="absolute right-0 top-full z-50 mt-1 min-w-[240px] animate-[fadeIn_0.15s_ease-out] rounded-xl border border-white/10 py-2 shadow-xl"
                     style={{ backgroundColor: "var(--app-card)" }}
                     role="menu"
                   >
+                    {/* User info + badges */}
                     <div className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)]">
@@ -984,8 +985,52 @@ export function Layout({ children }: { children: React.ReactNode }) {
                           <p className="truncate text-xs text-zinc-500">@{user.username?.trim() || "trader"}</p>
                         </div>
                       </div>
+                      {/* Badges row */}
+                      {(() => {
+                        const tier = (user as any)?.subscription_tier as string | undefined;
+                        const TIER_STYLES: Record<string, string> = {
+                          verified: "text-blue-400 border-blue-500/30 bg-blue-500/10",
+                          starter:  "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
+                          pro:      "text-[var(--accent-color)] border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10",
+                          elite:    "text-amber-400 border-amber-400/30 bg-amber-400/10",
+                        };
+                        const TIER_LABELS: Record<string, string> = { verified: "Verified Plan", starter: "Starter", pro: "Pro", elite: "Elite" };
+                        const showTier = tier && tier !== "free" && TIER_STYLES[tier];
+                        if (!showTier && !user.isVerified && !user.isFounder) return null;
+                        return (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {showTier && (
+                              <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${TIER_STYLES[tier!]}`}>
+                                {TIER_LABELS[tier!] ?? tier}
+                              </span>
+                            )}
+                            {user.isVerified && (
+                              <span className="inline-flex items-center gap-0.5 rounded border border-blue-500/30 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-bold text-blue-400">
+                                <svg className="h-2.5 w-2.5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                                Verified
+                              </span>
+                            )}
+                            {user.isFounder && (
+                              <span style={{
+                                background: "linear-gradient(90deg,#92400e 0%,#d97706 25%,#fbbf24 45%,#fde68a 50%,#fbbf24 55%,#d97706 75%,#92400e 100%)",
+                                backgroundSize: "200% auto",
+                                WebkitBackgroundClip: "text",
+                                backgroundClip: "text",
+                                WebkitTextFillColor: "transparent",
+                                animation: "founder-shimmer 2.8s linear infinite",
+                              }} className="inline-flex items-center rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                                Founder
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
+
                     <div className="my-2 h-px bg-white/10" />
+
                     <Link
                       href="/profile"
                       onClick={() => setProfileOpen(false)}
@@ -997,7 +1042,31 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       </span>
                       <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">View Profile</span>
                     </Link>
+                    <button
+                      type="button"
+                      onClick={() => { setProfileOpen(false); router.push("/settings"); }}
+                      className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
+                      role="menuitem"
+                    >
+                      <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
+                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 opacity-40 transition-transform transition-opacity duration-200 group-hover:opacity-100 group-hover:scale-125" />
+                      </span>
+                      <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">Settings</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setProfileOpen(false); router.push("/plans"); }}
+                      className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
+                      role="menuitem"
+                    >
+                      <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
+                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 opacity-40 transition-transform transition-opacity duration-200 group-hover:opacity-100 group-hover:scale-125" />
+                      </span>
+                      <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">Plans</span>
+                    </button>
+
                     <div className="my-2 h-px bg-white/10" />
+
                     <div className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5">
                       <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
                         <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 opacity-40 transition-transform transition-opacity duration-200 group-hover:opacity-100 group-hover:scale-125" />
@@ -1018,7 +1087,37 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         />
                       </button>
                     </div>
+
                     <div className="my-2 h-px bg-white/10" />
+
+                    <button
+                      type="button"
+                      onClick={() => { setProfileOpen(false); router.push("/feedback"); }}
+                      className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
+                      role="menuitem"
+                    >
+                      <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
+                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 opacity-40 transition-transform transition-opacity duration-200 group-hover:opacity-100 group-hover:scale-125" />
+                      </span>
+                      <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">Help Center</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setProfileOpen(false); router.push("/whats-new"); }}
+                      className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
+                      role="menuitem"
+                    >
+                      <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
+                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 opacity-40 transition-transform transition-opacity duration-200 group-hover:opacity-100 group-hover:scale-125" />
+                      </span>
+                      <span className="flex items-center gap-1.5 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">
+                        What&apos;s New
+                        <span className="rounded-full bg-[var(--accent-color)] px-1.5 py-0.5 text-[9px] font-bold text-[#020308]">NEW</span>
+                      </span>
+                    </button>
+
+                    <div className="my-2 h-px bg-white/10" />
+
                     <button
                       type="button"
                       onClick={() => {

@@ -280,7 +280,7 @@ function ExpandedCard({
                 <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#71717a" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 9, fill: "#71717a" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
                 <Tooltip
-                  contentStyle={{ background: "#0a0b14", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, fontSize: 11 }}
+                  contentStyle={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, fontSize: 11 }}
                   formatter={(v) => [`${v}%`, "Probability"]}
                 />
                 <ReferenceLine y={50} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
