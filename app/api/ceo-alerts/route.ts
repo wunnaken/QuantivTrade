@@ -168,9 +168,9 @@ export async function GET(request: NextRequest) {
   try {
     const params = new URLSearchParams({
       apikey: apiKey,
-      q: 'CEO replaced OR "new CEO" OR "steps down" OR "appointed CEO" OR "resigns as CEO" OR "named CEO"',
+      q: "CEO stock earnings market",
       language: "en",
-      size: "20",
+      size: "10",
     });
 
     let res = await fetch(`${NEWSDATA_BASE}?${params.toString()}`, {
@@ -181,7 +181,7 @@ export async function GET(request: NextRequest) {
 
     if (res.status === 429) {
       if (cached?.data) return NextResponse.json(cached.data);
-      return NextResponse.json({ count: 0, alerts: [], weekly: [] });
+      return NextResponse.json({ count: 0, alerts: [], weekly: [], allNews: [] });
     }
 
     const data = res.ok
@@ -193,6 +193,25 @@ export async function GET(request: NextRequest) {
       : null;
 
     const raw = data?.status === "success" ? (data?.results ?? []) : [];
+
+    // All CEO news articles (unfiltered — for the Recent Alerts sidebar)
+    const allNewsItems: CEOAlertItem[] = raw
+      .filter((a) => a?.title && a?.link)
+      .map((a) => {
+        const title = String(a.title ?? "");
+        const hay = (title + " " + String(a.description ?? "")).toLowerCase();
+        let matchedTicker: string | undefined;
+        for (const [company, ticker] of Object.entries(companyMap)) {
+          if (hay.includes(company.toLowerCase())) { matchedTicker = ticker; break; }
+        }
+        return {
+          title,
+          url: String(a.link),
+          source: String((a as { source_name?: string }).source_name ?? "News"),
+          publishedAt: (a as { pubDate?: string }).pubDate ?? new Date().toISOString(),
+          matchedTicker,
+        };
+      });
 
     const matchedAlerts = raw
       .filter((a) => a?.title && a?.link)
@@ -255,7 +274,7 @@ export async function GET(request: NextRequest) {
       const recentItems = Array.isArray(recent) ? (recent as Partial<SupabaseCeoAlertRow>[]).map(toItem) : [];
       const weeklyItems = Array.isArray(weekly) ? (weekly as Partial<SupabaseCeoAlertRow>[]).map(toItem) : [];
 
-      const payload = { count: recentItems.length, alerts: recentItems, weekly: weeklyItems };
+      const payload = { count: recentItems.length, alerts: recentItems, weekly: weeklyItems, allNews: allNewsItems };
       cache.set(cacheKey, { data: payload, fetchedAt: Date.now() });
       return NextResponse.json(payload);
     } catch (error) {
@@ -268,7 +287,7 @@ export async function GET(request: NextRequest) {
         company: m.company,
         matchedTicker: m.ticker,
       }));
-      const payload = { count: fallbackItems.length, alerts: fallbackItems, weekly: fallbackItems.slice(0, 10) };
+      const payload = { count: fallbackItems.length, alerts: fallbackItems, weekly: fallbackItems.slice(0, 10), allNews: allNewsItems };
       cache.set(cacheKey, { data: payload, fetchedAt: Date.now() });
       return NextResponse.json(payload);
     }

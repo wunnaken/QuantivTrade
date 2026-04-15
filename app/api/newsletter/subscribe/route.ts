@@ -99,7 +99,7 @@ function buildUnsubscribeEmail(): string {
         <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
           <tr>
             <td style="padding-bottom:32px;text-align:center">
-              <img src="https://quantiv.trade/xchange-logo.png" alt="" width="32" height="32" style="display:inline-block;vertical-align:middle;margin-right:8px;border-radius:6px" />
+              <img src="https://quantiv.trade/quantivtrade-logo.png" alt="" width="32" height="32" style="display:inline-block;vertical-align:middle;margin-right:8px;border-radius:6px" />
               <span style="font-size:22px;font-weight:800;color:#e8846a;letter-spacing:-0.5px;vertical-align:middle">QuantivTrade</span>
             </td>
           </tr>
@@ -153,14 +153,14 @@ function buildWelcomeEmail(unsubscribeUrl: string): string {
         <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
           <tr>
             <td style="padding-bottom:32px;text-align:center">
-              <img src="https://quantiv.trade/xchange-logo.png" alt="" width="32" height="32" style="display:inline-block;vertical-align:middle;margin-right:8px;border-radius:6px" />
+              <img src="https://quantiv.trade/quantivtrade-logo.png" alt="" width="32" height="32" style="display:inline-block;vertical-align:middle;margin-right:8px;border-radius:6px" />
               <span style="font-size:22px;font-weight:800;color:#e8846a;letter-spacing:-0.5px;vertical-align:middle">QuantivTrade</span>
             </td>
           </tr>
           <tr>
             <td style="background:#16161c;border:1px solid rgba(232,132,106,0.15);border-radius:16px;padding:40px 36px">
               <div style="text-align:center;margin-bottom:24px">
-                <img src="https://quantiv.trade/xchange-logo.png" alt="QuantivTrade" width="52" height="52" style="display:inline-block;border-radius:50%;background:rgba(232,132,106,0.12);padding:8px;border:1px solid rgba(232,132,106,0.25)" />
+                <img src="https://quantiv.trade/quantivtrade-logo.png" alt="QuantivTrade" width="52" height="52" style="display:inline-block;border-radius:50%;background:rgba(232,132,106,0.12);padding:8px;border:1px solid rgba(232,132,106,0.25)" />
               </div>
               <h1 style="margin:0 0 12px;font-size:24px;font-weight:800;color:#ffffff;text-align:center;letter-spacing:-0.5px;line-height:1.2">
                 You&apos;re subscribed

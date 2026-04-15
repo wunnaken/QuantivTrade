@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthContext";
-import { QuantivTradeLogo } from "@/components/XchangeLogo";
+import { QuantivTradeLogo } from "@/components/QuantivTradeLogo";
 import { createClient } from "@/lib/supabase/client";
 
 const USERNAME_RE = /^[a-z0-9_]{3,20}$/;

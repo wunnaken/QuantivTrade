@@ -2,7 +2,7 @@
 
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { QuantivTradeLogo } from "../../../components/XchangeLogo";
+import { QuantivTradeLogo } from "../../../components/QuantivTradeLogo";
 
 function VerifyTwoFactorForm() {
   const router = useRouter();

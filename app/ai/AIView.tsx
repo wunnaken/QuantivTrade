@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../components/AuthContext";
-import { QuantivTradeLogoImage } from "../../components/XchangeLogoImage";
-import { QuantivTradeLogoIcon } from "../../components/XchangeLogoIcon";
+import { QuantivTradeLogoImage } from "../../components/QuantivTradeLogoImage";
+import { QuantivTradeLogoIcon } from "../../components/QuantivTradeLogoIcon";
 import { AiMarkdown } from "../../components/AiMarkdown";
 import {
   getStoredConversations,

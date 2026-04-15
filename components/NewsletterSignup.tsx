@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { useAuth } from "./AuthContext";
 
 export function NewsletterSignup({ compact = false }: { compact?: boolean }) {
@@ -105,18 +106,21 @@ export function NewsletterSignup({ compact = false }: { compact?: boolean }) {
         className={`rounded-xl border bg-white/5 px-4 text-sm text-zinc-200 placeholder-zinc-500 outline-none transition focus:border-[var(--accent-color)]/60 focus:ring-1 focus:ring-[var(--accent-color)]/30 disabled:opacity-50 ${compact ? "h-9 flex-1" : "h-11 w-full"}`}
         style={{ borderColor: "rgba(255,255,255,0.1)" }}
       />
-      <button
+      <motion.button
         type="submit"
         disabled={status === "loading"}
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.97 }}
         className={`shrink-0 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 ${compact ? "h-9 px-4" : "h-11 w-full"}`}
         style={{
           background: "rgba(232,132,106,0.15)",
           border: "1px solid rgba(232,132,106,0.35)",
           color: "#e8846a",
+          willChange: "transform",
         }}
       >
         {status === "loading" ? "Subscribing…" : "Subscribe"}
-      </button>
+      </motion.button>
       {status === "error" && (
         <p className="text-xs text-red-400 mt-1">{errorMsg}</p>
       )}

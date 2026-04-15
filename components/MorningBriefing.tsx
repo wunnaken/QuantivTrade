@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { QuantivTradeLogoImage } from "./XchangeLogoImage";
+import { QuantivTradeLogoImage } from "./QuantivTradeLogoImage";
 import { getCachedBriefing, setCachedBriefing, clearCachedBriefing } from "../lib/briefing";
 import {
   hasPreferences,

@@ -17,11 +17,11 @@ export async function GET(request: NextRequest) {
     if (idList.length === 0) return NextResponse.json([]);
     const { data, error } = await supabase
       .from("profiles")
-      .select("user_id, username, name")
+      .select("user_id, username, name, avatar_url")
       .in("user_id", idList)
       .limit(50);
     if (error) return NextResponse.json([]);
-    return NextResponse.json((data ?? []).map((p: Record<string, unknown>) => ({ id: p.user_id, username: p.username, name: p.name })));
+    return NextResponse.json((data ?? []).map((p: Record<string, unknown>) => ({ id: p.user_id, username: p.username, name: p.name, avatar_url: p.avatar_url ?? null })));
   }
 
   // Search by username or name

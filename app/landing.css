@@ -162,6 +162,13 @@
   100% { transform: translateX(0); }
 }
 
+/* Community card subtle pulse — CSS compositor animation, no JS overhead */
+@keyframes community-pulse {
+  0%, 100% { opacity: 0.72; }
+  50%       { opacity: 1; }
+}
+
+
 /* Bento card entry animation — applied via JS when section enters view */
 @keyframes bento-fade-up {
   from { opacity: 0; transform: translateY(16px); }

@@ -48,6 +48,29 @@ type DetailData = {
     freq?: string;
   }> | null;
   nextEarningsDate?: string | null;
+  cryptoData?: {
+    name?: string;
+    symbol?: string;
+    description?: { en?: string };
+    image?: { large?: string };
+    genesis_date?: string | null;
+    hashing_algorithm?: string | null;
+    categories?: string[];
+    links?: { homepage?: string[]; blockchain_site?: string[] };
+    market_data?: {
+      current_price?: { usd?: number };
+      market_cap?: { usd?: number };
+      total_volume?: { usd?: number };
+      circulating_supply?: number | null;
+      total_supply?: number | null;
+      max_supply?: number | null;
+      ath?: { usd?: number };
+      atl?: { usd?: number };
+      price_change_percentage_24h?: number | null;
+      price_change_percentage_7d?: number | null;
+      price_change_percentage_30d?: number | null;
+    };
+  } | null;
 };
 
 type TechnicalsData = {
@@ -272,12 +295,82 @@ function CompanyOverviewSection({ detail, ticker }: { detail: DetailData; ticker
     { label: "Revenue Growth (YoY)", value: m?.["revenueGrowthQuarterlyYoy"] ? `${(m["revenueGrowthQuarterlyYoy"] as number).toFixed(2)}%` : "—" },
   ];
 
+  // Crypto profile — render CoinGecko data when Finnhub profile is unavailable
   if (!p && !m) {
+    const cd = detail.cryptoData;
+    if (cd) {
+      const md = cd.market_data;
+      const pct24h = md?.price_change_percentage_24h;
+      const pct7d = md?.price_change_percentage_7d;
+      const pct30d = md?.price_change_percentage_30d;
+      const homepage = cd.links?.homepage?.find(Boolean);
+      const cryptoRows = [
+        { label: "Symbol", value: cd.symbol?.toUpperCase() ?? "—" },
+        { label: "Categories", value: cd.categories?.slice(0, 3).join(", ") || "—" },
+        { label: "Genesis Date", value: cd.genesis_date ?? "—" },
+        { label: "Algorithm", value: cd.hashing_algorithm ?? "—" },
+        { label: "Market Cap", value: md?.market_cap?.usd != null ? fmtLarge(md.market_cap.usd) : "—" },
+        { label: "24h Volume", value: md?.total_volume?.usd != null ? fmtLarge(md.total_volume.usd) : "—" },
+        { label: "Circulating Supply", value: md?.circulating_supply != null ? fmtLarge(md.circulating_supply) : "—" },
+        { label: "Total Supply", value: md?.total_supply != null ? fmtLarge(md.total_supply) : "—" },
+        { label: "Max Supply", value: md?.max_supply != null ? fmtLarge(md.max_supply) : "∞" },
+        { label: "All-Time High", value: md?.ath?.usd != null ? `$${md.ath.usd.toLocaleString()}` : "—" },
+        { label: "All-Time Low", value: md?.atl?.usd != null ? `$${md.atl.usd.toLocaleString()}` : "—" },
+        {
+          label: "24h Change",
+          value: pct24h != null ? (
+            <span className={pct24h >= 0 ? "text-emerald-400" : "text-red-400"}>{pct24h >= 0 ? "+" : ""}{pct24h.toFixed(2)}%</span>
+          ) : "—",
+        },
+        {
+          label: "7d Change",
+          value: pct7d != null ? (
+            <span className={pct7d >= 0 ? "text-emerald-400" : "text-red-400"}>{pct7d >= 0 ? "+" : ""}{pct7d.toFixed(2)}%</span>
+          ) : "—",
+        },
+        {
+          label: "30d Change",
+          value: pct30d != null ? (
+            <span className={pct30d >= 0 ? "text-emerald-400" : "text-red-400"}>{pct30d >= 0 ? "+" : ""}{pct30d.toFixed(2)}%</span>
+          ) : "—",
+        },
+        {
+          label: "Website",
+          value: homepage ? (
+            <a href={homepage} target="_blank" rel="noopener noreferrer" className="text-[var(--accent-color)] hover:underline truncate max-w-[160px] inline-block">
+              {homepage.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+            </a>
+          ) : "—",
+        },
+      ];
+      const desc = cd.description?.en?.replace(/<[^>]*>/g, "").slice(0, 400);
+      return (
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            {cd.image?.large && (
+              <img src={cd.image.large} alt={cd.name} className="h-8 w-8 rounded-full object-contain" />
+            )}
+            <div>
+              <p className="text-sm font-semibold text-zinc-200">{cd.name}</p>
+              <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{cd.symbol} · via CoinGecko</p>
+            </div>
+          </div>
+          {desc && (
+            <p className="mb-4 text-xs text-zinc-400 leading-relaxed line-clamp-4">{desc}</p>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+            {cryptoRows.map(({ label, value }) => (
+              <DataRow key={label} label={label} value={value} />
+            ))}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="space-y-2">
         <UnavailablePlaceholder
-          label="Company profile unavailable"
-          reason="This may be a crypto, forex, or commodity ticker — company profile data is only available for equities via Finnhub."
+          label="Profile unavailable"
+          reason="No profile data found for this ticker."
         />
       </div>
     );

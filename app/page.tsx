@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, useInView } from "framer-motion";
-import { QuantivTradeLogoImage } from "../components/XchangeLogoImage";
+import { QuantivTradeLogoImage } from "../components/QuantivTradeLogoImage";
 import "./landing.css";
 import { SiteFooter } from "../components/SiteFooter";
 import { NewsletterSignup } from "../components/NewsletterSignup";
@@ -154,119 +154,100 @@ const TICKER_ROWS: { s: string; p: string; c: string; up: boolean }[][] = [
   ],
 ];
 
-type Ticker = { s: string; p: string; c: string; up: boolean; base: number; chg: number };
-
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function fmtPrice(n: number, base: number): string {
-  if (base >= 10000) return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (base >= 1000)  return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  if (base < 1)      return n.toFixed(4);
-  return n.toFixed(2);
-}
-
-function initTicker(t: { s: string; p: string; c: string; up: boolean }): Ticker {
-  const base = parseFloat(t.p.replace(/,/g, ""));
-  const chg  = parseFloat(t.c.replace("+", ""));
-  return { ...t, base, chg };
-}
-
 const COLS = 15;
-const ROWS = 6;
-const TILE_ROWS = 150; // enough to fill full page height
+const CELL_H = 55;
 
+type Cell = { s: string; p: string; c: string; up: boolean; flash: number };
+
+// Canvas ticker background — 1 DOM node, rAF flash animation, zero React re-renders
 function TickerBackground() {
-  const base = TICKER_ROWS.flat();
-  const [tickers, setTickers] = useState<Ticker[]>(() =>
-    Array.from({ length: COLS * TILE_ROWS }, (_, i) => initTicker(base[i % base.length]))
-  );
-  const [flashing, setFlashing] = useState<Set<number>>(new Set());
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const id = setInterval(() => {
-      const count = Math.floor(Math.random() * 7) + 6;
-      const indices: number[] = [];
+    const canvas = canvasRef.current;
+    const parent = canvas?.parentElement;
+    if (!canvas || !parent) return;
 
-      setTickers(prev => {
-        const next = [...prev];
-        for (let k = 0; k < count; k++) {
-          const i = Math.floor(Math.random() * next.length);
-          indices.push(i);
-          const t = next[i];
-          const delta = (Math.random() - 0.5) * 1.2;
-          const newChg = parseFloat((t.chg + delta).toFixed(2));
-          const newPrice = t.base * (1 + newChg / 100);
-          const clampedPrice = Math.max(t.base * 0.92, Math.min(t.base * 1.08, newPrice));
-          const clampedChg = parseFloat(((clampedPrice / t.base - 1) * 100).toFixed(2));
-          next[i] = {
-            ...t,
-            chg: clampedChg,
-            p: fmtPrice(clampedPrice, t.base),
-            c: (clampedChg >= 0 ? "+" : "") + clampedChg.toFixed(2),
-            up: clampedChg >= 0,
-          };
-        }
-        return next;
-      });
+    const base = TICKER_ROWS.flat();
+    let cells: Cell[] = [];
+    let cellW = 0;
+    let colCount = COLS;
+    let raf: number;
+    let lastFlash = 0;
+    let dirty = true;
 
-      setFlashing(prev => new Set([...prev, ...indices]));
-      setTimeout(() => setFlashing(prev => {
-        const next = new Set(prev);
-        indices.forEach(i => next.delete(i));
-        return next;
-      }), 600);
-    }, 250);
+    const cvs = canvas; // non-null alias for use inside closures
 
-    return () => clearInterval(id);
+    function build(w: number, h: number) {
+      cvs.width = w;
+      cvs.height = h;
+      cellW = Math.floor(w / colCount);
+      const rowCount = Math.ceil(h / CELL_H) + 1;
+      cells = Array.from({ length: colCount * rowCount }, (_, i) => ({
+        ...base[i % base.length], flash: 0,
+      }));
+      dirty = true;
+    }
+
+    build(parent.clientWidth, parent.clientHeight);
+
+    const ro = new ResizeObserver(([e]) => {
+      if (e) build(e.contentRect.width, e.contentRect.height);
+    });
+    ro.observe(parent);
+
+    const ctx = cvs.getContext("2d")!;
+
+    function draw(ts: number) {
+      raf = requestAnimationFrame(draw);
+
+      for (const c of cells) {
+        if (c.flash > 0) { c.flash = Math.max(0, c.flash - 0.04); dirty = true; }
+      }
+      if (ts - lastFlash > 420) {
+        const n = 6 + Math.floor(Math.random() * 8);
+        for (let k = 0; k < n; k++) cells[Math.floor(Math.random() * cells.length)].flash = 1;
+        lastFlash = ts;
+        dirty = true;
+      }
+      if (!dirty) return;
+      dirty = false;
+
+      ctx.clearRect(0, 0, cvs.width, cvs.height);
+      ctx.textAlign = "center";
+
+      for (let i = 0; i < cells.length; i++) {
+        const t = cells[i];
+        const x = (i % colCount) * cellW + cellW / 2;
+        const y = Math.floor(i / colCount) * CELL_H + 14;
+        const f = t.flash;
+
+        ctx.font = "600 9px monospace";
+        ctx.fillStyle = f > 0
+          ? (t.up ? `rgba(74,222,128,${0.38 + f * 0.57})` : `rgba(248,113,113,${0.38 + f * 0.57})`)
+          : "rgba(255,255,255,0.26)";
+        ctx.fillText(t.s, x, y);
+
+        ctx.font = "8px monospace";
+        ctx.fillStyle = `rgba(255,255,255,${0.13 + f * 0.35})`;
+        ctx.fillText(t.p, x, y + 13);
+
+        ctx.fillStyle = t.up
+          ? `rgba(74,222,128,${0.35 + f * 0.5})`
+          : `rgba(248,113,113,${0.35 + f * 0.5})`;
+        ctx.fillText(`${t.up ? "▲" : "▼"} ${t.c}%`, x, y + 24);
+      }
+    }
+
+    raf = requestAnimationFrame(draw);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
   }, []);
 
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: 0, left: 0, right: 0, bottom: 0,
-        zIndex: 1,
-        overflow: "hidden",
-        filter: "blur(1px)",
-        opacity: 0.7,
-        display: "grid",
-        gridTemplateColumns: `repeat(${COLS}, 1fr)`,
-        gridAutoRows: "55px",
-        alignContent: "start",
-      }}
-    >
-      {tickers.map((t, i) => {
-        const lit = flashing.has(i);
-        return (
-          <div key={i} className="font-mono flex flex-col items-center justify-center" style={{ gap: "1px" }}>
-            <span style={{
-              fontSize: "9px", fontWeight: 600, letterSpacing: "0.03em", lineHeight: 1.2,
-              color: lit ? (t.up ? "rgba(74,222,128,0.95)" : "rgba(248,113,113,0.95)") : "rgba(255,255,255,0.28)",
-              transition: "color 0.4s ease",
-            }}>{t.s}</span>
-            <span style={{
-              fontSize: "8px", lineHeight: 1.2,
-              color: lit ? (t.up ? "rgba(74,222,128,0.6)" : "rgba(248,113,113,0.6)") : "rgba(255,255,255,0.14)",
-              transition: "color 0.4s ease",
-            }}>{t.p}</span>
-            <span style={{
-              fontSize: "8px", lineHeight: 1.2,
-              color: t.up
-                ? (lit ? "rgba(74,222,128,0.9)" : "rgba(74,222,128,0.38)")
-                : (lit ? "rgba(248,113,113,0.9)" : "rgba(248,113,113,0.38)"),
-              transition: "color 0.4s ease",
-            }}>{t.up ? "▲" : "▼"} {t.c}%</span>
-          </div>
-        );
-      })}
-    </div>
+    <canvas ref={canvasRef} style={{
+      position: "absolute", top: 0, left: 0,
+      zIndex: 1, filter: "blur(0.6px)", opacity: 0.65, pointerEvents: "none",
+    }} />
   );
 }
 
@@ -285,11 +266,11 @@ function HeroSection() {
             width: "clamp(64px, 8vw, 110px)",
             height: "clamp(64px, 8vw, 110px)",
             backgroundColor: "var(--accent-color)",
-            WebkitMaskImage: "url(/xchange-logo.png)",
+            WebkitMaskImage: "url(/quantivtrade-logo.png)",
             WebkitMaskSize: "contain",
             WebkitMaskPosition: "center",
             WebkitMaskRepeat: "no-repeat",
-            maskImage: "url(/xchange-logo.png)",
+            maskImage: "url(/quantivtrade-logo.png)",
             maskSize: "contain",
             maskPosition: "center",
             maskRepeat: "no-repeat",
@@ -412,6 +393,7 @@ function HeroSection() {
                 borderRadius: "12px",
                 textDecoration: "none",
                 transition: "background 0.2s",
+                willChange: "transform",
               }}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" />
@@ -424,6 +406,9 @@ function HeroSection() {
 
         {/* Pricing plans */}
         <PricingPlans />
+
+        {/* Security trust bar */}
+        <SecuritySection />
 
         {/* Toolbar showcase inside hero background */}
         <ToolbarShowcaseInner />
@@ -483,14 +468,13 @@ const CARD_BASE = { borderRadius: "16px", border: "1px solid rgba(255,255,255,0.
 function BentoSection() {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: "-60px" });
-  const [hovered, setHovered] = useState<string | null>(null);
 
   const card = (key: string, delay: number, style: React.CSSProperties, children: React.ReactNode) => (
     <motion.div key={key}
       initial={{ opacity: 0, y: 18 }} animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ delay, duration: 0.5 }}
-      onMouseEnter={() => setHovered(key)} onMouseLeave={() => setHovered(null)}
-      style={{ ...CARD_BASE, ...style, transition: "border-color 0.25s, box-shadow 0.25s", borderColor: hovered === key ? "rgba(232,132,106,0.3)" : "rgba(255,255,255,0.07)", boxShadow: hovered === key ? "0 0 32px rgba(232,132,106,0.07)" : "none" }}
+      whileHover={{ borderColor: "rgba(232,132,106,0.3)", boxShadow: "0 0 32px rgba(232,132,106,0.07)" }}
+      style={{ ...CARD_BASE, ...style, borderColor: "rgba(255,255,255,0.07)" }}
     >
       {children}
     </motion.div>
@@ -570,15 +554,13 @@ function BentoSection() {
               { name: "Day Trading", members: "21k", color: "rgba(74,222,128,0.65)" },
               { name: "Macro & Rates", members: "5.3k", color: "rgba(251,191,36,0.65)" },
             ].map(({ name, members, color }, i) => (
-              <motion.div key={name}
-                animate={{ opacity: [0.7, 1, 0.7] }}
-                transition={{ duration: 3 + i * 0.5, repeat: Infinity, ease: "easeInOut", delay: i * 0.4 }}
-                style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 8px", borderRadius: "8px", background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.05)" }}
+              <div key={name}
+                style={{ display: "flex", alignItems: "center", gap: "8px", padding: "6px 8px", borderRadius: "8px", background: "rgba(255,255,255,0.025)", border: "1px solid rgba(255,255,255,0.05)", animation: `community-pulse ${3 + i * 0.5}s ease-in-out ${i * 0.4}s infinite` }}
               >
                 <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, flexShrink: 0 }} />
                 <span style={{ fontSize: "10px", fontWeight: 600, color: "rgba(255,255,255,0.65)", flex: 1 }}>{name}</span>
                 <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.25)" }}>{members}</span>
-              </motion.div>
+              </div>
             ))}
           </div>
           {label("Community", "Join groups, follow traders")}
@@ -627,6 +609,7 @@ function BentoSection() {
           </div>
           {label("Connect Brokerage", "Link accounts, track P&L in one place")}
         </>)}
+
 
       </div>
     </div>
@@ -822,18 +805,25 @@ function PricingPlans() {
               </ul>
 
               {/* CTA */}
-              <a href="/pricing" style={{
-                display: "block", textAlign: "center", padding: "13px 0", borderRadius: "10px",
-                border: highlight ? "none" : "1px solid rgba(232,132,106,0.25)",
-                background: highlight ? "var(--accent-color)" : "rgba(232,132,106,0.06)",
-                color: highlight ? "#fff" : "var(--accent-color)",
-                fontSize: "12px", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase",
-                textDecoration: "none", cursor: "pointer", transition: "opacity 0.2s",
-              }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = "0.85")}
-              onMouseLeave={e => (e.currentTarget.style.opacity = "1")}>
+              <motion.a href="/pricing"
+                whileHover={{ scale: 1.03, boxShadow: "0 0 28px rgba(232,132,106,0.6)" }}
+                whileTap={{ scale: 0.97 }}
+                style={{
+                  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                  width: "100%", padding: "13px 0", borderRadius: "10px",
+                  border: "1.5px solid var(--accent-color)",
+                  background: highlight ? "rgba(232,132,106,0.12)" : "transparent",
+                  color: "var(--accent-color)",
+                  fontFamily: "var(--font-lora)",
+                  fontSize: "13px", fontWeight: 600, letterSpacing: "0.03em",
+                  textDecoration: "none", cursor: "pointer",
+                  willChange: "transform",
+                }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
                 Get {name}
-              </a>
+              </motion.a>
             </div>
           </motion.div>
         ))}
@@ -1100,11 +1090,20 @@ function ToolbarShowcaseInner() {
   ];
 
   const personalItems = [
-    { name: "Journal", desc: "Trade log & reflection notes", vis: <>
-      {[85,70,90,60,80].map((w,i)=>(
-        <motion.div key={i} initial={{width:0}} animate={{width:`${w}%`}} transition={{delay:i*0.07,duration:0.5,ease:"easeOut"}}
-          style={{height:5,borderRadius:3,background:"rgba(255,255,255,0.07)",marginBottom:5}}/>
-      ))}
+    { name: "Journal", desc: "Trade log, analytics & P&L analysis", vis: <>
+      {/* Mini calendar */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:6}}>
+        {Array.from({length:21}).map((_,i)=>{
+          const active=[2,5,8,11,14,17,18,20].includes(i);
+          const profit=[2,8,14,18].includes(i);
+          return <div key={i} style={{height:6,borderRadius:1.5,background:active?(profit?"rgba(0,200,150,0.55)":"rgba(239,68,68,0.45)"):"rgba(255,255,255,0.06)"}} />;
+        })}
+      </div>
+      {/* Mini sparkline */}
+      <svg width="100%" height="22" viewBox="0 0 80 22" preserveAspectRatio="none">
+        <polyline points="0,18 12,14 24,16 36,9 48,11 60,5 72,7 80,3" fill="none" stroke="rgba(232,132,106,0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <polyline points="0,18 12,14 24,16 36,9 48,11 60,5 72,7 80,3 80,22 0,22" fill="rgba(232,132,106,0.08)" stroke="none"/>
+      </svg>
     </> },
     { name: "Prediction Markets", desc: "Community odds on key events", badge: { label: "Beta", color: "rgba(147,197,253,0.9)", bg: "rgba(147,197,253,0.1)" }, vis: <>
       {[["Fed cuts in June?",72],["BTC > 80k by EOY?",58],["NVDA beats Q2?",84]].map(([q,p])=>(
@@ -1145,6 +1144,65 @@ function ToolbarShowcaseInner() {
 
   return (
     <div ref={ref} style={{ width: "min(96vw, 1300px)", margin: "0 auto", paddingBottom: "48px" }}>
+
+      {/* Whiteboard — full-width feature card, no section label */}
+      <motion.div
+        initial={{ opacity: 0, y: 14 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+        transition={{ duration: 0.5 }}
+        style={{ ...W, marginBottom: "40px" }}
+      >
+        <div style={{ padding: "18px 20px 0", display: "flex", gap: "20px", alignItems: "flex-start" }}>
+          {/* Canvas mock */}
+          <div style={{ flex: 1, borderRadius: "10px", background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)", overflow: "hidden", position: "relative", height: "130px" }}>
+            <svg width="100%" height="100%" viewBox="0 0 600 130" preserveAspectRatio="none" style={{ position: "absolute", inset: 0 }}>
+              {[1,2,3,4,5].map(i => <line key={`h${i}`} x1="0" y1={i*22} x2="600" y2={i*22} stroke="rgba(255,255,255,0.04)" strokeWidth="1"/>)}
+              {[1,2,3,4,5,6,7,8,9,10,11].map(i => <line key={`v${i}`} x1={i*54} y1="0" x2={i*54} y2="130" stroke="rgba(255,255,255,0.04)" strokeWidth="1"/>)}
+              <polyline points="0,95 60,88 120,92 180,75 240,80 300,62 360,68 420,50 480,55 540,42 600,38" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1.5"/>
+              <line x1="30" y1="100" x2="580" y2="45" stroke="rgba(147,197,253,0.55)" strokeWidth="1.8" strokeDasharray="6 3"/>
+              <rect x="280" y="30" width="180" height="22" rx="3" fill="rgba(251,191,36,0.07)" stroke="rgba(251,191,36,0.3)" strokeWidth="1"/>
+              <text x="370" y="44" textAnchor="middle" fill="rgba(251,191,36,0.7)" fontSize="8" fontFamily="monospace">resistance zone</text>
+              <line x1="420" y1="115" x2="420" y2="58" stroke="rgba(74,222,128,0.5)" strokeWidth="1.5"/>
+              <polygon points="414,60 420,48 426,60" fill="rgba(74,222,128,0.5)"/>
+              <text x="434" y="90" fill="rgba(74,222,128,0.6)" fontSize="8" fontFamily="monospace">entry</text>
+              <rect x="18" y="10" width="80" height="36" rx="3" fill="rgba(232,132,106,0.12)" stroke="rgba(232,132,106,0.25)" strokeWidth="1"/>
+              <text x="58" y="25" textAnchor="middle" fill="rgba(232,132,106,0.8)" fontSize="7.5" fontFamily="monospace" fontWeight="600">key support</text>
+              <text x="58" y="38" textAnchor="middle" fill="rgba(232,132,106,0.5)" fontSize="7" fontFamily="monospace">~$178</text>
+            </svg>
+            {[
+              { x: "22%", y: "68%", color: "rgba(147,197,253,0.9)", label: "mk" },
+              { x: "68%", y: "22%", color: "rgba(251,191,36,0.9)", label: "rx" },
+              { x: "84%", y: "55%", color: "rgba(74,222,128,0.9)", label: "jd" },
+            ].map(({ x, y, color, label }) => (
+              <div key={label} style={{ position: "absolute", left: x, top: y, display: "flex", alignItems: "center", gap: "3px" }}>
+                <svg width="10" height="12" viewBox="0 0 10 12" fill={color}><path d="M0 0l10 7-5 1-2 4z"/></svg>
+                <span style={{ fontSize: "8px", fontWeight: 700, color, background: "rgba(0,0,0,0.5)", padding: "1px 4px", borderRadius: "3px" }}>{label}</span>
+              </div>
+            ))}
+          </div>
+          {/* Right text */}
+          <div style={{ width: "220px", flexShrink: 0, paddingTop: "4px", display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+              {["Draw", "Annotate", "Vote on levels"].map(t => (
+                <span key={t} style={{ fontSize: "9px", fontWeight: 600, letterSpacing: "0.1em", textTransform: "uppercase", color: "rgba(255,255,255,0.22)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", padding: "3px 7px", borderRadius: "4px" }}>{t}</span>
+              ))}
+            </div>
+            <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.3)", lineHeight: 1.7 }}>
+              A shared canvas for your community. Sketch trade ideas, mark support and resistance, drop sticky notes — all in real time with your group.
+            </p>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {["rgba(147,197,253,0.8)", "rgba(251,191,36,0.8)", "rgba(74,222,128,0.8)", "rgba(232,132,106,0.8)"].map((c, i) => (
+                <div key={i} style={{ width: 20, height: 20, borderRadius: "50%", background: c, border: "1.5px solid rgba(0,0,0,0.4)", marginLeft: i > 0 ? "-6px" : 0 }} />
+              ))}
+              <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.28)", marginLeft: "4px" }}>3 drawing now</span>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: "14px 20px 18px" }}>
+          <p style={{ fontFamily: "var(--font-lora), Georgia, serif", fontSize: "15px", fontWeight: 600, color: "#fff", marginBottom: "3px" }}>Community Whiteboard</p>
+          <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.3)" }}>Collaborate on charts and trade ideas in real time</p>
+        </div>
+      </motion.div>
+
       <SectionGroup title="Markets" color="rgba(147,197,253,0.8)" cols={5} delay={0} inView={inView} items={marketsItems} />
       <SectionGroup title="Analytics" color="rgba(74,222,128,0.8)" cols={6} delay={0.05} inView={inView} items={analyticsItems} />
       <SectionGroup title="Personal" color="rgba(196,181,253,0.8)" cols={5} delay={0.1} inView={inView} items={personalItems} />
@@ -1172,7 +1230,7 @@ function NewsletterSection() {
             Get notified on new releases
           </h2>
           <p className="mb-8" style={{ color: "rgba(255,255,255,0.38)", fontSize: "14px" }}>
-            We ship fast. Subscribe and we&apos;ll email you whenever a new version drops.
+            Subscribe and we&apos;ll email you whenever a new version drops.
           </p>
           <div className="max-w-sm mx-auto">
             <NewsletterSignup />
@@ -1181,6 +1239,114 @@ function NewsletterSection() {
             No spam. Unsubscribe anytime.
           </p>
         </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Security Trust Bar ───────────────────────────────────────────────────────
+
+const SECURITY_FEATURES = [
+  {
+    title: "Two-Factor Authentication",
+    desc: "Secure your account with a TOTP authenticator app or SMS code on every login.",
+    tag: "2FA",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="5" y="11" width="14" height="10" rx="2" />
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+        <circle cx="12" cy="16" r="1" fill="currentColor" />
+      </svg>
+    ),
+  },
+  {
+    title: "AES-256 Encryption",
+    desc: "All trade records, personal data, and API keys are encrypted at rest and in transit using bank-grade AES-256.",
+    tag: "Encryption",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+        <path d="M9 12l2 2 4-4" />
+      </svg>
+    ),
+  },
+  {
+    title: "Active Session Guard",
+    desc: "Every login is tracked by device and location. Suspicious sessions are flagged and revoked automatically.",
+    tag: "Sessions",
+    icon: (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.5 4.5l-15 15" stroke="rgba(74,222,128,0.7)" strokeWidth="1.4" />
+      </svg>
+    ),
+  },
+] as const;
+
+function SecuritySection() {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+
+  return (
+    <section ref={ref} className="relative px-6 py-20">
+      <div className="mx-auto" style={{ maxWidth: "min(96vw, 1300px)" }}>
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.5 }}
+          style={{ textAlign: "center", marginBottom: "40px" }}
+        >
+          <p className="overline-label" style={{ marginBottom: "10px" }}>Built for trust</p>
+          <p style={{ fontFamily: "var(--font-lora), Georgia, serif", fontSize: "clamp(20px, 2.4vw, 28px)", fontWeight: 600, color: "#fff" }}>
+            Your account, locked down.
+          </p>
+        </motion.div>
+
+        {/* Three cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "14px" }}>
+          {SECURITY_FEATURES.map(({ title, desc, tag, icon }, i) => (
+            <motion.div
+              key={title}
+              initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+              transition={{ delay: i * 0.1, duration: 0.5 }}
+              style={{
+                padding: "28px 28px 24px",
+                borderRadius: "16px",
+                border: "1px solid rgba(255,255,255,0.07)",
+                background: "rgba(255,255,255,0.025)",
+                backdropFilter: "blur(12px)",
+                display: "flex", flexDirection: "column", gap: "14px",
+              }}
+            >
+              {/* Icon + tag row */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{
+                  width: 42, height: 42, borderRadius: "10px",
+                  background: "rgba(232,132,106,0.08)",
+                  border: "1px solid rgba(232,132,106,0.18)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "var(--accent-color)",
+                  flexShrink: 0,
+                }}>
+                  {icon}
+                </div>
+                <span style={{
+                  fontSize: "9px", fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase",
+                  color: "rgba(74,222,128,0.8)",
+                  background: "rgba(74,222,128,0.07)",
+                  border: "1px solid rgba(74,222,128,0.18)",
+                  padding: "3px 8px", borderRadius: "5px",
+                }}>{tag}</span>
+              </div>
+              {/* Text */}
+              <div>
+                <p style={{ fontFamily: "var(--font-lora), Georgia, serif", fontSize: "15px", fontWeight: 600, color: "#fff", marginBottom: "8px" }}>{title}</p>
+                <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.32)", lineHeight: 1.75 }}>{desc}</p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -1202,7 +1368,7 @@ function QuizCTASection() {
           transition={{ duration: 0.65 }}
           className="font-black tracking-tight text-white mb-5"
           style={{ fontSize: "clamp(40px, 6.5vw, 72px)", letterSpacing: "-0.025em" }}>
-          Your Edge<br />Starts Here.
+          Connection.<br />Trade.<br />Grow.
         </motion.h2>
         <motion.p initial={{ opacity: 0, y: 14 }} animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ delay: 0.18, duration: 0.5 }}
@@ -1211,11 +1377,29 @@ function QuizCTASection() {
         </motion.p>
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
           <motion.a href="/onboarding"
-            whileHover={{ scale: 1.03 }}
+            whileHover={{ scale: 1.04, boxShadow: "0 0 32px rgba(232,132,106,0.35)" }}
             whileTap={{ scale: 0.97 }}
             initial={{ opacity: 0, y: 12 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-            transition={{ delay: 0.3, duration: 0.48 }}
-            className="inline-block cta-primary text-base font-semibold px-10 py-4 rounded-xl">
+            transition={{ default: { duration: 0.18, ease: "easeOut" }, opacity: { delay: 0.3, duration: 0.48 }, y: { delay: 0.3, duration: 0.48 } }}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: "10px",
+              background: "transparent",
+              border: "1.5px solid var(--accent-color)",
+              color: "var(--accent-color)",
+              fontFamily: "var(--font-lora)",
+              fontSize: "15px", fontWeight: 600,
+              letterSpacing: "0.03em",
+              padding: "12px 32px",
+              borderRadius: "12px",
+              textDecoration: "none",
+              transition: "background 0.2s",
+              willChange: "transform",
+            }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
+              <rect x="9" y="3" width="6" height="4" rx="1" />
+              <path d="M9 12h6M9 16h4" />
+            </svg>
             Take the Investor Quiz
           </motion.a>
         </div>
@@ -1246,10 +1430,9 @@ export default function Home() {
     <div className="landing-page">
       {!ready ? (
         <div className="flex min-h-screen items-center justify-center" style={{ background: "var(--app-bg)" }}>
-          <motion.div animate={{ opacity: [0.15, 0.5, 0.15] }} transition={{ duration: 2, repeat: Infinity }}
-            className="font-black tracking-tight text-white" style={{ fontSize: "24px", letterSpacing: "-0.02em" }}>
+          <div className="font-black tracking-tight text-white badge-pulse" style={{ fontSize: "24px", letterSpacing: "-0.02em" }}>
             Quantiv
-          </motion.div>
+          </div>
         </div>
       ) : (
         <div style={{ position: "relative" }}>

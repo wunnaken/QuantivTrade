@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { QuantivTradeLogoImage } from "../../components/XchangeLogoImage";
+import { QuantivTradeLogoImage } from "../../components/QuantivTradeLogoImage";
 
 /* Scattered positions for star dots (left/top %). Some slightly larger (size 3). */
 const STAR_POSITIONS: { left: number; top: number; size?: number }[] = [

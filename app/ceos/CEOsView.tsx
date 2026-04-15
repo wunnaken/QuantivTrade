@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 import {
   CEOS,
   CEO_SECTORS,
   type CEOEntry,
+  type CEOSentiment,
   getInitials,
   sentimentColor,
 } from "../../lib/ceo-data";
@@ -18,70 +17,17 @@ import {
 } from "../../lib/watchlist-api";
 import { TypewriterText } from "../../components/TypewriterText";
 
-const CANVAS_W = 3000;
-const CANVAS_H = 2000;
-const LINK_COLOR = "rgba(30, 58, 95, 0.4)";
-const LINK_HOVER = "rgba(255,255,255,0.9)";
-const PANEL_BG = "var(--app-card)";
-
-const CEO_PANELS_KEY = "quantivtrade-ceo-panels";
-
-function getCeoPanelPrefs(): { detailPanelWidth: number; detailPanelCollapsed: boolean; filterPanelCollapsed: boolean } {
-  if (typeof window === "undefined") return { detailPanelWidth: 400, detailPanelCollapsed: false, filterPanelCollapsed: false };
-  try {
-    const raw = localStorage.getItem(CEO_PANELS_KEY);
-    if (!raw) return { detailPanelWidth: 400, detailPanelCollapsed: false, filterPanelCollapsed: false };
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === "object" && "detailPanelWidth" in parsed && "detailPanelCollapsed" in parsed && "filterPanelCollapsed" in parsed) {
-      const p = parsed as { detailPanelWidth: number; detailPanelCollapsed: boolean; filterPanelCollapsed: boolean };
-      return {
-        detailPanelWidth: Math.min(700, Math.max(280, Number(p.detailPanelWidth) || 400)),
-        detailPanelCollapsed: Boolean(p.detailPanelCollapsed),
-        filterPanelCollapsed: Boolean(p.filterPanelCollapsed),
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return { detailPanelWidth: 400, detailPanelCollapsed: false, filterPanelCollapsed: false };
-}
-
-function saveCeoPanelPrefs(prefs: { detailPanelWidth: number; detailPanelCollapsed: boolean; filterPanelCollapsed: boolean }) {
-  try {
-    localStorage.setItem(CEO_PANELS_KEY, JSON.stringify(prefs));
-  } catch {
-    // ignore
-  }
-}
-
-const CEO_MAP_CAMERA_KEY = "quantivtrade-ceo-map-camera";
-
-function getCeoMapCamera(): { k: number; x: number; y: number } | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(CEO_MAP_CAMERA_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as unknown;
-    if (parsed && typeof parsed === "object" && "k" in parsed && "x" in parsed && "y" in parsed) {
-      const p = parsed as { k: number; x: number; y: number };
-      const k = Number(p.k);
-      if (k >= 0.28 && k <= 4) return { k, x: Number(p.x), y: Number(p.y) };
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
-function saveCeoMapCamera(camera: { k: number; x: number; y: number }) {
-  try {
-    localStorage.setItem(CEO_MAP_CAMERA_KEY, JSON.stringify(camera));
-  } catch {
-    // ignore
-  }
-}
+// ─── LocalStorage helpers ────────────────────────────────────────────────────
 
 const CEO_FILTERS_KEY = "quantivtrade-ceo-filters";
+
+type FilterState = {
+  search: string;
+  sectors: Set<string>;
+  sentiment: "all" | "positive" | "negative" | "alerts";
+  tenure: "all" | "new" | "established" | "veteran";
+  marketCap: "all" | "mega" | "large" | "mid";
+};
 
 function getCeoFilters(): FilterState | null {
   if (typeof window === "undefined") return null;
@@ -118,56 +64,6 @@ function saveCeoFilters(filters: FilterState) {
   }
 }
 
-function truncateCompany(name: string, maxLen: number): string {
-  if (name.length <= maxLen) return name;
-  return name.slice(0, maxLen - 1) + "…";
-}
-
-function seedRandom(seed: string): () => number {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h << 5) - h + seed.charCodeAt(i);
-  return () => {
-    h = (h << 5) - h + 1;
-    return Math.abs((h >>> 0) % 1000) / 1000;
-  };
-}
-
-function getTier(marketCap: number): number {
-  if (marketCap >= 1000) return 1;
-  if (marketCap >= 500) return 2;
-  if (marketCap >= 100) return 3;
-  if (marketCap >= 50) return 4;
-  return 5;
-}
-
-function tierRadius(tier: number): number {
-  switch (tier) {
-    case 1: return 28;
-    case 2: return 22;
-    case 3: return 16;
-    case 4: return 12;
-    default: return 8;
-  }
-}
-
-function tierY(tier: number): number {
-  switch (tier) {
-    case 1: return 280;
-    case 2: return 550;
-    case 3: return 1000;
-    case 4: return 1420;
-    default: return 1820;
-  }
-}
-
-type FilterState = {
-  search: string;
-  sectors: Set<string>;
-  sentiment: "all" | "positive" | "negative" | "alerts";
-  tenure: "all" | "new" | "established" | "veteran";
-  marketCap: "all" | "mega" | "large" | "mid";
-};
-
 const defaultFilters = (): FilterState => ({
   search: "",
   sectors: new Set(CEO_SECTORS),
@@ -175,6 +71,8 @@ const defaultFilters = (): FilterState => ({
   tenure: "all",
   marketCap: "all",
 });
+
+// ─── Preset data ──────────────────────────────────────────────────────────────
 
 type QuickPresetId = "spy500" | "qqq100" | "dow30" | "magnificent7" | "techGiants";
 
@@ -187,7 +85,6 @@ const QUICK_PRESET_BUTTON_LABEL: Record<QuickPresetId, string> = {
 };
 
 const QUICK_PRESET_SHOW_LABEL: Record<QuickPresetId, string> = {
-  // Special wording requested
   spy500: "S&P 500 Companies",
   qqq100: "QQQ 100",
   dow30: "Dow 30",
@@ -196,100 +93,60 @@ const QUICK_PRESET_SHOW_LABEL: Record<QuickPresetId, string> = {
 };
 
 const QUICK_PRESET_TICKERS: Record<QuickPresetId, Set<string> | null> = {
-  // All our CEOs are treated as belonging to the “S&P 500” preset.
-  spy500: null,
+  // S&P 500: all large-cap US companies in our dataset (excludes foreign ADRs + micro-caps)
+  spy500: new Set([
+    // Technology
+    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "AVGO", "ORCL", "INTU",
+    "IBM", "VZ", "TXN", "CSCO", "TMUS", "CMCSA", "BKNG", "AMD", "QCOM", "ADBE",
+    "NFLX", "CRM", "PANW", "CRWD", "KLAC", "SNPS", "CDNS", "LRCX", "WDAY", "NXPI",
+    "FTNT", "CHTR", "TTD", "MCHP", "DDOG", "EA", "CTSH", "ON", "ANSS", "ZS",
+    "TTWO", "VRSK", "MDB", "UBER", "SHOP", "INTC",
+    // Finance
+    "JPM", "BAC", "WFC", "V", "MA", "BRK", "GS", "MS", "BLK", "AXP",
+    "C", "ADP", "USB", "SCHW", "COF", "TRV", "PAYX", "PYPL",
+    // Healthcare
+    "UNH", "LLY", "JNJ", "MRK", "ABBV", "AMGN", "VRTX", "REGN", "CVS", "GILD",
+    "CI", "PFE", "ISRG", "BMY", "HUM", "IDXX", "GEHC", "MRNA", "DXCM", "BIIB",
+    // Energy
+    "XOM", "CVX", "COP", "SLB", "EOG", "CEG", "MPC", "OXY", "HAL", "BKR",
+    "EXC", "XEL", "FANG",
+    // Consumer
+    "WMT", "HD", "PG", "COST", "KO", "PEP", "DIS", "MCD", "SBUX", "MDLZ",
+    "NKE", "TGT", "ORLY", "MNST", "ROST", "KDP", "DLTR", "CMG", "LULU", "YUM",
+    "WBD", "WBA",
+    // Industrials
+    "BA", "CAT", "GE", "HON", "RTX", "UPS", "CTAS", "FDX", "ROP", "PCAR",
+    "FAST", "ODFL", "MMM", "DOW",
+    // Auto (US-listed domestic)
+    "F", "GM",
+    // Crypto/Fintech (S&P 500 members)
+    "COIN",
+  ]),
+  // Nasdaq-100 (QQQ): full index as of 2025
   qqq100: new Set([
-    "AAPL",
-    "MSFT",
-    "NVDA",
-    "GOOGL",
-    "AMZN",
-    "META",
-    "TSLA",
-    "AVGO",
-    "COST",
-    "NFLX",
-    "AMD",
-    "ADBE",
-    "QCOM",
-    "INTC",
-    "CSCO",
-    "TXN",
-    "AMGN",
-    "HON",
-    "SBUX",
-    "ISRG",
-    "VRTX",
-    "ADP",
-    "PANW",
-    "LRCX",
-    "MDLZ",
-    "REGN",
-    "GILD",
-    "PYPL",
-    "MELI",
-    "KDP",
+    "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOG", "GOOGL", "AVGO", "TSLA", "COST",
+    "NFLX", "ASML", "AMD", "MELI", "ISRG", "QCOM", "CSCO", "INTU", "TXN", "AMGN",
+    "ADBE", "PEP", "REGN", "VRTX", "ABNB", "HON", "PANW", "LRCX", "CRWD", "GILD",
+    "ADP", "CDNS", "SNPS", "SBUX", "KLAC", "NXPI", "FTNT", "MCHP", "CEG", "BKNG",
+    "PYPL", "ON", "ORLY", "CTAS", "MDLZ", "WDAY", "ROST", "PCAR", "ROP", "DXCM",
+    "PAYX", "TTD", "FAST", "MNST", "EA", "BIIB", "CTSH", "IDXX", "MRNA", "DLTR",
+    "ODFL", "ANSS", "VRSK", "KDP", "TTWO", "MDB", "ZS", "DDOG", "GEHC", "WBD",
+    "EXC", "XEL", "FANG", "INTC", "TMUS", "CMCSA", "CHTR", "TTD", "UBER", "LULU",
+    "AZN", "TEAM", "CDW", "ARM", "ILMN", "MRVL", "SMCI",
   ]),
   dow30: new Set([
-    "AAPL",
-    "MSFT",
-    "UNH",
-    "GS",
-    "HD",
-    "MCD",
-    "CAT",
-    "AMGN",
-    "V",
-    "BA",
-    "CRM",
-    "HON",
-    "IBM",
-    "JPM",
-    "AXP",
-    "JNJ",
-    "WMT",
-    "PG",
-    "TRV",
-    "CVX",
-    "MMM",
-    "MRK",
-    "DIS",
-    "NKE",
-    "DOW",
-    "INTC",
-    "VZ",
-    "CSCO",
-    "KO",
-    "WBA",
+    "AAPL", "MSFT", "UNH", "GS", "HD", "MCD", "CAT", "AMGN", "V", "BA",
+    "CRM", "HON", "IBM", "JPM", "AXP", "JNJ", "WMT", "PG", "TRV", "CVX",
+    "MMM", "MRK", "DIS", "NKE", "DOW", "INTC", "VZ", "CSCO", "KO", "WBA",
   ]),
   magnificent7: new Set(["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA"]),
   techGiants: new Set([
-    "AAPL",
-    "MSFT",
-    "NVDA",
-    "GOOGL",
-    "AMZN",
-    "META",
-    "TSLA",
-    "ORCL",
-    "CRM",
-    "ADBE",
-    "INTC",
-    "AMD",
-    "QCOM",
-    "SHOP",
-    "UBER",
-    "NFLX",
-    "SPOT",
+    "AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "ORCL", "CRM",
+    "ADBE", "INTC", "AMD", "QCOM", "SHOP", "UBER", "NFLX", "SPOT",
   ]),
 };
 
-function getLastName(fullName: string): string {
-  const parts = fullName.trim().split(/\s+/).filter(Boolean);
-  const last = parts[parts.length - 1] ?? "";
-  // Keep simple punctuation so “O'Neil” still reads nicely.
-  return last.replace(/[^\p{L}'-]/gu, "");
-}
+// ─── Filter logic ─────────────────────────────────────────────────────────────
 
 function filterCEOs(ceos: CEOEntry[], filters: FilterState): CEOEntry[] {
   return ceos.filter((c) => {
@@ -313,101 +170,15 @@ function filterCEOs(ceos: CEOEntry[], filters: FilterState): CEOEntry[] {
   });
 }
 
-type ConstellationNode = CEOEntry & { id: string; val: number; tier: number; fx: number; fy: number };
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function buildGraphData(ceos: CEOEntry[]): { nodes: ConstellationNode[]; links: { source: string; target: string }[] } {
-  const rnd = seedRandom(`constellation:${ceos.length}:${ceos.map((c) => c.ticker).slice(0, 6).join(",")}`);
-  const byTier = new Map<number, CEOEntry[]>();
-  ceos.forEach((c) => {
-    const t = getTier(c.marketCap);
-    if (!byTier.has(t)) byTier.set(t, []);
-    byTier.get(t)!.push(c);
-  });
-  [1, 2, 3, 4, 5].forEach((t) => {
-    const list = byTier.get(t) ?? [];
-    list.sort((a, b) => b.marketCap - a.marketCap);
-  });
 
-  const nodes: ConstellationNode[] = [];
-
-  if (ceos.length >= 220) {
-    // Large universes (SPY 500): spread nodes to avoid clumping.
-    const pad = 90;
-    const cols = Math.ceil(Math.sqrt(ceos.length));
-    const rows = Math.ceil(ceos.length / cols);
-    const cellW = (CANVAS_W - pad * 2) / Math.max(1, cols);
-    const cellH = (CANVAS_H - pad * 2) / Math.max(1, rows);
-    const sorted = [...ceos].sort((a, b) => (b.marketCap ?? 0) - (a.marketCap ?? 0));
-    sorted.forEach((c, i) => {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      const x = pad + col * cellW + cellW * (0.15 + rnd() * 0.7);
-      const y = pad + row * cellH + cellH * (0.15 + rnd() * 0.7);
-      const tier = getTier(c.marketCap);
-      const radius = tierRadius(tier);
-      nodes.push({ ...c, id: c.id, val: radius, tier, fx: x, fy: y });
-    });
-  } else {
-    // Smaller universes: tier bands.
-    const padding = 120;
-    [1, 2, 3, 4, 5].forEach((tier) => {
-      const list = byTier.get(tier) ?? [];
-      const count = list.length;
-      const baseY = tierY(tier);
-      const radius = tierRadius(tier);
-      list.forEach((c, i) => {
-        const x = count <= 1 ? CANVAS_W / 2 : padding + (i / (count - 1)) * (CANVAS_W - 2 * padding);
-        const y = baseY + (rnd() - 0.5) * 60;
-        nodes.push({ ...c, id: c.id, val: radius, tier, fx: x, fy: y });
-      });
-    });
-  }
-
-  const links: { source: string; target: string }[] = [];
-  const linkSet = new Set<string>();
-  function addLink(a: string, b: string) {
-    const key = [a, b].sort().join("|");
-    if (!linkSet.has(key)) {
-      linkSet.add(key);
-      links.push({ source: a, target: b });
-    }
-  }
-
-  const tierLists = [1, 2, 3, 4, 5].map((t) => byTier.get(t) ?? []);
-
-  tierLists.forEach((list, tierIndex) => {
-    const nextTier = tierLists[tierIndex + 1] ?? [];
-    list.forEach((c) => {
-      const id = c.id;
-      const connections: string[] = [];
-      if (nextTier.length > 0) {
-        const sameSectorBelow = nextTier.filter((x) => x.sector === c.sector);
-        const sameSectorTarget = sameSectorBelow.length > 0 ? sameSectorBelow[Math.floor(rnd() * sameSectorBelow.length)] : nextTier[Math.floor(rnd() * nextTier.length)];
-        if (sameSectorTarget) connections.push(sameSectorTarget.id);
-        const cross = nextTier.filter((x) => x.id !== sameSectorTarget?.id);
-        if (cross.length > 0 && connections.length < 3) {
-          const pick = cross[Math.floor(rnd() * cross.length)];
-          if (pick) connections.push(pick.id);
-        }
-      }
-      if (tierIndex > 0) {
-        const prevTier = tierLists[tierIndex - 1];
-        if (prevTier.length > 0 && connections.length < 4) {
-          const prev = prevTier[Math.floor(rnd() * prevTier.length)];
-          if (prev) connections.push(prev.id);
-        }
-      }
-      connections.slice(0, 4).forEach((targetId) => addLink(id, targetId));
-    });
-  });
-
-  nodes.forEach((n) => {
-    (n as Record<string, unknown>).x = n.fx;
-    (n as Record<string, unknown>).y = n.fy;
-  });
-
-  return { nodes, links };
+function formatMarketCap(mc: number): string {
+  if (mc >= 1000) return `$${(mc / 1000).toFixed(1)}T`;
+  return `$${mc}B`;
 }
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type CEOAlertItem = {
   title: string;
@@ -417,23 +188,6 @@ type CEOAlertItem = {
   company?: string;
   matchedTicker?: string;
 };
-
-const NODE_COLORS: Record<string, string> = {
-  positive: "#00C896",
-  neutral: "#60A5FA",
-  negative: "#EF4444",
-};
-
-/** Placeholder tickers used in index presets before real symbols load — not valid for Finnhub/Claude company resolution. */
-function isSyntheticMapTicker(ticker: string): boolean {
-  const t = ticker.toUpperCase().trim();
-  return (
-    /^SPY500_\d+$/.test(t) ||
-    t.startsWith("SPY500_FILL_") ||
-    t.startsWith("QQQ100_FILL_") ||
-    t.startsWith("DOW30_FILL_")
-  );
-}
 
 const CEO_PROFILE_CACHE_VER = "v3";
 
@@ -448,9 +202,7 @@ type CeoClaudeProfile = {
   legal_severity: "none" | "minor" | "significant";
   sentiment: "Bullish" | "Bearish" | "Neutral";
   sentiment_reason: string;
-  /** Approximate total return since CEO start; null if unknown */
   stock_since_tenure_percent_approx: number | null;
-  /** One line for UI, e.g. approximate return narrative */
   stock_since_tenure_summary: string;
 };
 
@@ -496,16 +248,7 @@ function parseCeoClaudeProfile(raw: string): CeoClaudeProfile | null {
     }
     const stock_since_tenure_summary =
       typeof o.stock_since_tenure_summary === "string" ? o.stock_since_tenure_summary.trim() : "";
-    return {
-      tenure_start,
-      tenure_years,
-      legal_history,
-      legal_severity,
-      sentiment,
-      sentiment_reason,
-      stock_since_tenure_percent_approx,
-      stock_since_tenure_summary,
-    };
+    return { tenure_start, tenure_years, legal_history, legal_severity, sentiment, sentiment_reason, stock_since_tenure_percent_approx, stock_since_tenure_summary };
   } catch {
     return null;
   }
@@ -513,384 +256,34 @@ function parseCeoClaudeProfile(raw: string): CeoClaudeProfile | null {
 
 function claudeSentimentStyles(sentiment: CeoClaudeProfile["sentiment"]) {
   switch (sentiment) {
-    case "Bullish":
-      return { color: "#00ff88", bg: "#00ff8822", border: "#00ff8855" };
-    case "Bearish":
-      return { color: "#ff4444", bg: "#ff444422", border: "#ff444455" };
-    default:
-      return { color: "#60A5FA", bg: "#60A5FA22", border: "#60A5FA55" };
+    case "Bullish": return { color: "#00ff88", bg: "#00ff8822", border: "#00ff8855" };
+    case "Bearish": return { color: "#ff4444", bg: "#ff444422", border: "#ff444455" };
+    default: return { color: "#60A5FA", bg: "#60A5FA22", border: "#60A5FA55" };
   }
 }
+
+// ─── Sector badge colors ──────────────────────────────────────────────────────
+
+const SECTOR_COLORS: Record<string, { bg: string; color: string }> = {
+  Technology:       { bg: "rgba(59,130,246,0.15)",  color: "#60A5FA" },
+  Finance:          { bg: "rgba(16,185,129,0.15)",   color: "#34D399" },
+  Healthcare:       { bg: "rgba(139,92,246,0.15)",   color: "#A78BFA" },
+  Energy:           { bg: "rgba(245,158,11,0.15)",   color: "#FCD34D" },
+  Consumer:         { bg: "rgba(236,72,153,0.15)",   color: "#F472B6" },
+  Industrials:      { bg: "rgba(107,114,128,0.15)",  color: "#9CA3AF" },
+  Auto:             { bg: "rgba(251,146,60,0.15)",   color: "#FB923C" },
+  "Crypto/Fintech": { bg: "rgba(167,139,250,0.15)",  color: "#C084FC" },
+};
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function PanelFieldSkeleton({ className }: { className?: string }) {
   return <div className={`animate-pulse rounded-md bg-white/10 ${className ?? "h-4 w-full"}`} />;
 }
 
-function CEOGraph({
-  graphData,
-  selectedId,
-  compareIds,
-  dimmedIds,
-  highlightSector,
-  hoveredNodeId,
-  chartLocked,
-  claudeTintByTicker,
-  onNodeHover,
-  onNodeClick,
-  onNodeRightClick,
-  onCameraChange,
-  graphRef,
-}: {
-  graphData: { nodes: ConstellationNode[]; links: { source: string; target: string }[] };
-  selectedId: string | null;
-  compareIds: Set<string>;
-  dimmedIds: Set<string>;
-  highlightSector: string | null;
-  hoveredNodeId: string | null;
-  chartLocked: boolean;
-  claudeTintByTicker: Record<string, "bullish" | "bearish" | "neutral">;
-  onNodeHover: (node: CEOEntry | null) => void;
-  onNodeClick: (node: CEOEntry) => void;
-  onNodeRightClick: (node: CEOEntry) => void;
-  onCameraChange?: (k: number, x: number, y: number) => void;
-  graphRef: React.RefObject<{
-    zoomToFit: (a?: number, b?: number, c?: (n: unknown) => boolean) => void;
-    zoom: (n: number, ms?: number) => void;
-    centerAt: (x?: number, y?: number, ms?: number) => void;
-    graph2ScreenCoords: (x: number, y: number) => { x: number; y: number };
-  } | null>;
-}) {
-  const [ForceGraph2D, setForceGraph2D] = useState<React.ComponentType<Record<string, unknown>> | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ w: 800, h: 600 });
+// ─── Filter Sidebar ───────────────────────────────────────────────────────────
 
-  const connectedToHover = useMemo(() => {
-    if (!hoveredNodeId) return new Set<string>();
-    const set = new Set<string>();
-    graphData.links.forEach((l) => {
-      if (l.source === hoveredNodeId || (typeof l.source === "object" && (l.source as { id?: string }).id === hoveredNodeId)) set.add(typeof l.target === "string" ? l.target : (l.target as { id?: string }).id ?? "");
-      if (l.target === hoveredNodeId || (typeof l.target === "object" && (l.target as { id?: string }).id === hoveredNodeId)) set.add(typeof l.source === "string" ? l.source : (l.source as { id?: string }).id ?? "");
-    });
-    return set;
-  }, [hoveredNodeId, graphData.links]);
-
-  useEffect(() => {
-    import("react-force-graph-2d").then((mod) => setForceGraph2D(() => mod.default));
-  }, []);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver((entries) => {
-      const { width, height } = entries[0]?.contentRect ?? { width: 800, height: 600 };
-      setSize({ w: width, h: height });
-    });
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
-
-  const [hoverTooltip, setHoverTooltip] = useState<{ ceo: CEOEntry; x: number; y: number } | null>(null);
-  const hoverTooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hoverTooltipNodeIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (hoverTooltipTimerRef.current) clearTimeout(hoverTooltipTimerRef.current);
-    };
-  }, []);
-
-  const resolveNodeColor = useCallback(
-    (n: ConstellationNode) => {
-      const t = (n.ticker ?? "").toUpperCase();
-      const tint = claudeTintByTicker[t];
-      if (tint === "bullish") return "#00ff88";
-      if (tint === "bearish") return "#ff4444";
-      return NODE_COLORS[n.sentiment as string] ?? NODE_COLORS.neutral;
-    },
-    [claudeTintByTicker]
-  );
-
-  const onRenderFramePre = useCallback((ctx: CanvasRenderingContext2D) => {
-    const cx = CANVAS_W / 2;
-    const cy = CANVAS_H / 2;
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(CANVAS_W, CANVAS_H) * 0.6);
-    grad.addColorStop(0, "#0D1B3E");
-    grad.addColorStop(1, "#050B1A");
-    ctx.fillStyle = grad;
-    ctx.fillRect(-500, -500, CANVAS_W + 1000, CANVAS_H + 1000);
-  }, []);
-
-  const nodeCanvasObject = useCallback(
-    (node: ConstellationNode | undefined, ctx: CanvasRenderingContext2D, globalScale: number) => {
-      if (!node) return;
-      const n = node as ConstellationNode & { x?: number; y?: number };
-      const px = n.x ?? n.fx;
-      const py = n.y ?? n.fy;
-      if (px == null || py == null) return;
-      const circleR = Math.max(node.val, 14);
-      const isDimmed = dimmedIds.has(node.id) || (hoveredNodeId && hoveredNodeId !== node.id && !connectedToHover.has(node.id));
-      const selected = selectedId === node.id || compareIds.has(node.id);
-
-      const nodeAlpha = isDimmed && hoveredNodeId ? 0.35 : highlightSector && node.sector !== highlightSector ? 0.5 : 1;
-
-      // Canvas labels: fade in based on zoom to prevent crowding.
-      const fadeStart = 0.6;
-      const fadeEnd = 1.0;
-      const fade = Math.max(0, Math.min(1, (globalScale - fadeStart) / (fadeEnd - fadeStart)));
-      const tierGate = node.tier === 1 ? 0 : node.tier === 2 ? 0.15 : node.tier === 3 ? 0.3 : 0.55;
-      const labelAlphaBase = Math.max(0, (fade - tierGate) / (1 - tierGate));
-
-      const zoomTextScale = Math.max(0.85, Math.min(1.2, globalScale));
-
-      let tickerText = (node.ticker ?? "").toUpperCase();
-      let lastName = getLastName(node.name);
-
-      const showSecondLine = node.tier <= 3;
-      if (!showSecondLine) {
-        // Tiny nodes: ticker only (truncate long tickers)
-        if (tickerText.length > 5) tickerText = tickerText.slice(0, 3);
-      } else {
-        // Large/medium/small nodes: ticker + last name
-        if (tickerText.length > 6) tickerText = tickerText.slice(0, 5);
-        if (lastName.length > 10) lastName = lastName.slice(0, 9) + "…";
-      }
-
-      const { tickerFontSize, nameFontSize } = (() => {
-        if (node.tier === 1) return { tickerFontSize: 11 * zoomTextScale, nameFontSize: 9 * zoomTextScale };
-        if (node.tier === 2) return { tickerFontSize: 9 * zoomTextScale, nameFontSize: 8 * zoomTextScale };
-        if (node.tier === 3) return { tickerFontSize: 8 * zoomTextScale, nameFontSize: 7 * zoomTextScale };
-        return { tickerFontSize: 7 * zoomTextScale, nameFontSize: 0 };
-      })();
-
-      ctx.save();
-      ctx.globalAlpha = nodeAlpha;
-
-      ctx.strokeStyle = "rgba(255,255,255,0.25)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(px, py, circleR + 1, 0, 2 * Math.PI);
-      ctx.stroke();
-
-      if (node.recentAlert) {
-        ctx.strokeStyle = "rgba(239, 68, 68, 0.85)";
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      }
-      if (selected) {
-        ctx.strokeStyle = "rgba(255,255,255,0.95)";
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-      }
-
-      // Draw text labels (ticker + last name) when enabled.
-      if (labelAlphaBase > 0) {
-        const finalAlpha = nodeAlpha * labelAlphaBase;
-        if (finalAlpha > 0) {
-          ctx.globalAlpha = finalAlpha;
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillStyle = "#fff";
-          ctx.font = `800 ${tickerFontSize}px system-ui, sans-serif`;
-
-          const gap = Math.max(1, tickerFontSize * 0.15);
-
-          if (showSecondLine && nameFontSize > 0) {
-            const y1 = py - (nameFontSize / 2 + gap / 2);
-            const y2 = py + (tickerFontSize / 2 + gap / 2);
-            ctx.fillText(tickerText, px, y1);
-            ctx.fillStyle = "#A1A1AA";
-            ctx.font = `400 ${nameFontSize}px system-ui, sans-serif`;
-            ctx.fillText(lastName, px, y2);
-          } else {
-            ctx.fillText(tickerText, px, py);
-          }
-        }
-      }
-      ctx.restore();
-    },
-    [selectedId, compareIds, dimmedIds, highlightSector, hoveredNodeId, connectedToHover]
-  );
-
-  const linkCanvasObject = useCallback(
-    (link: { source: { id?: string; x?: number; y?: number; fx?: number; fy?: number }; target: { id?: string; x?: number; y?: number; fx?: number; fy?: number } }, ctx: CanvasRenderingContext2D) => {
-      const src = link.source as { id?: string; x?: number; y?: number; fx?: number; fy?: number };
-      const tgt = link.target as { id?: string; x?: number; y?: number; fx?: number; fy?: number };
-      const sx = src?.x ?? src?.fx;
-      const sy = src?.y ?? src?.fy;
-      const tx = tgt?.x ?? tgt?.fx;
-      const ty = tgt?.y ?? tgt?.fy;
-      if (sx == null || sy == null || tx == null || ty == null) return;
-      const sid = src?.id ?? (link.source as unknown as string);
-      const tid = tgt?.id ?? (link.target as unknown as string);
-      const connectedToHighlight =
-        (hoveredNodeId && (sid === hoveredNodeId || tid === hoveredNodeId)) ||
-        (selectedId && (sid === selectedId || tid === selectedId)) ||
-        compareIds.has(sid) ||
-        compareIds.has(tid);
-      ctx.save();
-      ctx.strokeStyle = connectedToHighlight ? LINK_HOVER : LINK_COLOR;
-      ctx.lineWidth = connectedToHighlight ? 1.4 : 0.8;
-      ctx.beginPath();
-      ctx.moveTo(sx, sy);
-      ctx.lineTo(tx, ty);
-      ctx.stroke();
-      ctx.restore();
-    },
-    [hoveredNodeId, selectedId, compareIds]
-  );
-
-  // Initial camera is applied by parent (CEOsPage) so saved position can be restored
-
-  if (!ForceGraph2D) {
-    return (
-      <div ref={containerRef} className="flex h-full w-full items-center justify-center" style={{ background: "radial-gradient(ellipse at center, #0D1B3E 0%, #050B1A 100%)" }}>
-        <p className="text-zinc-400">Loading graph…</p>
-      </div>
-    );
-  }
-  if (!graphData.nodes.length) {
-    return (
-      <div ref={containerRef} className="flex h-full w-full items-center justify-center" style={{ background: "radial-gradient(ellipse at center, #0D1B3E 0%, #050B1A 100%)" }}>
-        <p className="text-zinc-400">No CEOs match the current filter</p>
-      </div>
-    );
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative h-full w-full overflow-hidden force-dark-text"
-      style={{ background: "#050B1A" }}
-      onWheel={(e) => e.stopPropagation()}
-    >
-      <ForceGraph2D
-        ref={graphRef}
-        graphData={graphData}
-        nodeId="id"
-        linkSource="source"
-        linkTarget="target"
-        // Disable react-force-graph's built-in tooltip content.
-        // We render our own richer hover overlay above.
-        nodeLabel={() => ""}
-        linkLabel={() => ""}
-        nodeVal={(n: ConstellationNode) => Math.max(n.val, 14)}
-        nodeColor={resolveNodeColor}
-        linkColor={() => LINK_COLOR}
-        linkWidth={0.8}
-        backgroundColor="transparent"
-        width={size.w}
-        height={size.h}
-        nodeCanvasObjectMode="after"
-        nodeCanvasObject={nodeCanvasObject}
-        linkCanvasObjectMode="after"
-        linkCanvasObject={linkCanvasObject}
-        onRenderFramePre={onRenderFramePre}
-        onNodeClick={(n: { id?: string; x?: number; y?: number }, event?: MouseEvent) => {
-          const ceo = graphData.nodes.find((x) => x.id === n?.id);
-          if (event?.detail === 2 && n?.x != null && n?.y != null && graphRef.current) {
-            graphRef.current.centerAt(n.x, n.y, 400);
-            graphRef.current.zoom(2, 400);
-          }
-          if (ceo) onNodeClick(ceo);
-        }}
-        onNodeRightClick={(n: { id?: string }) => {
-          const ceo = graphData.nodes.find((x) => x.id === n?.id);
-          if (ceo) onNodeRightClick(ceo);
-        }}
-        onNodeHover={(n: { id?: string; x?: number; y?: number; fx?: number; fy?: number } | null) => {
-          if (hoverTooltipTimerRef.current) clearTimeout(hoverTooltipTimerRef.current);
-
-          const ceo = n ? graphData.nodes.find((x) => x.id === n.id) ?? null : null;
-          onNodeHover(ceo ?? null);
-
-          if (!ceo || !n) {
-            hoverTooltipNodeIdRef.current = null;
-            setHoverTooltip(null);
-            return;
-          }
-
-          const nodeX = n.x ?? n.fx;
-          const nodeY = n.y ?? n.fy;
-          if (nodeX == null || nodeY == null) return;
-
-          const thisId = ceo.id;
-          hoverTooltipNodeIdRef.current = thisId;
-          hoverTooltipTimerRef.current = setTimeout(() => {
-            if (hoverTooltipNodeIdRef.current !== thisId) return;
-            if (!graphRef.current) return;
-            const sc = graphRef.current.graph2ScreenCoords(nodeX, nodeY);
-            setHoverTooltip({ ceo, x: sc.x, y: sc.y });
-          }, 100);
-        }}
-        onZoomEnd={onCameraChange ? (t: { k: number; x: number; y: number }) => onCameraChange(t.k, t.x, t.y) : undefined}
-        autoPauseRedraw={true}
-        enableNodeDrag={false}
-        enableZoomInteraction={!chartLocked}
-        enablePanInteraction={!chartLocked}
-        warmupTicks={10}
-        d3AlphaDecay={0}
-        d3AlphaMin={0}
-        minZoom={0.28}
-        maxZoom={4}
-      />
-
-      {hoverTooltip && (
-        <div
-          className="pointer-events-none absolute z-50 max-w-[260px] rounded-lg border border-white/10 bg-[var(--app-card)]/95 px-3 py-2 shadow-xl backdrop-blur"
-          style={{
-            left: hoverTooltip.x,
-            top: hoverTooltip.y,
-            transform: "translate(-50%, -105%)",
-          }}
-        >
-          {(() => {
-            const c = hoverTooltip.ceo;
-            const t = (c.ticker ?? "").toUpperCase();
-            const synthetic = isSyntheticMapTicker(t);
-            const sent = sentimentColor(c.sentiment);
-            const presetLabel = t.startsWith("SPY500_") || t.startsWith("SPY500_FILL_")
-              ? "S&P 500 grid"
-              : t.startsWith("QQQ100_FILL_")
-                ? "Nasdaq 100 grid"
-                : t.startsWith("DOW30_FILL_")
-                  ? "Dow 30 grid"
-                  : null;
-            return (
-              <>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="min-w-0 text-[13px] font-bold leading-tight text-zinc-100">{c.name}</div>
-                  <span
-                    className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    style={{
-                      backgroundColor: sent + "22",
-                      color: sent,
-                      border: `1px solid ${sent}55`,
-                    }}
-                  >
-                    {c.sentiment === "positive" ? "Positive" : c.sentiment === "negative" ? "Negative" : "Neutral"}
-                  </span>
-                </div>
-                {!synthetic ? (
-                  <div className="mt-1 text-[11px] font-medium text-zinc-300">{t}</div>
-                ) : presetLabel ? (
-                  <div className="mt-1 text-[10px] text-zinc-500">{presetLabel}</div>
-                ) : null}
-                <div className="mt-0.5 text-[11px] text-zinc-400">{c.company}</div>
-                {c.interimNames?.length ? (
-                  <div className="mt-1 text-[10px] text-amber-200">Interim: {c.interimNames[0]}</div>
-                ) : null}
-                {c.coCeoNames?.length ? (
-                  <div className="text-[10px] text-violet-200">Co-CEOs</div>
-                ) : null}
-              </>
-            );
-          })()}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FilterPanel({
+function FilterSidebar({
   filters,
   onFiltersChange,
   alertsCount,
@@ -898,14 +291,13 @@ function FilterPanel({
   recentAlerts,
   ceoOfWeekAlertTitle,
   weeklyAlerts,
+  sentimentChanges,
   activeQuickPreset,
   onQuickPresetChange,
   presetShownCount,
   allViewLabel,
   activePresetShowLabel,
-  onSelectTicker,
-  collapsed,
-  onToggleCollapse,
+  onSelectCeo,
 }: {
   filters: FilterState;
   onFiltersChange: (f: FilterState) => void;
@@ -914,262 +306,393 @@ function FilterPanel({
   recentAlerts: CEOAlertItem[];
   ceoOfWeekAlertTitle?: string | null;
   weeklyAlerts: CEOAlertItem[];
+  sentimentChanges: { ticker: string; name: string; company: string; from: CEOSentiment; to: CEOSentiment; changedAt: string }[];
   activeQuickPreset: QuickPresetId | null;
   onQuickPresetChange: (id: QuickPresetId | null) => void;
   presetShownCount: number;
   allViewLabel: string;
   activePresetShowLabel: string | null;
-  onSelectTicker: (ticker: string) => void;
-  collapsed: boolean;
-  onToggleCollapse: () => void;
+  onSelectCeo: (ticker: string) => void;
 }) {
   const [nowMs, setNowMs] = useState(0);
   useEffect(() => {
     const id = window.setTimeout(() => setNowMs(Date.now()), 0);
     const t = window.setInterval(() => setNowMs(Date.now()), 60 * 1000);
-    return () => {
-      window.clearTimeout(id);
-      window.clearInterval(t);
-    };
+    return () => { window.clearTimeout(id); window.clearInterval(t); };
   }, []);
 
   const timeAgo = (iso: string) => {
     const ts = Date.parse(iso);
-    if (!Number.isFinite(ts)) return "";
-    if (!nowMs) return "";
+    if (!Number.isFinite(ts) || !nowMs) return "";
     const s = Math.max(0, Math.floor((nowMs - ts) / 1000));
     if (s < 60) return `${s}s ago`;
     const m = Math.floor(s / 60);
     if (m < 60) return `${m}m ago`;
     const h = Math.floor(m / 60);
     if (h < 24) return `${h}h ago`;
-    const d = Math.floor(h / 24);
-    return `${d}d ago`;
+    return `${Math.floor(h / 24)}d ago`;
   };
 
   return (
-    <div
-      className="absolute left-0 top-0 z-20 flex h-full min-w-[48px] shrink-0 flex-col rounded-r-lg border-r border-white/10 shadow-xl transition-all duration-200"
-      style={{
-        width: collapsed ? 48 : 220,
-        backgroundColor: collapsed ? "var(--app-card)" : "rgba(15, 21, 32, 0.96)",
-        backdropFilter: collapsed ? "none" : "blur(8px)",
-      }}
-    >
-      <button
-        type="button"
-        onClick={onToggleCollapse}
-        className="absolute right-1 top-2 z-30 rounded p-2 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
-        aria-label={collapsed ? "Expand panel" : "Collapse panel"}
-      >
-        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          {collapsed ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /> : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />}
-        </svg>
-      </button>
-      {!collapsed && (
-        <div className="scrollbar-hide flex min-h-0 flex-1 flex-col gap-4 p-4 pt-12">
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-400">Quick Filter</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
+    <div className="flex h-full w-[200px] shrink-0 flex-col overflow-y-auto border-r border-white/10 bg-[rgba(15,21,32,0.97)] scrollbar-hide">
+      <div className="flex flex-col gap-4 p-3 pt-4">
+
+        {/* Preset pills */}
+        <div>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Index</p>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => onQuickPresetChange(null)}
+              className={`rounded-full border px-2 py-1 text-[10px] transition ${
+                activeQuickPreset === null
+                  ? "border-[var(--accent-color)] bg-[var(--accent-color)]/15 text-[var(--accent-color)]"
+                  : "border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+              }`}
+            >
+              {allViewLabel}
+            </button>
+            {(["spy500", "qqq100", "dow30", "techGiants", "magnificent7"] as QuickPresetId[]).map((id) => (
               <button
+                key={id}
                 type="button"
-                onClick={() => onQuickPresetChange(null)}
-                className={`rounded-full border px-3 py-1.5 text-[11px] transition ${
-                  activeQuickPreset === null
+                onClick={() => onQuickPresetChange(activeQuickPreset === id ? null : id)}
+                className={`rounded-full border px-2 py-1 text-[10px] transition ${
+                  activeQuickPreset === id
                     ? "border-[var(--accent-color)] bg-[var(--accent-color)]/15 text-[var(--accent-color)]"
-                    : "border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:bg-white/10 hover:text-zinc-200"
+                    : "border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
                 }`}
               >
-                {allViewLabel}
+                {QUICK_PRESET_BUTTON_LABEL[id]}
               </button>
-              {(
-                [
-                  "spy500",
-                  "qqq100",
-                  "dow30",
-                  "techGiants",
-                  "magnificent7",
-                ] as QuickPresetId[]
-              ).map((id) => {
-                const btnLabel = QUICK_PRESET_BUTTON_LABEL[id];
-                const isActive = activeQuickPreset === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => onQuickPresetChange(isActive ? null : id)}
-                    className={`rounded-full border px-3 py-1.5 text-[11px] transition ${
-                      isActive
-                        ? "border-[var(--accent-color)] bg-[var(--accent-color)]/15 text-[var(--accent-color)]"
-                        : "border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:bg-white/10 hover:text-zinc-200"
-                    }`}
-                  >
-                    {btnLabel}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-2 text-[10px] text-zinc-500">
-              Showing {presetShownCount} CEOs in {activeQuickPreset ? activePresetShowLabel : allViewLabel}
-            </p>
+            ))}
           </div>
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-xs font-medium text-zinc-400">Sector</span>
-              <div className="flex gap-1">
-                <button type="button" onClick={() => onFiltersChange({ ...filters, sectors: new Set(CEO_SECTORS) })} className="text-[10px] text-[var(--accent-color)] hover:underline">All</button>
-                <button type="button" onClick={() => onFiltersChange({ ...filters, sectors: new Set() })} className="text-[10px] text-zinc-500 hover:underline">Clear</button>
-              </div>
+          <p className="mt-1.5 text-[10px] text-zinc-600">
+            {presetShownCount} in {activeQuickPreset ? activePresetShowLabel : allViewLabel}
+          </p>
+        </div>
+
+        {/* Sector */}
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Sector</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => onFiltersChange({ ...filters, sectors: new Set(CEO_SECTORS) })} className="text-[10px] text-[var(--accent-color)] hover:underline">All</button>
+              <button type="button" onClick={() => onFiltersChange({ ...filters, sectors: new Set() })} className="text-[10px] text-zinc-500 hover:underline">Clear</button>
             </div>
-            <div className="space-y-1.5">
-              {CEO_SECTORS.map((s) => (
-                <label key={s} className="flex cursor-pointer items-center gap-2 text-sm text-zinc-300">
+          </div>
+          <div className="space-y-1.5">
+            {CEO_SECTORS.map((s) => {
+              const sc = SECTOR_COLORS[s];
+              return (
+                <label key={s} className="flex cursor-pointer items-center gap-2">
                   <input
                     type="checkbox"
                     checked={filters.sectors.has(s)}
                     onChange={() => {
                       const next = new Set(filters.sectors);
-                      if (next.has(s)) next.delete(s);
-                      else next.add(s);
+                      if (next.has(s)) next.delete(s); else next.add(s);
                       onFiltersChange({ ...filters, sectors: next });
                     }}
                     className="rounded border-white/20 text-[var(--accent-color)]"
                   />
-                  {s}
+                  <span
+                    className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+                    style={{ backgroundColor: sc?.bg ?? "rgba(255,255,255,0.08)", color: sc?.color ?? "#9CA3AF" }}
+                  >
+                    {s}
+                  </span>
                 </label>
-              ))}
-            </div>
-          </div>
-          <div>
-            <span className="mb-1 block text-xs font-medium text-zinc-400">Sentiment</span>
-            <select
-              value={filters.sentiment}
-              onChange={(e) => onFiltersChange({ ...filters, sentiment: e.target.value as FilterState["sentiment"] })}
-              className="w-full rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[var(--app-card)] [&>option]:text-zinc-200"
-            >
-              <option value="all">All</option>
-              <option value="positive">Positive only</option>
-              <option value="negative">Negative only</option>
-              <option value="alerts">Recent alerts only</option>
-            </select>
-          </div>
-          <div>
-            <span className="mb-1 block text-xs font-medium text-zinc-400">Tenure</span>
-            <select
-              value={filters.tenure}
-              onChange={(e) => onFiltersChange({ ...filters, tenure: e.target.value as FilterState["tenure"] })}
-              className="w-full rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[var(--app-card)] [&>option]:text-zinc-200"
-            >
-              <option value="all">All</option>
-              <option value="new">New (&lt; 2 years)</option>
-              <option value="established">Established (2–10 years)</option>
-              <option value="veteran">Veteran (10+ years)</option>
-            </select>
-          </div>
-          <div>
-            <span className="mb-1 block text-xs font-medium text-zinc-400">Market cap</span>
-            <select
-              value={filters.marketCap}
-              onChange={(e) => onFiltersChange({ ...filters, marketCap: e.target.value as FilterState["marketCap"] })}
-              className="w-full rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[var(--app-card)] [&>option]:text-zinc-200"
-            >
-              <option value="all">All</option>
-              <option value="mega">Mega cap (&gt;500B)</option>
-              <option value="large">Large cap (100–500B)</option>
-              <option value="mid">Mid cap (&lt;100B)</option>
-            </select>
-          </div>
-          {ceoOfWeek && (
-            <div className="rounded-lg border border-[var(--accent-color)]/30 bg-white/5 p-3">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-[var(--accent-color)]">CEO of the week</p>
-              <p className="mt-1 font-semibold text-zinc-100">{ceoOfWeek.name}</p>
-              <p className="text-xs text-zinc-400">{ceoOfWeek.company} ({ceoOfWeek.ticker})</p>
-              <p className="mt-1 text-[10px] text-zinc-500">{ceoOfWeekAlertTitle ?? "Most talked about this week"}</p>
-              <button type="button" onClick={() => onSelectTicker(ceoOfWeek.ticker)} className="mt-2 text-xs text-[var(--accent-color)] hover:underline">View on graph →</button>
-            </div>
-          )}
-          <div className="border-t border-white/10 pt-3">
-            <p className="mb-2 text-xs font-medium text-zinc-400">Recent alerts</p>
-            {recentAlerts.length === 0 ? (
-              <p className="text-xs text-zinc-500">No recent CEO changes</p>
-            ) : (
-              <ul className="space-y-2">
-                {recentAlerts.slice(0, 5).map((a) => {
-                  const t = (a.matchedTicker ?? "").toUpperCase();
-                  return (
-                    <li key={a.url}>
-                      <a
-                        href={a.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded-md px-2 py-1 hover:bg-white/5"
-                        onClick={(e) => {
-                          if (t) {
-                            e.preventDefault();
-                            onSelectTicker(t);
-                          }
-                        }}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs font-medium text-zinc-200">{a.company ?? "Company"}</span>
-                              {t ? <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-300">{t}</span> : null}
-                            </div>
-                            <div className="mt-0.5 line-clamp-2 text-xs text-zinc-300">{a.title}</div>
-                          </div>
-                        </div>
-                        <div className="mt-1 text-[10px] text-zinc-500">{a.source} · {timeAgo(a.publishedAt)}</div>
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-          <div className="border-t border-white/10 pt-3">
-            <p className="mb-2 text-xs font-medium text-zinc-400">Weekly CEO changes</p>
-            {weeklyAlerts.length === 0 ? (
-              <p className="text-xs text-zinc-500">No CEO change headlines this week</p>
-            ) : (
-              <ul className="space-y-2">
-                {weeklyAlerts.slice(0, 10).map((a) => {
-                  const t = (a.matchedTicker ?? "").toUpperCase();
-                  return (
-                    <li key={a.url}>
-                      <a
-                        href={a.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block rounded-md px-2 py-1 hover:bg-white/5"
-                        onClick={(e) => {
-                          if (t) {
-                            e.preventDefault();
-                            onSelectTicker(t);
-                          }
-                        }}
-                        title={a.title}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-zinc-200">{a.company ?? "Company"}</span>
-                          {t ? <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-zinc-300">{t}</span> : null}
-                        </div>
-                        <div className="mt-0.5 line-clamp-2 text-xs text-zinc-300">{a.title.length > 80 ? a.title.slice(0, 80) + "…" : a.title}</div>
-                        <div className="mt-1 text-[10px] text-zinc-500">{a.source} · {timeAgo(a.publishedAt)}</div>
-                      </a>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+              );
+            })}
           </div>
         </div>
-      )}
+
+        {/* Sentiment */}
+        <div>
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Sentiment</p>
+          <select
+            value={filters.sentiment}
+            onChange={(e) => onFiltersChange({ ...filters, sentiment: e.target.value as FilterState["sentiment"] })}
+            className="w-full rounded-lg border border-white/10 bg-[var(--app-card)] px-2 py-1.5 text-[11px] text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[var(--app-card)]"
+          >
+            <option value="all">All</option>
+            <option value="positive">Positive only</option>
+            <option value="negative">Negative only</option>
+            <option value="alerts">Recent alerts only</option>
+          </select>
+        </div>
+
+        {/* Tenure */}
+        <div>
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Tenure</p>
+          <select
+            value={filters.tenure}
+            onChange={(e) => onFiltersChange({ ...filters, tenure: e.target.value as FilterState["tenure"] })}
+            className="w-full rounded-lg border border-white/10 bg-[var(--app-card)] px-2 py-1.5 text-[11px] text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[var(--app-card)]"
+          >
+            <option value="all">All</option>
+            <option value="new">New (&lt; 2 yrs)</option>
+            <option value="established">Established (2–10 yrs)</option>
+            <option value="veteran">Veteran (10+ yrs)</option>
+          </select>
+        </div>
+
+        {/* Market cap */}
+        <div>
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Market Cap</p>
+          <select
+            value={filters.marketCap}
+            onChange={(e) => onFiltersChange({ ...filters, marketCap: e.target.value as FilterState["marketCap"] })}
+            className="w-full rounded-lg border border-white/10 bg-[var(--app-card)] px-2 py-1.5 text-[11px] text-zinc-200 focus:border-[var(--accent-color)] focus:outline-none [&>option]:bg-[var(--app-card)]"
+          >
+            <option value="all">All</option>
+            <option value="mega">Mega cap (&gt;$500B)</option>
+            <option value="large">Large cap ($100–500B)</option>
+            <option value="mid">Mid cap (&lt;$100B)</option>
+          </select>
+        </div>
+
+        {/* CEO of the week */}
+        {ceoOfWeek && (
+          <div className="rounded-lg border border-[var(--accent-color)]/25 bg-[var(--accent-color)]/5 p-2.5">
+            <p className="text-[9px] font-semibold uppercase tracking-widest text-[var(--accent-color)]">CEO of the week</p>
+            <p className="mt-1 text-[12px] font-semibold text-zinc-100">{ceoOfWeek.name}</p>
+            <p className="text-[10px] text-zinc-400">{ceoOfWeek.company} · {ceoOfWeek.ticker}</p>
+            <p className="mt-1 text-[9px] leading-snug text-zinc-500">{ceoOfWeekAlertTitle ?? "Most talked about this week"}</p>
+            <button type="button" onClick={() => onSelectCeo(ceoOfWeek.ticker)} className="mt-1.5 text-[10px] text-[var(--accent-color)] hover:underline">
+              View profile →
+            </button>
+          </div>
+        )}
+
+        {/* Weekly CEO changes */}
+        <div className="border-t border-white/10 pt-3 pb-4">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Weekly Changes</p>
+
+          {/* Sentiment shifts detected by the weekly AI refresh */}
+          {sentimentChanges.length > 0 && (
+            <ul className="mb-3 space-y-1.5">
+              {sentimentChanges.slice(0, 5).map((sc) => {
+                const toColor = sc.to === "positive" ? "#00C896" : sc.to === "negative" ? "#EF4444" : "#6B7280";
+                const arrow = sc.to === "positive" ? "↑" : sc.to === "negative" ? "↓" : "→";
+                const fromLabel = sc.from.charAt(0).toUpperCase() + sc.from.slice(1);
+                const toLabel = sc.to.charAt(0).toUpperCase() + sc.to.slice(1);
+                return (
+                  <li key={sc.ticker}>
+                    <button
+                      type="button"
+                      className="w-full rounded-md px-1.5 py-1.5 text-left hover:bg-white/5"
+                      onClick={() => onSelectCeo(sc.ticker)}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[13px] font-bold" style={{ color: toColor }}>{arrow}</span>
+                          <span className="text-[11px] font-medium text-zinc-200 truncate">{sc.name}</span>
+                        </div>
+                        <span className="shrink-0 rounded bg-white/10 px-1 py-px text-[9px] text-zinc-400">{sc.ticker}</span>
+                      </div>
+                      <p className="mt-0.5 text-[10px]" style={{ color: toColor }}>
+                        {fromLabel} → {toLabel}
+                      </p>
+                      <p className="text-[9px] text-zinc-600">{timeAgo(sc.changedAt)}</p>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {/* News headlines */}
+          {sentimentChanges.length === 0 && <p className="text-[10px] text-zinc-600">No sentiment shifts this week</p>}
+        </div>
+
+        {/* Recent CEO news — any story, not just tracked tickers */}
+        <div className="border-t border-white/10 pt-3 pb-4">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Recent News</p>
+          {recentAlerts.length === 0 ? (
+            <p className="text-[10px] text-zinc-600">No recent CEO news</p>
+          ) : (
+            <ul className="space-y-2">
+              {recentAlerts.slice(0, 8).map((a) => {
+                const t = (a.matchedTicker ?? "").toUpperCase();
+                return (
+                  <li key={a.url}>
+                    <button
+                      type="button"
+                      className="w-full rounded-md px-1.5 py-1 text-left hover:bg-white/5"
+                      onClick={() => { if (t) onSelectCeo(t); else window.open(a.url, "_blank"); }}
+                    >
+                      <p className="line-clamp-2 text-[10px] leading-tight text-zinc-300">
+                        {a.title.length > 80 ? a.title.slice(0, 80) + "…" : a.title}
+                      </p>
+                      <div className="mt-0.5 flex items-center gap-1.5">
+                        <p className="text-[9px] text-zinc-600">{a.source} · {timeAgo(a.publishedAt)}</p>
+                        {t && <span className="rounded bg-white/10 px-1 py-px text-[9px] text-zinc-500">{t}</span>}
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
+
+// ─── CEO List Row ─────────────────────────────────────────────────────────────
+
+function CEORow({ ceo, isSelected, onClick }: { ceo: CEOEntry; isSelected: boolean; onClick: (e: React.MouseEvent) => void }) {
+  const sentColor = sentimentColor(ceo.sentiment);
+  const sentimentLabel = ceo.sentiment === "positive" ? "Bullish" : ceo.sentiment === "negative" ? "Bearish" : "Neutral";
+  const sectorStyle = SECTOR_COLORS[ceo.sector] ?? { bg: "rgba(107,114,128,0.12)", color: "#9CA3AF" };
+  const tenureYrs = new Date().getFullYear() - ceo.tenureStart;
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(e); }}
+      className="group w-full text-left transition-colors duration-100"
+      style={{
+        borderLeft: `3px solid ${isSelected ? "var(--accent-color)" : "transparent"}`,
+        backgroundColor: isSelected ? "rgba(255,255,255,0.04)" : "transparent",
+      }}
+    >
+      <div className="flex items-center gap-2.5 px-3 py-2.5 group-hover:bg-white/[0.025]">
+        {/* Ticker + alert dot */}
+        <div className="w-[52px] shrink-0">
+          <div className="flex items-center gap-1">
+            <span
+              className="text-[11px] font-bold leading-none text-[var(--accent-color)]"
+              style={{ fontFamily: "var(--font-jetbrains-mono, 'JetBrains Mono'), monospace" }}
+            >
+              {ceo.ticker.toUpperCase()}
+            </span>
+            {ceo.recentAlert && (
+              <span className="mt-px h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" title="Recent alert" />
+            )}
+          </div>
+        </div>
+
+        {/* Company + CEO name */}
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[12px] font-medium leading-tight text-zinc-200">{ceo.company}</p>
+          <p className="truncate text-[10px] leading-tight text-zinc-500">{ceo.name}</p>
+        </div>
+
+        {/* Sector badge */}
+        <span
+          className="shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium leading-none"
+          style={{ backgroundColor: sectorStyle.bg, color: sectorStyle.color }}
+        >
+          {ceo.sector === "Crypto/Fintech" ? "Crypto" : ceo.sector}
+        </span>
+
+        {/* Tenure */}
+        <span
+          className="w-7 shrink-0 text-right text-[10px] text-zinc-600"
+          style={{ fontFamily: "var(--font-jetbrains-mono, 'JetBrains Mono'), monospace" }}
+        >
+          {tenureYrs}yr
+        </span>
+
+        {/* Sentiment badge */}
+        <span
+          className="w-14 shrink-0 rounded-full px-1.5 py-0.5 text-center text-[9px] font-medium leading-none"
+          style={{
+            backgroundColor: sentColor + "22",
+            color: sentColor,
+            border: `1px solid ${sentColor}44`,
+          }}
+        >
+          {sentimentLabel}
+        </span>
+
+        {/* Market cap */}
+        <span
+          className="w-12 shrink-0 text-right text-[10px] text-zinc-500"
+          style={{ fontFamily: "var(--font-jetbrains-mono, 'JetBrains Mono'), monospace" }}
+        >
+          {formatMarketCap(ceo.marketCap)}
+        </span>
+      </div>
+    </button>
+  );
+}
+
+// ─── CEO List Panel ───────────────────────────────────────────────────────────
+
+function CEOListPanel({
+  ceos,
+  selectedId,
+  onSelect,
+  onDeselect,
+}: {
+  ceos: CEOEntry[];
+  selectedId: string | null;
+  onSelect: (ceo: CEOEntry) => void;
+  onDeselect: () => void;
+}) {
+  const positive = ceos.filter((c) => c.sentiment === "positive").length;
+  const neutral  = ceos.filter((c) => c.sentiment === "neutral").length;
+  const negative = ceos.filter((c) => c.sentiment === "negative").length;
+
+  return (
+    <div className="flex h-full flex-1 min-w-0 flex-col border-r border-white/10">
+      {/* Sentiment summary bubbles */}
+      <div className="flex shrink-0 items-center gap-2 border-b border-white/10 px-3 py-2" style={{ backgroundColor: "rgba(15,21,32,0.8)" }}>
+        <span className="text-[10px] text-zinc-600 mr-1">{ceos.length} CEOs</span>
+        <span className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium" style={{ backgroundColor: "#00C89618", color: "#00C896", border: "1px solid #00C89640" }}>
+          <span className="h-1.5 w-1.5 rounded-full bg-[#00C896]" />
+          {positive} Bullish
+        </span>
+        <span className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium" style={{ backgroundColor: "#60A5FA18", color: "#60A5FA", border: "1px solid #60A5FA40" }}>
+          <span className="h-1.5 w-1.5 rounded-full bg-[#60A5FA]" />
+          {neutral} Neutral
+        </span>
+        <span className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium" style={{ backgroundColor: "#EF444418", color: "#EF4444", border: "1px solid #EF444440" }}>
+          <span className="h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
+          {negative} Bearish
+        </span>
+      </div>
+      {/* Column headers */}
+      <div
+        className="flex shrink-0 items-center gap-2.5 border-b border-white/10 px-3 py-2"
+        style={{ backgroundColor: "rgba(15,21,32,0.6)" }}
+      >
+        <span className="w-[52px] shrink-0 text-[9px] font-semibold uppercase tracking-wider text-zinc-600">Ticker</span>
+        <span className="min-w-0 flex-1 text-[9px] font-semibold uppercase tracking-wider text-zinc-600">Company / CEO</span>
+        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wider text-zinc-600">Sector</span>
+        <span className="w-7 shrink-0 text-right text-[9px] font-semibold uppercase tracking-wider text-zinc-600">Tenure</span>
+        <span className="w-14 shrink-0 text-center text-[9px] font-semibold uppercase tracking-wider text-zinc-600">Sent.</span>
+        <span className="w-12 shrink-0 text-right text-[9px] font-semibold uppercase tracking-wider text-zinc-600">Mkt Cap</span>
+      </div>
+      {/* Rows — clicking the background (not a row) deselects */}
+      <div className="flex-1 overflow-y-auto scrollbar-hide" onClick={onDeselect}>
+        {ceos.length === 0 ? (
+          <div className="flex h-full items-center justify-center">
+            <p className="text-sm text-zinc-500">No CEOs match the current filters</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/[0.04]">
+            {ceos.map((ceo) => (
+              <CEORow
+                key={ceo.id}
+                ceo={ceo}
+                isSelected={ceo.id === selectedId}
+                onClick={() => onSelect(ceo)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Detail Panel ─────────────────────────────────────────────────────────────
 
 function DetailPanel({
   ceo,
@@ -1186,7 +709,6 @@ function DetailPanel({
 }) {
   const [news, setNews] = useState<{ title: string; url: string; source: string; publishedAt: string; sentiment: string }[]>([]);
   const [newsOverallSentiment, setNewsOverallSentiment] = useState<"positive" | "neutral" | "negative" | null>(null);
-  const [legal, setLegal] = useState<{ date: string; headline: string; url: string; source: string; active: boolean }[]>([]);
   const [quote, setQuote] = useState<{ price: number } | null>(null);
   const [stockSince, setStockSince] = useState<{ ok: boolean; percentChange?: number; startYear?: number } | null>(null);
   const [assessment, setAssessment] = useState<{ leadershipScore: number; scoreLabel: string; summary: string; strengths: string[]; watchPoints: string[]; longTermOutlook: string; investorVerdict: string } | null>(null);
@@ -1199,15 +721,9 @@ function DetailPanel({
   const [claudeProfile, setClaudeProfile] = useState<CeoClaudeProfile | null>(null);
   const [claudeProfileLoading, setClaudeProfileLoading] = useState(false);
   const tenureYears = new Date().getFullYear() - ceo.tenureStart;
-  const slotSynthetic = isSyntheticMapTicker(ceo.ticker);
 
   useEffect(() => {
     const t = ceo.ticker.toUpperCase();
-    if (slotSynthetic) {
-      setClaudeProfile(null);
-      setClaudeProfileLoading(false);
-      return;
-    }
     const ck = ceoProfileCacheKey(ceo.ticker);
     const cached = profileCacheRef.current.get(ck);
     if (cached) {
@@ -1252,57 +768,30 @@ Ticker: ${ceo.ticker}`;
         const tint = mapClaudeSentimentToTint(parsed.sentiment);
         if (tint) onClaudeGraphSentiment(t, tint);
       } catch {
-        // keep fallbacks in UI
+        // keep fallbacks
       } finally {
         if (!cancelled) setClaudeProfileLoading(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [ceo.ticker, ceo.name, ceo.company, slotSynthetic, profileCacheRef, onClaudeGraphSentiment]);
+    return () => { cancelled = true; };
+  }, [ceo.ticker, ceo.name, ceo.company, profileCacheRef, onClaudeGraphSentiment]);
 
   useEffect(() => {
     fetch(`/api/ceo-news?name=${encodeURIComponent(ceo.name)}&company=${encodeURIComponent(ceo.company)}`)
       .then((r) => r.json())
-      .then((d) => {
-        setNews(d?.articles ?? []);
-        setNewsOverallSentiment(d?.overallSentiment ?? null);
-      })
-      .catch(() => {
-        setNews([]);
-        setNewsOverallSentiment(null);
-      });
+      .then((d) => { setNews(d?.articles ?? []); setNewsOverallSentiment(d?.overallSentiment ?? null); })
+      .catch(() => { setNews([]); setNewsOverallSentiment(null); });
   }, [ceo.id, ceo.name, ceo.company]);
 
   useEffect(() => {
-    if (slotSynthetic) {
-      setStockSince(null);
-      return;
-    }
     setStockSince(null);
     fetch(`/api/ceo-stock-performance?ticker=${encodeURIComponent(ceo.ticker)}&tenureStartYear=${encodeURIComponent(String(ceo.tenureStart))}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => {
-        if (d?.ok) setStockSince({ ok: true, percentChange: d.percentChange, startYear: d.startYear });
-        else setStockSince({ ok: false });
-      })
+      .then((d) => { if (d?.ok) setStockSince({ ok: true, percentChange: d.percentChange, startYear: d.startYear }); else setStockSince({ ok: false }); })
       .catch(() => setStockSince({ ok: false }));
-  }, [ceo.ticker, ceo.tenureStart, slotSynthetic]);
+  }, [ceo.ticker, ceo.tenureStart]);
 
   useEffect(() => {
-    fetch(`/api/ceo-legal?name=${encodeURIComponent(ceo.name)}`)
-      .then((r) => r.json())
-      .then((d) => setLegal(d?.items ?? []))
-      .catch(() => setLegal([]));
-  }, [ceo.id, ceo.name]);
-
-  useEffect(() => {
-    if (slotSynthetic) {
-      setQuote(null);
-      return;
-    }
     fetch(`/api/ticker-quote?ticker=${encodeURIComponent(ceo.ticker)}`)
       .then((r) => r.json())
       .then((d) => {
@@ -1311,17 +800,14 @@ Ticker: ${ceo.ticker}`;
         setQuote(price != null ? { price } : null);
       })
       .catch(() => setQuote(null));
-  }, [ceo.ticker, slotSynthetic]);
+  }, [ceo.ticker]);
 
   useEffect(() => {
     let mounted = true;
-    fetchWatchlist().then((list) => {
-      if (mounted) setInWatchlist(isTickerInWatchlist(list, ceo.ticker));
-    });
+    fetchWatchlist().then((list) => { if (mounted) setInWatchlist(isTickerInWatchlist(list, ceo.ticker)); });
     return () => { mounted = false; };
   }, [ceo.ticker]);
 
-  // When CEO changes, clear assessment then load cached one for this CEO so we never show another CEO's assessment
   useEffect(() => {
     setAssessment(null);
     const cacheKey = `ceo-assess-${ceo.id}`;
@@ -1342,24 +828,15 @@ Ticker: ${ceo.ticker}`;
           investorVerdict: rest.investorVerdict ?? "",
         });
       }
-    } catch {
-      // ignore invalid cache
-    }
+    } catch { /* ignore */ }
   }, [ceo.id]);
 
   const handleWatchlist = async () => {
     setWatchlistLoading(true);
     try {
-      if (inWatchlist) {
-        await removeFromWatchlistApi(ceo.ticker);
-        setInWatchlist(false);
-      } else {
-        await addToWatchlistApi({ ticker: ceo.ticker, name: ceo.company });
-        setInWatchlist(true);
-      }
-    } finally {
-      setWatchlistLoading(false);
-    }
+      if (inWatchlist) { await removeFromWatchlistApi(ceo.ticker); setInWatchlist(false); }
+      else { await addToWatchlistApi({ ticker: ceo.ticker, name: ceo.company }); setInWatchlist(true); }
+    } finally { setWatchlistLoading(false); }
   };
 
   const runAssessment = async () => {
@@ -1380,13 +857,7 @@ Ticker: ${ceo.ticker}`;
       const res = await fetch("/api/ceo-assess", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: ceo.name,
-          company: ceo.company,
-          ticker: ceo.ticker,
-          tenureYears,
-          headlines: news.map((a) => a.title),
-        }),
+        body: JSON.stringify({ name: ceo.name, company: ceo.company, ticker: ceo.ticker, tenureYears, headlines: news.map((a) => a.title) }),
       });
       if (!res.ok || !res.body) throw new Error("Assessment failed");
       const reader = res.body.getReader();
@@ -1406,194 +877,221 @@ Ticker: ${ceo.ticker}`;
       setAnimateAssess(true);
       setAssessment(data);
       if (typeof localStorage !== "undefined") localStorage.setItem(cacheKey, JSON.stringify({ ...data, _ts: Date.now() }));
-    } catch {
-      setAssessment(null);
-    }
+    } catch { setAssessment(null); }
     setAssessStreaming(false);
   };
 
   const shownSentiment = newsOverallSentiment ?? ceo.sentiment;
   const fallbackSentimentColor = sentimentColor(shownSentiment);
   const avatarColor = claudeProfile ? claudeSentimentStyles(claudeProfile.sentiment).color : fallbackSentimentColor;
+  const sectorStyle = SECTOR_COLORS[ceo.sector] ?? { bg: "rgba(107,114,128,0.12)", color: "#9CA3AF" };
+
   return (
-    <div className="flex h-full w-full flex-col overflow-hidden border-l border-white/10 bg-[var(--app-card)]/98 shadow-2xl backdrop-blur-sm">
-      <div className="flex shrink-0 items-start justify-between border-b border-white/10 p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white" style={{ backgroundColor: avatarColor }}>
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--app-card)]/60">
+      {/* Header */}
+      <div className="flex shrink-0 items-start justify-between border-b border-white/10 p-5">
+        <div className="flex items-center gap-4">
+          <div
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-lg font-bold text-[#080d14]"
+            style={{ backgroundColor: avatarColor }}
+          >
             {getInitials(ceo.name)}
           </div>
           <div>
-            <h2 className="text-xl font-bold text-zinc-100">{ceo.name}</h2>
-            <p className="text-sm text-zinc-400">{ceo.company}</p>
-            <span className="mt-1 inline-block rounded bg-white/10 px-2 py-0.5 text-xs font-medium text-zinc-300">{ceo.ticker}</span>
-            <span className="ml-1 inline-block rounded bg-white/5 px-2 py-0.5 text-[10px] text-zinc-500">{ceo.sector}</span>
-            {ceo.interimNames?.length ? (
-              <span className="ml-1 inline-block rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-200" title="Interim leadership">
-                Interim: {ceo.interimNames[0]}
+            <h2
+              className="text-2xl font-bold leading-tight text-zinc-100"
+              style={{ fontFamily: "var(--font-lora, Georgia), serif" }}
+            >
+              {ceo.name}
+            </h2>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span
+                className="text-sm font-medium text-zinc-300"
+                style={{ fontFamily: "var(--font-jetbrains-mono, monospace)" }}
+              >
+                {ceo.ticker}
               </span>
-            ) : null}
-            {ceo.coCeoNames?.length ? (
-              <span className="ml-1 inline-block rounded bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-200" title="Co-CEO leadership">
-                Co-CEOs
+              <span className="text-zinc-600">·</span>
+              <span className="text-sm text-zinc-400">{ceo.company}</span>
+              <span
+                className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+                style={{ backgroundColor: sectorStyle.bg, color: sectorStyle.color }}
+              >
+                {ceo.sector}
               </span>
-            ) : null}
+              {ceo.interimNames?.length ? (
+                <span className="rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-200">
+                  Interim
+                </span>
+              ) : null}
+              {ceo.coCeoNames?.length ? (
+                <span className="rounded bg-violet-500/15 px-2 py-0.5 text-[10px] font-medium text-violet-200">
+                  Co-CEOs
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
-        <button type="button" onClick={onClose} className="rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-zinc-300" aria-label="Close">×</button>
+        <button type="button" onClick={onClose} className="rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300" aria-label="Close">
+          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
-        {claudeProfileLoading && !claudeProfile ? (
-          <PanelFieldSkeleton className="h-4 w-52" />
-        ) : claudeProfile ? (
-          <p className="text-sm text-zinc-400">
-            CEO since {claudeProfile.tenure_start} · {claudeProfile.tenure_years} years
-          </p>
-        ) : (
-          <p className="text-sm text-zinc-400">CEO since {ceo.tenureStart} · {tenureYears} years</p>
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-zinc-400">Sentiment:</span>
-          {claudeProfileLoading && !claudeProfile ? (
-            <PanelFieldSkeleton className="h-5 w-28" />
-          ) : claudeProfile ? (
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-              style={{
-                backgroundColor: claudeSentimentStyles(claudeProfile.sentiment).bg,
-                color: claudeSentimentStyles(claudeProfile.sentiment).color,
-                border: `1px solid ${claudeSentimentStyles(claudeProfile.sentiment).border}`,
-              }}
-              title={claudeProfile.sentiment_reason || undefined}
-            >
-              {claudeProfile.sentiment}
-            </span>
-          ) : (
-            <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-              style={{
-                backgroundColor: fallbackSentimentColor + "22",
-                color: fallbackSentimentColor,
-                border: `1px solid ${fallbackSentimentColor}55`,
-              }}
-            >
-              {shownSentiment === "positive" ? "Positive" : shownSentiment === "negative" ? "Negative" : "Neutral"}
-            </span>
-          )}
-        </div>
-        {ceo.recentAlert && alertsCount > 0 && (
-          <div className="rounded-lg border border-red-500/50 bg-red-500/10 p-3 text-sm text-red-300">
-            <strong>Leadership change detected</strong>
-            <p className="mt-1 text-xs text-red-200/80">See recent news for details.</p>
+
+      {/* Body */}
+      <div className="flex-1 space-y-5 overflow-y-auto p-5 scrollbar-hide">
+
+        {/* Key stats row */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3">
+            <p className="text-[10px] text-zinc-500">Tenure</p>
+            {claudeProfileLoading && !claudeProfile ? (
+              <PanelFieldSkeleton className="mt-1 h-4 w-20" />
+            ) : claudeProfile ? (
+              <p className="mt-0.5 text-[13px] font-semibold text-zinc-200" style={{ fontFamily: "var(--font-jetbrains-mono, monospace)" }}>
+                {claudeProfile.tenure_years}yr
+              </p>
+            ) : (
+              <p className="mt-0.5 text-[13px] font-semibold text-zinc-200" style={{ fontFamily: "var(--font-jetbrains-mono, monospace)" }}>
+                {tenureYears}yr
+              </p>
+            )}
+            {claudeProfile && (
+              <p className="text-[10px] text-zinc-500">since {claudeProfile.tenure_start}</p>
+            )}
           </div>
-        )}
-        {slotSynthetic ? (
-          <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-            <p className="text-xs text-zinc-500">Stock</p>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-              Placeholder tickers such as <span className="font-mono text-zinc-300">{ceo.ticker}</span> are not listed symbols, so quotes and Finnhub history stay empty. When the index ticker list loads, real symbols replace these slots. This is usually{" "}
-              <span className="text-zinc-300">not</span> a rate limit.
+
+          <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3">
+            <p className="text-[10px] text-zinc-500">Sentiment</p>
+            {claudeProfileLoading && !claudeProfile ? (
+              <PanelFieldSkeleton className="mt-1 h-5 w-20" />
+            ) : claudeProfile ? (
+              <span
+                className="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                style={{
+                  backgroundColor: claudeSentimentStyles(claudeProfile.sentiment).bg,
+                  color: claudeSentimentStyles(claudeProfile.sentiment).color,
+                  border: `1px solid ${claudeSentimentStyles(claudeProfile.sentiment).border}`,
+                }}
+                title={claudeProfile.sentiment_reason || undefined}
+              >
+                {claudeProfile.sentiment}
+              </span>
+            ) : (
+              <span
+                className="mt-1 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                style={{ backgroundColor: fallbackSentimentColor + "22", color: fallbackSentimentColor, border: `1px solid ${fallbackSentimentColor}55` }}
+              >
+                {shownSentiment === "positive" ? "Positive" : shownSentiment === "negative" ? "Negative" : "Neutral"}
+              </span>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-white/8 bg-white/[0.03] p-3">
+            <p className="text-[10px] text-zinc-500">Mkt Cap</p>
+            <p className="mt-0.5 text-[13px] font-semibold text-zinc-200" style={{ fontFamily: "var(--font-jetbrains-mono, monospace)" }}>
+              {formatMarketCap(ceo.marketCap)}
             </p>
           </div>
-        ) : (
-          <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-            <p className="text-xs text-zinc-500">Stock</p>
+        </div>
+
+        {/* Stock performance */}
+        <div className="rounded-lg border border-white/8 bg-white/[0.03] p-4">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Stock</p>
             {quote != null ? (
-              <p className="text-lg font-semibold text-zinc-100">
+              <p className="text-2xl font-bold text-zinc-100" style={{ fontFamily: "var(--font-jetbrains-mono, monospace)" }}>
                 ${quote.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             ) : (
               <p className="text-sm text-zinc-500">Live price unavailable</p>
             )}
             {claudeProfileLoading && !claudeProfile ? (
-              <PanelFieldSkeleton className="mt-2 h-3.5 w-full max-w-[240px]" />
+              <PanelFieldSkeleton className="mt-2 h-3.5 w-60" />
             ) : claudeProfile?.stock_since_tenure_summary ? (
               <p className="mt-2 text-xs leading-snug text-zinc-400">
                 <span className="font-medium text-zinc-500">Since tenure (AI est.): </span>
                 {claudeProfile.stock_since_tenure_summary}
-                {typeof claudeProfile.stock_since_tenure_percent_approx === "number" &&
-                Number.isFinite(claudeProfile.stock_since_tenure_percent_approx) ? (
-                  <span
-                    className={
-                      claudeProfile.stock_since_tenure_percent_approx >= 0 ? "text-emerald-400" : "text-red-400"
-                    }
-                  >
-                    {" "}
-                    (
-                    {claudeProfile.stock_since_tenure_percent_approx >= 0 ? "+" : ""}
-                    {claudeProfile.stock_since_tenure_percent_approx.toFixed(1)}%)
+                {typeof claudeProfile.stock_since_tenure_percent_approx === "number" && Number.isFinite(claudeProfile.stock_since_tenure_percent_approx) ? (
+                  <span className={claudeProfile.stock_since_tenure_percent_approx >= 0 ? "text-emerald-400" : "text-red-400"}>
+                    {" "}({claudeProfile.stock_since_tenure_percent_approx >= 0 ? "+" : ""}{claudeProfile.stock_since_tenure_percent_approx.toFixed(1)}%)
                   </span>
                 ) : null}
               </p>
-            ) : claudeProfile != null &&
-              claudeProfile.stock_since_tenure_percent_approx != null &&
-              Number.isFinite(claudeProfile.stock_since_tenure_percent_approx) ? (
-              <p className="mt-2 text-xs text-zinc-400">
-                <span className="font-medium text-zinc-500">Since tenure (AI est.): </span>
-                <span
-                  className={
-                    claudeProfile.stock_since_tenure_percent_approx >= 0 ? "text-emerald-400" : "text-red-400"
-                  }
-                >
-                  {claudeProfile.stock_since_tenure_percent_approx >= 0 ? "+" : ""}
-                  {claudeProfile.stock_since_tenure_percent_approx.toFixed(1)}%
-                </span>
-              </p>
             ) : stockSince?.ok ? (
               <p className="mt-2 text-xs text-zinc-500">
-                Stock since {ceo.name} took over ({stockSince.startYear}):{" "}
+                Since {ceo.name} took over ({stockSince.startYear}):{" "}
                 <span className={(stockSince.percentChange ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}>
-                  {(stockSince.percentChange ?? 0) >= 0 ? "+" : ""}
-                  {(stockSince.percentChange ?? 0).toFixed(2)}%
+                  {(stockSince.percentChange ?? 0) >= 0 ? "+" : ""}{(stockSince.percentChange ?? 0).toFixed(2)}%
                 </span>
               </p>
             ) : stockSince?.ok === false ? (
-              <p className="mt-2 text-xs text-zinc-500">Historical performance unavailable from data provider.</p>
+              <p className="mt-2 text-xs text-zinc-500">Historical performance unavailable.</p>
             ) : (
               <p className="mt-2 text-xs text-zinc-500">Loading performance…</p>
             )}
+        </div>
+
+        {/* Alert banner */}
+        {ceo.recentAlert && alertsCount > 0 && (
+          <div className="rounded-lg border border-red-500/40 bg-red-500/8 p-3">
+            <p className="text-sm font-semibold text-red-300">Leadership change detected</p>
+            <p className="mt-1 text-xs text-red-200/70">See recent news for details.</p>
           </div>
         )}
+
+        {/* Legal history */}
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-zinc-200">Recent news</h3>
-          {news.length === 0 ? <p className="text-xs text-zinc-500">No recent articles</p> : (
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Legal History</p>
+
+          {/* AI summary — always shown first as the authoritative source */}
+          {claudeProfileLoading && !claudeProfile ? (
+            <PanelFieldSkeleton className="h-10 w-full" />
+          ) : claudeProfile ? (
+            <div
+              className={`mb-3 rounded-lg border p-3 text-xs leading-relaxed ${
+                claudeProfile.legal_severity === "significant"
+                  ? "border-red-500/30 bg-red-500/6 text-red-200/90"
+                  : claudeProfile.legal_severity === "minor"
+                    ? "border-amber-500/30 bg-amber-500/6 text-amber-200/90"
+                    : "border-emerald-500/20 bg-emerald-500/5 text-emerald-300/80"
+              }`}
+            >
+              <span className="mb-1 block text-[9px] font-semibold uppercase tracking-wider opacity-60">
+                {claudeProfile.legal_severity === "significant" ? "⚠ Significant Issues" : claudeProfile.legal_severity === "minor" ? "Minor Issues" : "Clean Record"}
+              </span>
+              {claudeProfile.legal_history ?? "No significant legal or regulatory issues on record."}
+            </div>
+          ) : (
+            <p className="mb-3 text-xs text-zinc-500">No legal history data available.</p>
+          )}
+
+        </div>
+
+        {/* Recent news */}
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">Recent News</p>
+          {news.length === 0 ? (
+            <p className="text-xs text-zinc-500">No recent articles</p>
+          ) : (
             <ul className="space-y-2">
               {news.map((a, i) => (
-                <li key={i} className="rounded border border-white/5 bg-white/5 p-2">
+                <li key={i} className="rounded border border-white/5 bg-white/[0.03] p-2.5">
                   <p className="line-clamp-2 text-xs text-zinc-200">{a.title}</p>
                   <p className="mt-1 text-[10px] text-zinc-500">{a.source} · {new Date(a.publishedAt).toLocaleDateString()}</p>
-                  <a href={a.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-[10px] text-[var(--accent-color)] hover:underline">Read full story →</a>
+                  <a href={a.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-[10px] text-[var(--accent-color)] hover:underline">
+                    Read full story →
+                  </a>
                 </li>
               ))}
             </ul>
           )}
         </div>
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-zinc-200">Legal history</h3>
-          {legal.length > 0 ? (
-            <ul className="space-y-2">
-              {legal.map((l, i) => (
-                <li key={i} className={`rounded border p-2 text-xs ${l.active ? "border-red-500/30 bg-red-500/5 text-red-200" : "border-white/5 bg-white/5 text-zinc-400"}`}>
-                  <p className="font-medium">{l.date}</p>
-                  <p className="line-clamp-2">{l.headline}</p>
-                  <a href={l.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-[10px] text-[var(--accent-color)]">Source</a>
-                </li>
-              ))}
-            </ul>
-          ) : claudeProfileLoading && !claudeProfile ? (
-            <PanelFieldSkeleton className="h-14 w-full" />
-          ) : claudeProfile ? (
-            <p className={`text-xs ${claudeProfile.legal_severity === "significant" ? "text-red-200/90" : claudeProfile.legal_severity === "minor" ? "text-amber-200/90" : "text-zinc-300"}`}>
-              {claudeProfile.legal_history ?? "No significant legal issues reported."}
-            </p>
-          ) : (
-            <p className="text-xs text-emerald-500/90">No significant legal issues found</p>
-          )}
-        </div>
+
+        {/* Leadership assessment */}
         <div>
           {assessStreaming ? (
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
               <div className="flex items-center gap-2">
-                {[0,150,300].map((d) => (
+                {[0, 150, 300].map((d) => (
                   <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-[var(--accent-color)]" style={{ animationDelay: `${d}ms` }} />
                 ))}
                 <span className="text-xs text-zinc-400">Analyzing leadership…</span>
@@ -1603,39 +1101,77 @@ Ticker: ${ceo.ticker}`;
               </div>
             </div>
           ) : assessment ? (
-            <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-              <p className="text-sm font-semibold text-zinc-200">Leadership assessment</p>
-              <p className="mt-1 text-xs text-zinc-400">Score: {assessment.leadershipScore}/10 — {assessment.scoreLabel}</p>
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-zinc-200">Leadership Assessment</p>
+                <span className="rounded bg-[var(--accent-color)]/15 px-2 py-0.5 text-xs font-bold text-[var(--accent-color)]">
+                  {assessment.leadershipScore}/10
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-zinc-500">{assessment.scoreLabel}</p>
               <p className="mt-2 text-xs text-zinc-300">
                 {animateAssess ? <TypewriterText text={assessment.summary} startDelay={0} /> : assessment.summary}
               </p>
-              <p className="mt-2 text-xs font-medium text-zinc-400">Strengths</p>
-              <ul className="list-disc pl-4 text-xs text-zinc-400">
+              <p className="mt-3 text-[11px] font-medium text-zinc-400">Strengths</p>
+              <ul className="mt-1 list-disc pl-4 text-xs text-zinc-400">
                 {assessment.strengths.map((s, i) => (
                   <li key={i}>{animateAssess ? <TypewriterText text={s} startDelay={550 + i * 200} /> : s}</li>
                 ))}
               </ul>
-              <p className="mt-2 text-xs font-medium text-zinc-400">Watch points</p>
-              <ul className="list-disc pl-4 text-xs text-zinc-400">
+              <p className="mt-2 text-[11px] font-medium text-zinc-400">Watch Points</p>
+              <ul className="mt-1 list-disc pl-4 text-xs text-zinc-400">
                 {assessment.watchPoints.map((s, i) => (
                   <li key={i}>{animateAssess ? <TypewriterText text={s} startDelay={1150 + i * 200} /> : s}</li>
                 ))}
               </ul>
-              <p className="mt-2 text-xs text-zinc-300">
+              <p className="mt-3 text-xs text-zinc-300">
                 {animateAssess ? <TypewriterText text={assessment.investorVerdict} startDelay={1600} /> : assessment.investorVerdict}
               </p>
             </div>
           ) : (
-            <button type="button" onClick={runAssessment} disabled={assessLoading} className="w-full rounded-lg bg-[var(--accent-color)] py-2 text-sm font-medium text-[#020308] hover:opacity-90 disabled:opacity-50">Leadership Report</button>
+            <button
+              type="button"
+              onClick={runAssessment}
+              disabled={assessLoading}
+              className="w-full rounded-lg bg-[var(--accent-color)] py-2.5 text-sm font-semibold text-[#020308] hover:opacity-90 disabled:opacity-50"
+            >
+              Run Leadership Report
+            </button>
           )}
         </div>
-        <button type="button" onClick={handleWatchlist} disabled={watchlistLoading} className="w-full rounded-lg border border-white/20 py-2 text-sm font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-50">
-          {inWatchlist ? `✓ Watching ${ceo.ticker}` : "Add to watchlist"}
+
+        {/* Watchlist */}
+        <button
+          type="button"
+          onClick={handleWatchlist}
+          disabled={watchlistLoading}
+          className="w-full rounded-lg border border-white/15 py-2 text-sm font-medium text-zinc-300 hover:bg-white/5 disabled:opacity-50"
+        >
+          {inWatchlist ? `✓ Watching ${ceo.ticker}` : "Add to Watchlist"}
         </button>
       </div>
     </div>
   );
 }
+
+// ─── Empty state ──────────────────────────────────────────────────────────────
+
+function EmptyDetailState() {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-3 bg-[var(--app-card)]/30 p-8">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full border border-white/10 bg-white/[0.03]">
+        <svg className="h-7 w-7 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+        </svg>
+      </div>
+      <p className="text-center text-sm text-zinc-500">
+        Select a CEO from the list to view their profile,<br />news, legal history, and leadership assessment.
+      </p>
+    </div>
+  );
+}
+
+// ─── Compare Modal ────────────────────────────────────────────────────────────
 
 function CompareModal({ ceos, onClose }: { ceos: CEOEntry[]; onClose: () => void }) {
   if (ceos.length === 0) return null;
@@ -1651,155 +1187,78 @@ function CompareModal({ ceos, onClose }: { ceos: CEOEntry[]; onClose: () => void
             <div key={c.id} className="rounded-lg border border-white/10 bg-white/5 p-3">
               <p className="font-semibold text-zinc-100">{c.name}</p>
               <p className="text-xs text-zinc-400">{c.company} ({c.ticker})</p>
-              <p className="mt-1 text-[10px] text-zinc-500">Tenure: {new Date().getFullYear() - c.tenureStart} years · Sentiment: {c.sentiment}</p>
+              <p className="mt-1 text-[10px] text-zinc-500">
+                Tenure: {new Date().getFullYear() - c.tenureStart} years · Sentiment: {c.sentiment}
+              </p>
             </div>
           ))}
         </div>
-        <p className="mt-4 text-xs text-zinc-500">Side-by-side tenure, sentiment, and stock performance. Use detail panel for full data.</p>
+        <p className="mt-4 text-xs text-zinc-500">Shift-click rows to add/remove from comparison.</p>
       </div>
     </div>
   );
 }
 
+// ─── Main View ────────────────────────────────────────────────────────────────
+
 export default function CEOsView() {
-  const pathname = usePathname();
   const [filters, setFilters] = useState<FilterState>(() => getCeoFilters() ?? defaultFilters());
   const [selected, setSelected] = useState<CEOEntry | null>(null);
   const [compare, setCompare] = useState<CEOEntry[]>([]);
-  const [filterPanelCollapsed, setFilterPanelCollapsed] = useState(() => getCeoPanelPrefs().filterPanelCollapsed);
   const [alertsCount, setAlertsCount] = useState(0);
-  const graphRef = useRef<{
-    zoomToFit: (a?: number, b?: number, c?: (n: unknown) => boolean) => void;
-    zoom: (n: number, ms?: number) => void;
-    centerAt: (x?: number, y?: number, ms?: number) => void;
-    graph2ScreenCoords: (x: number, y: number) => { x: number; y: number };
-  } | null>(null);
-  const shiftRef = useRef(false);
-  const [highlightSector, setHighlightSector] = useState<string | null>(null);
-  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
-  const [chartLocked, setChartLocked] = useState(false);
-  const [showLinesInfo, setShowLinesInfo] = useState(false);
-  const [activeQuickPreset, setActiveQuickPreset] = useState<QuickPresetId | null>(null);
   const [ceoAlerts, setCeoAlerts] = useState<CEOAlertItem[]>([]);
   const [weeklyCeoAlerts, setWeeklyCeoAlerts] = useState<CEOAlertItem[]>([]);
-  const [spy500Tickers, setSpy500Tickers] = useState<string[] | null>(null);
-  const [qqq100Tickers, setQqq100Tickers] = useState<string[] | null>(null);
-  const [dow30Tickers, setDow30Tickers] = useState<string[] | null>(null);
-  const [detailPanelWidth, setDetailPanelWidth] = useState(() => getCeoPanelPrefs().detailPanelWidth);
-  const [detailPanelCollapsed, setDetailPanelCollapsed] = useState(() => getCeoPanelPrefs().detailPanelCollapsed);
+  const [allCeoNews, setAllCeoNews] = useState<CEOAlertItem[]>([]);
+  const [activeQuickPreset, setActiveQuickPreset] = useState<QuickPresetId | null>(null);
+  const [liveSentiments, setLiveSentiments] = useState<Map<string, { sentiment: CEOSentiment; reason: string; previousSentiment: CEOSentiment | null; changedAt: string | null; updatedAt: string }>>(new Map());
 
   const ceoProfileCacheRef = useRef<Map<string, CeoClaudeProfile>>(new Map());
   const [graphClaudeByTicker, setGraphClaudeByTicker] = useState<Record<string, "bullish" | "bearish" | "neutral">>({});
+  const shiftRef = useRef(false);
+
   const handleClaudeGraphSentiment = useCallback((ticker: string, tint: "bullish" | "bearish" | "neutral") => {
-    const key = ticker.toUpperCase();
-    setGraphClaudeByTicker((prev) => ({ ...prev, [key]: tint }));
+    setGraphClaudeByTicker((prev) => ({ ...prev, [ticker.toUpperCase()]: tint }));
   }, []);
 
   const CEOS_BY_TICKER = useMemo(() => new Map(CEOS.map((c) => [c.ticker.toUpperCase(), c])), []);
 
   const ceoUniverse = useMemo(() => {
-    const placeholderLastNames = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Miller", "Davis", "Garcia", "Rodriguez", "Lee", "Walker", "Hall", "Allen", "Young", "King", "Wright", "Scott", "Green", "Baker", "Adams", "Nelson", "Carter", "Mitchell", "Perez", "Roberts"];
-    const alertTickers = new Set(
-      ceoAlerts
-        .map((a) => a.matchedTicker?.toUpperCase())
-        .filter((t): t is string => Boolean(t))
-    );
+    const alertTickers = new Set(ceoAlerts.map((a) => a.matchedTicker?.toUpperCase()).filter((t): t is string => Boolean(t)));
 
-    const makePlaceholder = (ticker: string, preset: QuickPresetId): CEOEntry => {
-      const rnd = seedRandom(`ceo-placeholder:${preset}:${ticker}`);
-      const h = Math.floor(rnd() * 1000);
-      const last = placeholderLastNames[h % placeholderLastNames.length] ?? "Smith";
-      const first = ["Alex", "Jordan", "Taylor", "Morgan", "Casey", "Jamie", "Riley", "Quinn", "Avery", "Robin"][h % 10] ?? "Alex";
-      const tenureStart = 1995 + (h % 30);
-      const capPick = h % 100;
-      const marketCap = capPick > 90 ? 3500 : capPick > 75 ? 900 : capPick > 55 ? 300 : capPick > 25 ? 120 : 60;
-      const sentiment: CEOEntry["sentiment"] = (() => {
-        const m = h % 10;
-        if (m <= 2) return "negative";
-        if (m <= 6) return "neutral";
-        return "positive";
-      })();
-      const company =
-        ticker.startsWith("SPY500_") || ticker.startsWith("SPY500_FILL_")
-          ? "S&P 500 constituent"
-          : ticker.startsWith("QQQ100_FILL_")
-            ? "Nasdaq 100 constituent"
-            : ticker.startsWith("DOW30_FILL_")
-              ? "Dow 30 constituent"
-              : ticker;
+    const applyLive = (c: CEOEntry) => {
+      const live = liveSentiments.get(c.ticker.toUpperCase());
       return {
-        id: `${ticker}-placeholder-${preset}`,
-        name: `${first} ${last}`,
-        company,
-        ticker,
-        sector: "Technology",
-        tenureStart,
-        sentiment,
-        marketCap,
-        recentAlert: alertTickers.has(ticker),
+        ...c,
+        recentAlert: alertTickers.has(c.ticker.toUpperCase()),
+        ...(live ? { sentiment: live.sentiment } : {}),
       };
     };
 
-    const baseFromCEOs = CEOS.map((c) => ({
-      ...c,
-      recentAlert: alertTickers.has(c.ticker.toUpperCase()),
-    }));
+    const base = CEOS.map(applyLive);
 
-    if (!activeQuickPreset) return baseFromCEOs;
+    if (!activeQuickPreset || activeQuickPreset === "spy500") {
+      const presetSet = QUICK_PRESET_TICKERS["spy500"];
+      if (!presetSet) return base;
+      return Array.from(presetSet)
+        .map((ticker) => CEOS_BY_TICKER.get(ticker.toUpperCase()))
+        .filter((c): c is CEOEntry => c !== undefined)
+        .map(applyLive);
+    }
 
-    const presetTickers = (() => {
-      if (activeQuickPreset === "spy500") {
-        const fetched = spy500Tickers && spy500Tickers.length > 0 ? spy500Tickers : null;
-        const arr = (fetched ? [...fetched] : Array.from({ length: 500 }, (_, i) => `SPY500_${i + 1}`)).slice(0, 500);
-        while (arr.length < 500) arr.push(`SPY500_FILL_${arr.length + 1}`);
-        const alerts = Array.from(alertTickers);
-        for (let i = 0; i < alerts.length && i < arr.length; i++) {
-          arr[i] = alerts[i];
-        }
-        return arr;
-      }
-      const baseSet = QUICK_PRESET_TICKERS[activeQuickPreset];
-      const arr = baseSet ? Array.from(baseSet) : [];
-      if (activeQuickPreset === "qqq100") {
-        const fetched = qqq100Tickers && qqq100Tickers.length > 0 ? qqq100Tickers : null;
-        const base = fetched ? [...fetched] : arr;
-        const next = base.slice(0, 100);
-        while (next.length < 100) next.push(`QQQ100_FILL_${next.length + 1}`);
-        // Replace filler tickers with any tickers we have live alerts for.
-        const baseSize = baseSet ? baseSet.size : 0;
-        const alerts = Array.from(alertTickers).filter((t) => !next.includes(t));
-        let replaceIdx = next.length - 1;
-        for (let i = 0; i < alerts.length && replaceIdx >= baseSize; i++) {
-          next[replaceIdx] = alerts[i];
-          replaceIdx--;
-        }
-        return next.slice(0, 100);
-      }
-      if (activeQuickPreset === "dow30") {
-        const fetched = dow30Tickers && dow30Tickers.length > 0 ? dow30Tickers : null;
-        const next = (fetched ? [...fetched] : arr).slice(0, 30);
-        while (next.length < 30) next.push(`DOW30_FILL_${next.length + 1}`);
-        return next;
-      }
-      return arr;
-    })();
+    const presetSet = QUICK_PRESET_TICKERS[activeQuickPreset];
+    if (!presetSet) return base;
 
-    return presetTickers.map((ticker) => {
-      const key = ticker.toUpperCase();
-      const existing = CEOS_BY_TICKER.get(key);
-      if (existing) {
-        return { ...existing, recentAlert: alertTickers.has(key) };
-      }
-      return makePlaceholder(key, activeQuickPreset);
-    });
-  }, [activeQuickPreset, ceoAlerts, CEOS_BY_TICKER, spy500Tickers, qqq100Tickers, dow30Tickers]);
+    return Array.from(presetSet)
+      .map((ticker) => CEOS_BY_TICKER.get(ticker.toUpperCase()))
+      .filter((c): c is CEOEntry => c !== undefined)
+      .map(applyLive);
+  }, [activeQuickPreset, ceoAlerts, liveSentiments, CEOS_BY_TICKER]);
 
   const filtered = useMemo(() => filterCEOs(ceoUniverse, filters), [ceoUniverse, filters]);
-  const graphData = useMemo(() => buildGraphData(filtered), [filtered]);
 
   const presetShownCount = filtered.length;
   const activePresetShowLabel = activeQuickPreset ? QUICK_PRESET_SHOW_LABEL[activeQuickPreset] : null;
-  const allViewLabel = `Overall`;
+  const allViewLabel = "Overall";
 
   const ceoOfWeek = useMemo(() => {
     const ticker = ceoAlerts[0]?.matchedTicker?.toUpperCase();
@@ -1807,36 +1266,36 @@ export default function CEOsView() {
     return ceoUniverse.find((c) => c.ticker.toUpperCase() === ticker) ?? null;
   }, [ceoAlerts, ceoUniverse]);
 
-  const weeklyAlerts = weeklyCeoAlerts;
+  // Sentiment shifts detected this week (previous_sentiment differs from current)
+  const sentimentChanges = useMemo(() => {
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const changes: { ticker: string; name: string; company: string; from: CEOSentiment; to: CEOSentiment; changedAt: string }[] = [];
+    for (const ceo of CEOS) {
+      const live = liveSentiments.get(ceo.ticker.toUpperCase());
+      if (!live?.previousSentiment || !live.changedAt) continue;
+      if (live.previousSentiment === live.sentiment) continue;
+      if (new Date(live.changedAt).getTime() < weekAgo) continue;
+      changes.push({ ticker: ceo.ticker, name: ceo.name, company: ceo.company, from: live.previousSentiment, to: live.sentiment, changedAt: live.changedAt });
+    }
+    return changes.sort((a, b) => new Date(b.changedAt).getTime() - new Date(a.changedAt).getTime());
+  }, [liveSentiments]);
 
   const searchMatches = useMemo(() => {
     if (!filters.search.trim()) return [];
     const q = filters.search.toLowerCase();
-    return filtered.filter((c) => c.name.toLowerCase().includes(q) || c.company.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)).slice(0, 8);
-  }, [filtered, filters.search]);
+    return CEOS.filter((c) => c.name.toLowerCase().includes(q) || c.company.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)).slice(0, 10);
+  }, [filters.search]);
 
-  const startResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startW = detailPanelWidth;
-    const onMove = (ev: MouseEvent) => {
-      const delta = startX - ev.clientX;
-      setDetailPanelWidth(Math.min(700, Math.max(280, startW + delta)));
-    };
-    const onUp = () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }, [detailPanelWidth]);
+  // Auto-select first CEO on load / when filtered changes and selected is null
+  const autoSelectedRef = useRef(false);
+  useEffect(() => {
+    if (!autoSelectedRef.current && filtered.length > 0) {
+      setSelected(filtered[0]);
+      autoSelectedRef.current = true;
+    }
+  }, [filtered]);
 
-  const dimmedIds = useMemo(() => {
-    if (!filters.search) return new Set<string>();
-    const q = filters.search.toLowerCase();
-    const matchIds = new Set(filtered.filter((c) => c.name.toLowerCase().includes(q) || c.company.toLowerCase().includes(q) || c.ticker.toLowerCase().includes(q)).map((c) => c.id));
-    return new Set(graphData.nodes.map((n) => n.id).filter((id) => !matchIds.has(id)));
-  }, [filters.search, filtered, graphData.nodes]);
+  // Data fetching
   useEffect(() => {
     let mounted = true;
     const load = async () => {
@@ -1847,107 +1306,62 @@ export default function CEOsView() {
         setAlertsCount(d?.count ?? 0);
         setCeoAlerts(Array.isArray(d?.alerts) ? d.alerts : []);
         setWeeklyCeoAlerts(Array.isArray(d?.weekly) ? d.weekly : []);
+        setAllCeoNews(Array.isArray(d?.allNews) ? d.allNews : []);
       } catch {
         if (!mounted) return;
-        setAlertsCount(0);
-        setCeoAlerts([]);
-        setWeeklyCeoAlerts([]);
+        setAlertsCount(0); setCeoAlerts([]); setWeeklyCeoAlerts([]); setAllCeoNews([]);
       }
     };
     load();
     const t = setInterval(load, 2 * 60 * 1000);
-    return () => {
-      mounted = false;
-      clearInterval(t);
-    };
+    return () => { mounted = false; clearInterval(t); };
   }, []);
 
+  // Fetch live sentiments from Supabase (populated weekly by /api/ceo-sentiment POST)
   useEffect(() => {
-    const loadIndexTickers = async () => {
-      if (activeQuickPreset === "spy500" && spy500Tickers == null) {
-        try {
-          const r = await fetch("/api/ceo-alerts?index=spy500", { cache: "no-store" });
-          const d = await r.json();
-          setSpy500Tickers(Array.isArray(d?.tickers) ? d.tickers : []);
-        } catch {
-          setSpy500Tickers([]);
+    let mounted = true;
+    fetch("/api/ceo-sentiment")
+      .then((r) => r.json())
+      .then((d: { sentiments?: { ticker: string; sentiment: string; sentiment_reason: string; previous_sentiment?: string | null; sentiment_changed_at?: string | null; updated_at: string }[] }) => {
+        if (!mounted) return;
+        const map = new Map<string, { sentiment: CEOSentiment; reason: string; previousSentiment: CEOSentiment | null; changedAt: string | null; updatedAt: string }>();
+        for (const row of d?.sentiments ?? []) {
+          if (row.sentiment === "positive" || row.sentiment === "neutral" || row.sentiment === "negative") {
+            const prev = row.previous_sentiment;
+            map.set(row.ticker.toUpperCase(), {
+              sentiment: row.sentiment,
+              reason: row.sentiment_reason ?? "",
+              previousSentiment: (prev === "positive" || prev === "neutral" || prev === "negative") ? prev : null,
+              changedAt: row.sentiment_changed_at ?? null,
+              updatedAt: row.updated_at ?? "",
+            });
+          }
         }
-      }
-      if (activeQuickPreset === "qqq100" && qqq100Tickers == null) {
-        try {
-          const r = await fetch("/api/ceo-alerts?index=qqq100", { cache: "no-store" });
-          const d = await r.json();
-          setQqq100Tickers(Array.isArray(d?.tickers) ? d.tickers : []);
-        } catch {
-          setQqq100Tickers([]);
-        }
-      }
-      if (activeQuickPreset === "dow30" && dow30Tickers == null) {
-        try {
-          const r = await fetch("/api/ceo-alerts?index=dow30", { cache: "no-store" });
-          const d = await r.json();
-          setDow30Tickers(Array.isArray(d?.tickers) ? d.tickers : []);
-        } catch {
-          setDow30Tickers([]);
-        }
-      }
-    };
-    void loadIndexTickers();
-  }, [activeQuickPreset, spy500Tickers, qqq100Tickers, dow30Tickers]);
+        setLiveSentiments(map);
+      })
+      .catch(() => { /* silently fall back to static sentiment */ });
+    return () => { mounted = false; };
+  }, []);
 
+  // Persist filters
   const filtersPersistSkippedRef = useRef(false);
   useEffect(() => {
-    if (!filtersPersistSkippedRef.current) {
-      filtersPersistSkippedRef.current = true;
-      return;
-    }
+    if (!filtersPersistSkippedRef.current) { filtersPersistSkippedRef.current = true; return; }
     saveCeoFilters(filters);
   }, [filters]);
 
-  const panelsPersistSkippedRef = useRef(false);
-  // Persist panel positions when they change (skip first run so we don't overwrite restored prefs)
+  // Keyboard: shift for compare, Escape to close detail
   useEffect(() => {
-    if (!panelsPersistSkippedRef.current) {
-      panelsPersistSkippedRef.current = true;
-      return;
-    }
-    saveCeoPanelPrefs({
-      detailPanelWidth,
-      detailPanelCollapsed,
-      filterPanelCollapsed,
-    });
-  }, [detailPanelWidth, detailPanelCollapsed, filterPanelCollapsed]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { shiftRef.current = e.shiftKey; };
+    const onKey = (e: KeyboardEvent) => {
+      shiftRef.current = e.shiftKey;
+      if (e.key === "Escape") setSelected(null);
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKey);
     return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKey); };
   }, []);
 
-  // When landing on (or returning to) the CEOs page, center map and zoom out (delay so graph is mounted)
-  useEffect(() => {
-    if (pathname !== "/ceos" || !graphData.nodes.length) return;
-    const t = setTimeout(() => {
-      if (graphRef.current) {
-        graphRef.current.zoomToFit?.(0, 40);
-        graphRef.current.zoom?.(0.28, 0);
-      }
-    }, 280);
-    return () => clearTimeout(t);
-  }, [pathname, graphData.nodes.length]);
-
-  const handleCameraChange = useCallback((k: number, x: number, y: number) => {
-    saveCeoMapCamera({ k, x, y });
-  }, []);
-
-  // Right panel stays blank until user clicks a CEO (no auto-select)
-
-  const handleNodeClick = useCallback((ceo: CEOEntry) => {
-    // If the filter panel is collapsed, selecting a CEO should reveal it again.
-    setFilterPanelCollapsed(false);
-    // If the right detail panel is collapsed, selecting a CEO should reveal it again.
-    setDetailPanelCollapsed(false);
+  const handleCeoSelect = useCallback((ceo: CEOEntry) => {
     if (shiftRef.current) {
       setCompare((prev) => {
         const next = prev.filter((c) => c.id !== ceo.id);
@@ -1961,37 +1375,49 @@ export default function CEOsView() {
     }
   }, []);
 
+  const handleSelectByTicker = useCallback((ticker: string) => {
+    const ceo = ceoUniverse.find((c) => c.ticker.toUpperCase() === ticker.toUpperCase());
+    if (ceo) { setSelected(ceo); setCompare([]); }
+  }, [ceoUniverse]);
+
   const handleExport = useCallback(() => {
-    const headers = "Company,CEO,Sector,Tenure,Sentiment\n";
-    const rows = CEOS.map((c) => `${c.company},${c.name},${c.sector},${c.tenureStart},${c.sentiment}`).join("\n");
+    const headers = "Company,CEO,Sector,Tenure,Sentiment,MarketCap\n";
+    const rows = filtered.map((c) => `${c.company},${c.name},${c.sector},${c.tenureStart},${c.sentiment},${c.marketCap}`).join("\n");
     const blob = new Blob([headers + rows], { type: "text/csv" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = "quantivtrade-ceo-list.csv";
     a.click();
     URL.revokeObjectURL(a.href);
-  }, []);
+  }, [filtered]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-hidden bg-[var(--app-bg)]">
-      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b bg-[var(--app-card)] px-4" style={{ borderColor: "var(--app-border, rgba(255,255,255,0.1))" }}>
-        <div>
-          <h1 className="text-xl font-bold text-zinc-100">CEO Intelligence</h1>
-          <p className="text-sm text-zinc-500">Track the leaders behind the world&apos;s biggest companies</p>
-        </div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#080d14]">
+
+      {/* ── Header ── */}
+      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-[var(--app-card)] px-5">
+        <h1
+          className="text-xl font-bold text-zinc-100"
+          style={{ fontFamily: "var(--font-lora, Georgia), serif" }}
+        >
+          CEO Intelligence
+        </h1>
+
         <div className="flex items-center gap-3">
           {alertsCount > 0 && (
-            <span className="rounded-full bg-red-500/20 px-3 py-1 text-xs font-medium text-red-400">
-              {alertsCount} CEO changes this month
+            <span className="rounded-full bg-red-500/15 px-3 py-1 text-xs font-medium text-red-400">
+              {alertsCount} changes this month
             </span>
           )}
+
+          {/* Search */}
           <div className="relative">
             <input
               type="text"
-              placeholder="Search CEO or company..."
+              placeholder="Search CEO or company…"
               value={filters.search}
               onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-              className="w-48 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-500 focus:border-[var(--accent-color)] focus:outline-none sm:w-64"
+              className="w-52 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-zinc-100 placeholder-zinc-500 focus:border-[var(--accent-color)] focus:outline-none"
             />
             {searchMatches.length > 0 && (
               <ul className="absolute left-0 top-full z-50 mt-1 max-h-60 w-64 overflow-y-auto rounded-lg border border-white/10 bg-[var(--app-card)] py-1 shadow-xl">
@@ -2000,182 +1426,76 @@ export default function CEOsView() {
                     <button
                       type="button"
                       className="w-full px-3 py-2 text-left text-sm text-zinc-200 hover:bg-white/10"
-                      onClick={() => {
-                        setSelected(c);
-                        setCompare([]);
-                        setFilterPanelCollapsed(false);
-                        setDetailPanelCollapsed(false);
-                        setFilters((f) => ({ ...f, search: "" }));
-                      }}
+                      onClick={() => { setSelected(c); setCompare([]); setFilters((f) => ({ ...f, search: "" })); }}
                     >
-                      {c.name} · {c.company} ({c.ticker})
+                      {c.name} · {c.company}
+                      <span className="ml-1 text-[11px] text-zinc-500" style={{ fontFamily: "monospace" }}>({c.ticker})</span>
                     </button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
-          <button type="button" onClick={handleExport} className="rounded-lg bg-white/10 px-3 py-1.5 text-sm text-zinc-300 hover:bg-white/15">Export CEO list</button>
+
+          <button
+            type="button"
+            onClick={handleExport}
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-zinc-300 hover:bg-white/10"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            Export CSV
+          </button>
         </div>
       </header>
-      <div className="relative flex flex-1 min-h-0 overflow-hidden">
-        <div className="absolute inset-0 z-0 hidden md:block">
-          <CEOGraph
-            graphData={graphData}
-            selectedId={selected?.id ?? null}
-            compareIds={new Set(compare.map((c) => c.id))}
-            dimmedIds={dimmedIds}
-            highlightSector={highlightSector}
-            hoveredNodeId={hoveredNodeId}
-            chartLocked={chartLocked}
-            claudeTintByTicker={graphClaudeByTicker}
-            onNodeHover={(n) => setHoveredNodeId(n?.id ?? null)}
-            onNodeClick={handleNodeClick}
-            onNodeRightClick={(c) => { setSelected(c); setFilterPanelCollapsed(false); setDetailPanelCollapsed(false); }}
-            onCameraChange={handleCameraChange}
-            graphRef={graphRef}
-          />
-        </div>
-        <FilterPanel
+
+      {/* ── Body: 3-panel layout ── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+
+        {/* Left: Filter sidebar */}
+        <FilterSidebar
           filters={filters}
           onFiltersChange={setFilters}
           alertsCount={alertsCount}
           ceoOfWeek={ceoOfWeek}
-          recentAlerts={ceoAlerts}
+          recentAlerts={allCeoNews.length > 0 ? allCeoNews : ceoAlerts}
           ceoOfWeekAlertTitle={ceoAlerts[0]?.title ?? null}
-          weeklyAlerts={weeklyAlerts}
+          weeklyAlerts={weeklyCeoAlerts}
+          sentimentChanges={sentimentChanges}
           activeQuickPreset={activeQuickPreset}
           onQuickPresetChange={(id) => setActiveQuickPreset((cur) => (cur === id ? null : id))}
           presetShownCount={presetShownCount}
           allViewLabel={allViewLabel}
           activePresetShowLabel={activePresetShowLabel}
-          onSelectTicker={(t) => {
-            const ceo = ceoUniverse.find((c) => c.ticker.toUpperCase() === t.toUpperCase());
-            if (ceo) {
-              setSelected(ceo);
-              setCompare([]);
-              setFilterPanelCollapsed(false);
-              setDetailPanelCollapsed(false);
-            }
-          }}
-          collapsed={filterPanelCollapsed}
-          onToggleCollapse={() => setFilterPanelCollapsed((x) => !x)}
+          onSelectCeo={handleSelectByTicker}
         />
-        <div
-          className="absolute top-2 z-20 flex flex-wrap items-center gap-2 rounded-lg bg-black/50 p-2 transition-[left] duration-200"
-          style={{ left: (filterPanelCollapsed ? 48 : 220) + 12 }}
-        >
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setShowLinesInfo((v) => !v)}
-                className="rounded p-1.5 text-zinc-500 hover:bg-white/10 hover:text-zinc-300"
-                aria-label="What do the lines mean?"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4" /><path d="M12 8h.01" /></svg>
-              </button>
-              {showLinesInfo && (
-                <>
-                  <div className="absolute left-0 top-full z-20 mt-1 w-72 rounded-lg border border-white/10 bg-[var(--app-card)] p-3 shadow-xl">
-                    <p className="text-xs text-zinc-300">Lines connect CEOs in the same sector (typically to the tier below); some cross-sector links are shown for context.</p>
-                    <button type="button" onClick={() => setShowLinesInfo(false)} className="mt-2 text-[10px] text-zinc-500 underline hover:text-zinc-400">Close</button>
-                  </div>
-                  <div className="fixed inset-0 z-10" aria-hidden onClick={() => setShowLinesInfo(false)} />
-                </>
-              )}
-            </div>
-            <button type="button" onClick={() => graphRef.current?.zoom?.(1.2)} className="rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200" title="Zoom in">+</button>
-            <button type="button" onClick={() => graphRef.current?.zoom?.(0.28, 300)} className="rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200" title="Zoom out to max">−</button>
-            <button type="button" onClick={() => graphRef.current?.zoomToFit?.(200, 40)} className="rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200" title="Fit all">⊡</button>
-            <button type="button" onClick={() => graphRef.current?.zoomToFit?.(200, 40)} className="flex items-center justify-center rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200" title="Reset view">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" /><path d="M16 21h5v-5" /></svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => setChartLocked((x) => !x)}
-              className={`flex items-center gap-1.5 rounded px-2 py-1.5 text-xs ${chartLocked ? "bg-amber-500/20 text-amber-300" : "text-zinc-400 hover:bg-white/10 hover:text-zinc-200"}`}
-              title={chartLocked ? "Unlock map: scroll will zoom/pan map" : "Lock map: scroll will move page"}
-            >
-              {chartLocked ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M7 11V7a5 5 0 0 1 9.9-1" /><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /></svg>
-              )}
-              {chartLocked ? "Locked" : "Lock"}
-            </button>
-          </div>
+
+        {/* Center: CEO list */}
+        <CEOListPanel
+          ceos={filtered}
+          selectedId={selected?.id ?? null}
+          onSelect={handleCeoSelect}
+          onDeselect={() => setSelected(null)}
+        />
+
+        {/* Right: Detail panel — only shown when a CEO is selected */}
         {selected && (
-          <>
-            {/* Desktop: right-side CEO detail panel (same content as earlier bottom panel) */}
-            <div className="absolute right-0 top-0 bottom-0 z-30 hidden md:flex md:flex-row">
-              {detailPanelCollapsed ? (
-                <button
-                  type="button"
-                  onClick={() => setDetailPanelCollapsed(false)}
-                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center border-l border-white/10 bg-[var(--app-card)] text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
-                  aria-label="Expand CEO panel"
-                >
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-                </button>
-              ) : (
-                <>
-                  <div
-                    role="separator"
-                    aria-label="Resize panel"
-                    className="hidden w-1 flex-shrink-0 cursor-col-resize bg-white/5 hover:bg-[var(--accent-color)]/30 md:block"
-                    onMouseDown={startResize}
-                  />
-                  <div
-                    className="flex min-h-0 flex-1 flex-col overflow-hidden border-l border-white/10 bg-[var(--app-card)] shadow-2xl md:flex-shrink-0"
-                    style={{ width: detailPanelWidth, minWidth: 320 }}
-                  >
-                    <div className="flex shrink-0 items-center justify-end border-b border-white/5 px-2 py-1">
-                      <button type="button" onClick={() => setDetailPanelCollapsed(true)} className="rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200" aria-label="Collapse panel">
-                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                      </button>
-                    </div>
-                    <div className="min-h-0 flex-1 overflow-hidden">
-                      <DetailPanel
-                        ceo={selected}
-                        onClose={() => setSelected(null)}
-                        alertsCount={alertsCount}
-                        profileCacheRef={ceoProfileCacheRef}
-                        onClaudeGraphSentiment={handleClaudeGraphSentiment}
-                      />
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-            {/* Mobile: bottom sheet overlay */}
-            <div className="fixed inset-0 z-50 flex items-end bg-black/60 md:hidden" onClick={() => setSelected(null)} aria-hidden>
-              <div className="max-h-[85vh] w-full overflow-hidden rounded-t-xl bg-[var(--app-card)] shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                <DetailPanel
-                  ceo={selected}
-                  onClose={() => setSelected(null)}
-                  alertsCount={alertsCount}
-                  profileCacheRef={ceoProfileCacheRef}
-                  onClaudeGraphSentiment={handleClaudeGraphSentiment}
-                />
-              </div>
-            </div>
-          </>
+          <div className="flex w-[440px] shrink-0 flex-col overflow-hidden border-l border-white/10">
+            <DetailPanel
+              ceo={selected}
+              onClose={() => setSelected(null)}
+              alertsCount={alertsCount}
+              profileCacheRef={ceoProfileCacheRef}
+              onClaudeGraphSentiment={handleClaudeGraphSentiment}
+            />
+          </div>
         )}
-        <div className="absolute inset-x-0 bottom-0 z-10 max-h-[40vh] overflow-y-auto rounded-t-lg border-t border-white/10 bg-[var(--app-card)]/95 p-4 md:hidden scrollbar-hide">
-          <p className="mb-2 text-sm font-medium text-zinc-400">CEO list</p>
-          <ul className="space-y-2">
-            {filtered.slice(0, 50).map((c) => (
-              <li key={c.id}>
-                <button type="button" onClick={() => { setSelected(c); setFilterPanelCollapsed(false); setDetailPanelCollapsed(false); }} className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-left">
-                  <p className="font-medium text-zinc-100">{c.name}</p>
-                  <p className="text-xs text-zinc-400">{c.company} ({c.ticker}) · {c.sector}</p>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
+
       {compare.length >= 2 && <CompareModal ceos={compare} onClose={() => setCompare([])} />}
+      <footer className="shrink-0 border-t border-white/10 bg-[var(--app-card)] px-6 py-2 flex items-center justify-between">
+        <p className="text-[10px] text-zinc-600">© {new Date().getFullYear()} QuantivTrade · CEO Intelligence</p>
+        <p className="text-[10px] text-zinc-600">Sentiment updated weekly · Data for informational purposes only</p>
+      </footer>
     </div>
   );
 }

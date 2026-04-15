@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAuth } from "../../components/AuthContext";
-import { QuantivTradeLogoImage } from "../../components/XchangeLogoImage";
+import { QuantivTradeLogoImage } from "../../components/QuantivTradeLogoImage";
 import { WelcomeAnimation } from "../../components/WelcomeAnimation";
 
 const WELCOMED_KEY = "quantivtrade-welcomed";

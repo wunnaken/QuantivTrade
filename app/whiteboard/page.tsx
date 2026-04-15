@@ -15,8 +15,10 @@ const TOP_BAR_BG = "#080B14";
 const DEFAULT_APP_STATE = { viewBackgroundColor: "#1e1e2e" };
 const USER_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#e879f9", "#f87171", "#34d399"];
 const CURSOR_THROTTLE_MS = 50;
-const SCENE_POLL_MS = 500;
+const SCENE_THROTTLE_MS = 80;  // broadcast at most every 80ms for live feel
 const AUTOSAVE_MS = 30_000;
+const GROUP_AUTOSAVE_MS = 5_000;  // faster autosave on group boards so peers see changes via polling
+const GROUP_POLL_MS = 2_000;       // how often to poll DB for remote scene changes
 
 const Excalidraw = dynamic(
   () => import("@excalidraw/excalidraw").then((m) => m.Excalidraw),
@@ -208,13 +210,23 @@ function CreateBoardModal({
           body: JSON.stringify({
             name: name.trim(),
             community_id: communityId || null,
-            allowed_members: selectedMembers.map(m => m.id),
+            allowed_members: [],
             permissions,
           }),
         });
         const data = (await res.json()) as { board?: Board; error?: string };
         if (!res.ok) throw new Error(data.error ?? "Failed to create group board");
-        onCreate({ ...data.board!, id: String((data.board as Record<string, unknown>).id) }, true);
+        const board = { ...data.board!, id: String((data.board as Record<string, unknown>).id) };
+        // Send invites to selected members instead of auto-adding
+        const boardIdRaw = board.id.startsWith("board-") ? board.id.slice("board-".length) : board.id;
+        await Promise.all(selectedMembers.map(m =>
+          fetch("/api/board-invites", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ board_id: boardIdRaw, board_name: name.trim(), invitee_id: m.id, permissions }),
+          }).catch(() => {})
+        ));
+        onCreate(board, true);
       } else {
         const id = String(Date.now());
         onCreate({ id, name: name.trim(), scene: emptyScene() }, false);
@@ -287,7 +299,7 @@ function CreateBoardModal({
                     {searchResults.map(m => (
                       <li
                         key={m.id}
-                        onMouseDown={() => addMember(m)}
+                        onMouseDown={e => { e.preventDefault(); addMember(m); }}
                         className="flex items-center gap-2.5 cursor-pointer px-3 py-2 hover:bg-white/5 first:rounded-t-lg last:rounded-b-lg"
                       >
                         {m.avatar_url
@@ -580,7 +592,7 @@ function ManageMembersModal({
                 {searchResults.map(m => (
                   <li
                     key={m.id}
-                    onMouseDown={() => addMember(m)}
+                    onMouseDown={e => { e.preventDefault(); addMember(m); }}
                     className="flex items-center gap-2.5 cursor-pointer px-3 py-2 hover:bg-white/5 first:rounded-t-lg last:rounded-b-lg"
                   >
                     {m.avatar_url
@@ -676,26 +688,60 @@ function ManageMembersModal({
 
 // ── ActiveMembersBar ───────────────────────────────────────────────────────────
 
-function ActiveMembersBar({ members }: { members: ActiveMember[] }) {
-  if (members.length === 0) return null;
-  const shown = members.slice(0, 5);
-  const extra = members.length - 5;
+function ActiveMembersBar({ activeMembers, allMembers }: { activeMembers: ActiveMember[]; allMembers: MemberResult[] }) {
+  const onlineIds = new Set(activeMembers.map(m => m.userId));
+  // Build avatar map from resolved profiles
+  const avatarMap = Object.fromEntries(allMembers.map(m => [m.id, m.avatar_url ?? null]));
+
+  // Combine: online members first (with avatar lookup), then offline board members
+  type Row = { userId: string; username: string; avatarUrl: string | null; isOnline: boolean; color: string };
+  const rows: Row[] = [
+    ...activeMembers.map(m => ({
+      userId: m.userId,
+      username: m.username,
+      avatarUrl: avatarMap[m.userId] ?? null,
+      isOnline: true,
+      color: m.color,
+    })),
+    ...allMembers
+      .filter(m => !onlineIds.has(m.id))
+      .map(m => ({
+        userId: m.id,
+        username: m.username,
+        avatarUrl: m.avatar_url ?? null,
+        isOnline: false,
+        color: getUserColor(m.id),
+      })),
+  ];
+
+  if (rows.length === 0) return null;
+  const shown = rows.slice(0, 7);
+  const extra = rows.length - 7;
+
   return (
     <div className="flex items-center gap-1">
       {shown.map(m => (
         <div
           key={m.userId}
-          title={`@${m.username}`}
-          style={{ backgroundColor: m.color }}
-          className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white ring-2 ring-black"
+          title={`@${m.username}${m.isOnline ? " (online)" : " (offline)"}`}
+          className={`relative flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full text-[10px] font-bold text-white ring-2 ring-black transition-opacity ${m.isOnline ? "opacity-100" : "opacity-35"}`}
+          style={m.avatarUrl ? undefined : { backgroundColor: m.color }}
         >
-          {(m.username[0] ?? "?").toUpperCase()}
+          {m.avatarUrl
+            ? <img src={m.avatarUrl} alt={m.username} className="h-full w-full object-cover" />
+            : (m.username[0] ?? "?").toUpperCase()
+          }
+          {m.isOnline && (
+            <span className="absolute bottom-0 right-0 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-1 ring-black" />
+          )}
         </div>
       ))}
       {extra > 0 && (
-        <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-zinc-400">+{extra} more</span>
+        <span className="rounded-full border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] text-zinc-400">+{extra}</span>
       )}
-      <span className="ml-1 h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+      {activeMembers.length > 0 && (
+        <span className="ml-1 h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+      )}
     </div>
   );
 }
@@ -723,6 +769,7 @@ export default function WhiteboardPage() {
   // Realtime state
   const [remoteCursors, setRemoteCursors] = useState<Record<string, RemoteCursor>>({});
   const [activeMembers, setActiveMembers] = useState<ActiveMember[]>([]);
+  const [boardAllMembers, setBoardAllMembers] = useState<MemberResult[]>([]);
 
   // Refs
   const excalidrawAPIRef = useRef<ExcalidrawAPI | null>(null);
@@ -730,9 +777,11 @@ export default function WhiteboardPage() {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const cursorTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const cursorThrottleRef = useRef<number>(0);
+  const sceneThrottleRef = useRef<number>(0);
   const sceneHashRef = useRef<string>("");
   const sceneIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autosaveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastSyncedAtRef = useRef<string>("");
   const canvasRef = useRef<HTMLDivElement>(null);
   const saveFnRef = useRef<() => Promise<void>>(async () => {});
   const authUserIdRef = useRef<string | null>(null);
@@ -755,16 +804,20 @@ export default function WhiteboardPage() {
     });
   }, []);
 
-  // Load personal + group boards on mount
+  // Load personal + group boards on mount, restore last active board
   useEffect(() => {
     setLastWorkspaceTab("whiteboard");
     let cancelled = false;
+    const lastId = typeof window !== "undefined" ? localStorage.getItem("wb-last-board-id") : null;
     Promise.all([fetchBoardsFromApi(), fetchGroupBoardsFromApi()]).then(([list, gList]) => {
       if (cancelled) return;
       setBoards(list);
       setGroupBoards(gList);
-      if (list.length > 0) {
-        const first = list[0];
+      const all = [...list, ...gList];
+      // Try to restore the board the user was last on
+      const restored = lastId ? all.find(b => b.id === lastId) : null;
+      const first = restored ?? list[0] ?? null;
+      if (first) {
         initialDataRef.current = toInitialData(first.scene);
         setActiveId(first.id);
         setActiveBoard(first);
@@ -789,6 +842,49 @@ export default function WhiteboardPage() {
     if (skipGroupFetchRef.current) { skipGroupFetchRef.current = false; return; }
     fetchGroupBoardsFromApi().then(list => setGroupBoards(list));
   }, [tab]);
+
+  // Re-fetch group boards when an invite is accepted from the notification bell
+  useEffect(() => {
+    const handler = () => {
+      fetchGroupBoardsFromApi().then(list => setGroupBoards(list));
+    };
+    window.addEventListener("whiteboard-group-boards-changed", handler);
+    return () => window.removeEventListener("whiteboard-group-boards-changed", handler);
+  }, []);
+
+  // If navigated here after accepting an invite (?refresh=1), re-fetch group boards
+  // then auto-switch to the newest one so realtime subscribes immediately
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("refresh")) return;
+    window.history.replaceState({}, "", "/whiteboard");
+    const t = setTimeout(() => {
+      fetchGroupBoardsFromApi().then(list => {
+        if (!list.length) return;
+        setGroupBoards(list);
+        // Auto-switch to the newest group board (most recently updated)
+        const newest = list.reduce((a, b) =>
+          (a.updated_at ?? "") > (b.updated_at ?? "") ? a : b
+        );
+        initialDataRef.current = toInitialData(newest.scene ?? emptyScene());
+        setActiveId(newest.id);
+        setActiveBoard(newest);
+        setBoardName(newest.name);
+        setLastSavedAt(newest.updated_at ? new Date(newest.updated_at).getTime() : null);
+      });
+    }, 600);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Save group board when the tab loses visibility (covers browser refresh / close)
+  useEffect(() => {
+    if (!isGroupBoard) return;
+    const handleHide = () => { if (document.visibilityState === "hidden") saveFnRef.current(); };
+    document.addEventListener("visibilitychange", handleHide);
+    return () => document.removeEventListener("visibilitychange", handleHide);
+  }, [isGroupBoard]);
 
   // Realtime channel lifecycle — subscribe when on a group board
   useEffect(() => {
@@ -866,39 +962,70 @@ export default function WhiteboardPage() {
       });
 
       channel.subscribe(async (status) => {
-        if (status === "SUBSCRIBED" && isMounted) {
-          await channel.track({ userId, username, joinedAt: Date.now() });
-        }
+        if (status !== "SUBSCRIBED" || !isMounted) return;
+        // Only expose the channel for sends AFTER it is fully subscribed
+        channelRef.current = channel;
+        await channel.track({ userId, username, joinedAt: Date.now() });
+        // Announce presence immediately now that the channel is ready
+        channel.send({
+          type: "broadcast", event: "cursor",
+          payload: { userId, username, x: 0.5, y: 0.5, color },
+        });
       });
 
-      channelRef.current = channel;
-
-      // Poll scene and broadcast changes at SCENE_POLL_MS
-      sceneIntervalRef.current = setInterval(() => {
-        const api = excalidrawAPIRef.current;
-        const ch = channelRef.current;
-        if (!api || !ch || !isMounted) return;
-        const elements = api.getSceneElements();
-        const hash = JSON.stringify(elements).slice(0, 300);
-        if (hash === sceneHashRef.current) return;
-        sceneHashRef.current = hash;
-        ch.send({ type: "broadcast", event: "scene", payload: { userId, elements } });
-      }, SCENE_POLL_MS);
-
-      // Autosave every 30s
-      autosaveIntervalRef.current = setInterval(() => { saveFnRef.current(); }, AUTOSAVE_MS);
-
-      // Announce cursor presence immediately
-      channel.send({
-        type: "broadcast", event: "cursor",
-        payload: { userId, username, x: 0.5, y: 0.5, color },
-      });
+      // Autosave every 5s on group boards so peers can poll and see changes promptly
+      autosaveIntervalRef.current = setInterval(() => { saveFnRef.current(); }, GROUP_AUTOSAVE_MS);
     };
 
     setup();
     return () => { isMounted = false; cleanup(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGroupBoard, activeId]);
+
+  // Poll group board scene every 2s — picks up changes from other users saved to DB
+  useEffect(() => {
+    if (!isGroupBoard || !activeId) return;
+    const boardIdRaw = activeId.startsWith("board-") ? activeId.slice("board-".length) : activeId;
+    lastSyncedAtRef.current = ""; // reset when switching boards
+    const poll = setInterval(async () => {
+      const res = await fetch(`/api/whiteboard/group?boardId=${boardIdRaw}`, { cache: "no-store" }).catch(() => null);
+      if (!res?.ok) return;
+      const { scene, updated_at } = await res.json() as { scene?: { elements?: unknown[] }; updated_at?: string };
+      if (!updated_at || updated_at === lastSyncedAtRef.current) return;
+      lastSyncedAtRef.current = updated_at;
+      const api = excalidrawAPIRef.current;
+      if (!api) return;
+      const remote = (scene?.elements ?? []) as unknown[];
+      const merged = mergeElements(api.getSceneElements(), remote);
+      api.updateScene({ elements: merged, commitToHistory: false });
+    }, GROUP_POLL_MS);
+    return () => clearInterval(poll);
+  }, [isGroupBoard, activeId]);
+
+  // Fetch all board members (for offline presence display) when a group board is active
+  useEffect(() => {
+    if (!isGroupBoard || !activeBoard?.allowed_members?.length) {
+      setBoardAllMembers([]);
+      return;
+    }
+    const ids = activeBoard.allowed_members.join(",");
+    fetch(`/api/whiteboard/members?ids=${ids}`)
+      .then(r => r.json())
+      .then((d: MemberResult[]) => setBoardAllMembers(Array.isArray(d) ? d : []))
+      .catch(() => setBoardAllMembers([]));
+  }, [isGroupBoard, activeId, activeBoard?.allowed_members]);
+
+  // Autosave personal boards every 30s
+  useEffect(() => {
+    if (isGroupBoard) return; // group boards autosave inside the realtime setup
+    const interval = setInterval(() => { saveFnRef.current(); }, AUTOSAVE_MS);
+    return () => clearInterval(interval);
+  }, [isGroupBoard, activeId]);
+
+  // Persist last active board ID so refresh restores it
+  useEffect(() => {
+    if (activeId) localStorage.setItem("wb-last-board-id", activeId);
+  }, [activeId]);
 
   // Switch to a board
   const switchBoard = useCallback((b: Board) => {
@@ -1066,10 +1193,8 @@ export default function WhiteboardPage() {
     if (isGroup) {
       skipGroupFetchRef.current = true;
       setGroupBoards(prev => [board, ...prev]);
-      setTab("group");
     } else {
       setBoards(prev => [board, ...prev]);
-      setTab("personal");
     }
     initialDataRef.current = toInitialData(board.scene ?? emptyScene());
     setActiveId(board.id);
@@ -1089,7 +1214,12 @@ export default function WhiteboardPage() {
   }
   if (!activeId) return null;
 
-  const currentBoards = tab === "group" ? groupBoards : boards;
+  // Merge personal + group boards, newest first
+  const allBoards = [...boards, ...groupBoards].sort((a, b) => {
+    const ta = a.updated_at ?? "";
+    const tb = b.updated_at ?? "";
+    return tb.localeCompare(ta);
+  });
 
   return (
     <>
@@ -1116,55 +1246,31 @@ export default function WhiteboardPage() {
             <span className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-medium text-zinc-100">Whiteboard</span>
           </div>
           <div className="flex items-center gap-3">
-            {isGroupBoard && <ActiveMembersBar members={activeMembers} />}
+            {isGroupBoard && <ActiveMembersBar activeMembers={activeMembers} allMembers={boardAllMembers} />}
             {isViewOnly && (
               <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
                 View Only
               </span>
             )}
-            <button
-              type="button"
-              onClick={saveCurrent}
-              disabled={saving || isViewOnly}
-              className="rounded bg-white/10 px-3 py-1.5 text-sm text-zinc-200 hover:bg-white/15 disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save Whiteboard"}
-            </button>
-            <span className="text-[10px] text-zinc-500">
-              {lastSavedAt == null
-                ? "Not saved yet"
-                : `Last saved ${Math.floor((Date.now() - lastSavedAt) / 60000)}m ago`}
-            </span>
+            {saving && (
+              <span className="text-[10px] text-zinc-500">Saving…</span>
+            )}
           </div>
         </header>
 
         <div className="flex min-h-0 flex-1">
           {/* Sidebar */}
           <aside className="flex w-56 shrink-0 flex-col border-r border-white/10 bg-[var(--app-bg)]">
-            {/* Tab selector */}
-            <div className="flex gap-1 border-b border-white/10 p-1.5">
-              {(["personal", "group"] as const).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTab(t)}
-                  className={`flex-1 rounded-md py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
-                    tab === t ? "bg-white/10 text-zinc-100" : "text-zinc-600 hover:text-zinc-400"
-                  }`}
-                >
-                  {t === "personal" ? "My Boards" : "Group"}
-                </button>
-              ))}
+            <div className="border-b border-white/10 px-3 py-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">Boards</p>
             </div>
 
             {/* Board list */}
             <div className="flex-1 overflow-y-auto p-2">
-              {currentBoards.length === 0 ? (
-                <p className="px-2 py-3 text-xs text-zinc-500">
-                  {tab === "group" ? "No group boards yet." : "No boards yet. Save to create one."}
-                </p>
+              {allBoards.length === 0 ? (
+                <p className="px-2 py-3 text-xs text-zinc-500">No boards yet. Create one below.</p>
               ) : (
-                currentBoards.map(b => (
+                allBoards.map(b => (
                   <div
                     key={b.id}
                     onClick={() => { if (b.id !== activeId) switchBoard(b); }}
@@ -1216,6 +1322,25 @@ export default function WhiteboardPage() {
                             className="rounded border border-white/10 px-2 py-1 text-[10px] text-zinc-400 hover:bg-white/10 hover:text-[var(--accent-color)]"
                           >
                             Manage
+                          </button>
+                        )}
+                        {b.is_group && b.user_id !== authUserId && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!confirm(`Leave "${b.name}"? You'll need a new invite to rejoin.`)) return;
+                              const boardIdRaw = b.id.startsWith("board-") ? b.id.slice("board-".length) : b.id;
+                              await fetch("/api/whiteboard/group", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ boardId: boardIdRaw, action: "remove_member", memberId: authUserId }),
+                              });
+                              setGroupBoards(prev => prev.filter(x => x.id !== b.id));
+                              if (activeId === b.id) createPersonalBoard();
+                            }}
+                            className="rounded border border-white/10 px-2 py-1 text-[10px] text-zinc-400 hover:bg-white/10 hover:text-red-400"
+                          >
+                            Leave
                           </button>
                         )}
                         {(!b.is_group || b.user_id === authUserId) && (
@@ -1280,20 +1405,22 @@ export default function WhiteboardPage() {
             )}
 
 
-            {/* Save reminder for personal boards */}
-            {!isGroupBoard && (
-              <div className="absolute bottom-4 left-1/2 z-10 w-[90%] max-w-sm -translate-x-1/2 rounded border border-white/10 bg-[var(--app-card)]/90 px-3 py-2 text-xs text-zinc-400 shadow-lg">
-                <p className="font-medium text-zinc-200">Save Whiteboard</p>
-                <p className="mt-1">Click Save to persist to Supabase. No auto-save.</p>
-              </div>
-            )}
-
             <Excalidraw
               key={activeId}
               initialData={initialDataRef.current}
               excalidrawAPI={handleExcalidrawAPI as unknown as (api: unknown) => void}
               theme="dark"
               viewModeEnabled={isViewOnly}
+              onChange={(elements: unknown) => {
+                if (!isGroupBoard) return;
+                const ch = channelRef.current;
+                const uid = authUserIdRef.current;
+                if (!ch || !uid) return;
+                const now = Date.now();
+                if (now - sceneThrottleRef.current < SCENE_THROTTLE_MS) return;
+                sceneThrottleRef.current = now;
+                ch.send({ type: "broadcast", event: "scene", payload: { userId: uid, elements } });
+              }}
             />
           </main>
         </div>

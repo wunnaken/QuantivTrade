@@ -52,5 +52,33 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ profile, metrics, earnings, dividends, nextEarningsDate });
+  // For crypto: fetch CoinGecko profile data
+  let cryptoData: Record<string, unknown> | null = null;
+  if (isCrypto) {
+    try {
+      const searchRes = await fetch(
+        `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(ticker)}`,
+        { next: { revalidate: 3600 } }
+      );
+      if (searchRes.ok) {
+        const searchJson = await searchRes.json() as { coins?: Array<{ id: string; symbol: string; market_cap_rank?: number }> };
+        // Pick the top result whose symbol matches (prefer lower market cap rank = more popular)
+        const coins = (searchJson.coins ?? []).filter(
+          (c) => c.symbol.toLowerCase() === ticker.toLowerCase()
+        );
+        const coinId = coins[0]?.id;
+        if (coinId) {
+          const coinRes = await fetch(
+            `https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&community_data=false&developer_data=false`,
+            { next: { revalidate: 3600 } }
+          );
+          if (coinRes.ok) cryptoData = await coinRes.json() as Record<string, unknown>;
+        }
+      }
+    } catch {
+      // ignore — crypto profile section will gracefully show available data
+    }
+  }
+
+  return NextResponse.json({ profile, metrics, earnings, dividends, nextEarningsDate, cryptoData });
 }

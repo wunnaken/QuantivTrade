@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   const { data: postsRows, error: postsError } = await supabase
     .from("posts")
-    .select("id, user_id, content, created_at, comments_count")
+    .select("id, user_id, content, created_at, comments_count, ticker, image_url")
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -25,19 +25,20 @@ export async function GET(request: NextRequest) {
   const authorIds = [...new Set((postsRows || []).map((p: { user_id: string }) => p.user_id))];
   const { data: profilesRows } = await supabase
     .from("profiles")
-    .select("user_id, name, username, is_verified")
+    .select("user_id, name, username, is_verified, is_founder")
     .in("user_id", authorIds);
 
-  const profilesById: Record<string, { name: string; username: string; is_verified: boolean }> = {};
+  const profilesById: Record<string, { name: string; username: string; is_verified: boolean; is_founder: boolean }> = {};
   for (const pr of profilesRows || []) {
     profilesById[pr.user_id] = {
       name: pr.name ?? "Trader",
       username: pr.username ?? pr.user_id.slice(0, 8),
       is_verified: pr.is_verified ?? false,
+      is_founder: pr.is_founder ?? false,
     };
   }
 
-  const posts = (postsRows || []).map((p: { id: string; user_id: string; content: string; created_at: string; comments_count: number }) => {
+  const posts = (postsRows || []).map((p: { id: string; user_id: string; content: string; created_at: string; comments_count: number; ticker?: string | null; image_url?: string | null }) => {
     const profile = profilesById[p.user_id];
     return {
       id: p.id,
@@ -47,8 +48,11 @@ export async function GET(request: NextRequest) {
         handle: profile?.username ?? p.user_id.slice(0, 8),
         avatar: null,
         verified: profile?.is_verified ?? false,
+        isFounder: profile?.is_founder ?? false,
       },
       content: p.content,
+      ticker: p.ticker ?? null,
+      image: p.image_url ?? null,
       timestamp: p.created_at,
       comments: p.comments_count ?? 0,
     };
@@ -96,7 +100,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  let body: { content?: string };
+  let body: { content?: string; ticker?: string; image_url?: string };
   try {
     body = await request.json();
   } catch {
@@ -108,11 +112,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "content is required" }, { status: 400 });
   }
 
+  const ticker = typeof body.ticker === "string" ? body.ticker.trim().toUpperCase() : null;
+  const image_url = typeof body.image_url === "string" ? body.image_url.trim() : null;
+
   const supabase = createServerClient();
   const { data: post, error } = await supabase
     .from("posts")
-    .insert({ user_id: profileId, content })
-    .select("id, user_id, content, created_at, comments_count")
+    .insert({ user_id: profileId, content, ...(ticker ? { ticker } : {}), ...(image_url ? { image_url } : {}) })
+    .select("id, user_id, content, created_at, comments_count, ticker, image_url")
     .single();
 
   if (error) {
@@ -122,7 +129,7 @@ export async function POST(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, username, is_verified")
+    .select("name, username, is_verified, is_founder")
     .eq("user_id", profileId)
     .single();
 
@@ -133,10 +140,13 @@ export async function POST(request: NextRequest) {
       author: {
         name: profile?.name ?? "Trader",
         handle: profile?.username ?? profileId.slice(0, 8),
+        isFounder: profile?.is_founder ?? false,
         avatar: null,
         verified: profile?.is_verified ?? false,
       },
       content: post.content,
+      ticker: post.ticker ?? null,
+      image: post.image_url ?? null,
       timestamp: post.created_at,
       comments: post.comments_count ?? 0,
     },

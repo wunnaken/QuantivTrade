@@ -103,7 +103,7 @@ function buildEmail(version: string, notes: string, unsubscribeUrl: string): str
           <!-- Header -->
           <tr>
             <td style="padding-bottom:32px;text-align:center">
-              <img src="https://quantiv.trade/xchange-logo.png" alt="" width="32" height="32" style="display:inline-block;vertical-align:middle;margin-right:8px;border-radius:6px" />
+              <img src="https://quantiv.trade/quantivtrade-logo.png" alt="" width="32" height="32" style="display:inline-block;vertical-align:middle;margin-right:8px;border-radius:6px" />
               <span style="font-size:22px;font-weight:800;color:#e8846a;letter-spacing:-0.5px;vertical-align:middle">QuantivTrade</span>
             </td>
           </tr>

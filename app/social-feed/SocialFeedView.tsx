@@ -73,6 +73,36 @@ function isOnlineStable(handle: string): boolean {
 }
 
 const CARD_BG_VAR = "var(--app-card)";
+
+function FounderBadge() {
+  return (
+    <>
+      <style>{`
+        @keyframes founder-shimmer {
+          0%   { background-position: -200% center; }
+          100% { background-position:  200% center; }
+        }
+        .founder-badge-feed {
+          background: linear-gradient(
+            90deg,
+            #92400e 0%, #d97706 25%, #fbbf24 45%, #fde68a 50%, #fbbf24 55%, #d97706 75%, #92400e 100%
+          );
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          background-clip: text;
+          -webkit-text-fill-color: transparent;
+          animation: founder-shimmer 2.8s linear infinite;
+        }
+      `}</style>
+      <span
+        className="founder-badge-feed inline-flex items-center rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-widest"
+        title="Founder"
+      >
+        Founder
+      </span>
+    </>
+  );
+}
 const AI_SHARE_KEY = "quantivtrade-ai-share";
 
 function getInitials(user: User) {
@@ -107,22 +137,43 @@ const ACTIVE_COMMUNITIES = [
 
 type ReactionKey = "bullish" | "bearish" | "informative" | "risky" | "interesting";
 const REACTIONS: { key: ReactionKey; label: string; emoji: string }[] = [
-  { key: "bullish", label: "Bullish", emoji: "↑" },
-  { key: "bearish", label: "Bearish", emoji: "↓" },
-  { key: "informative", label: "Informative", emoji: "i" },
-  { key: "risky", label: "Risky", emoji: "!" },
-  { key: "interesting", label: "Interesting", emoji: "★" },
+  { key: "bullish", label: "Bullish", emoji: "📈" },
+  { key: "bearish", label: "Bearish", emoji: "📉" },
+  { key: "informative", label: "Informative", emoji: "💡" },
+  { key: "risky", label: "Risky", emoji: "⚠️" },
+  { key: "interesting", label: "Interesting", emoji: "⭐" },
 ];
 
 type FeedPost = {
   id: string;
-  author: { name: string; handle: string; avatar: string | null; verified?: boolean };
+  author: { name: string; handle: string; avatar: string | null; verified?: boolean; isFounder?: boolean };
   content: string;
-  timestamp: string;
+  ticker?: string | null;
   image?: string | null;
   reactions?: Record<ReactionKey, number>;
   comments: number;
+  timestamp: string;
 };
+
+function renderPostContent(content: string) {
+  const parts = content.split(/(\$[A-Z]{1,6})/g);
+  return parts.map((part, i) => {
+    if (/^\$[A-Z]{1,6}$/.test(part)) {
+      const symbol = part.slice(1);
+      return (
+        <a
+          key={i}
+          href={`/search/${symbol}`}
+          onClick={(e) => e.stopPropagation()}
+          className="font-semibold text-[var(--accent-color)] hover:underline"
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
 
 export default function SocialFeedView() {
   const pathname = usePathname();
@@ -134,6 +185,11 @@ export default function SocialFeedView() {
   const { results: searchResults, searching: searchSearching } = useUserSearch(searchQ);
   const { recent: recentSearches, save: saveSearch, remove: removeSearch } = useSearchHistory();
   const [composerText, setComposerText] = useState("");
+  const [composerTicker, setComposerTicker] = useState("");
+  const [composerTickerInput, setComposerTickerInput] = useState(false);
+  const [composerImage, setComposerImage] = useState<string | null>(null);
+  const [composerImageUploading, setComposerImageUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [reactionCounts, setReactionCounts] = useState<Record<string, Record<ReactionKey, number>>>({});
   const [userReactions, setUserReactions] = useState<Record<string, Partial<Record<ReactionKey, boolean>>>>({});
@@ -359,14 +415,19 @@ export default function SocialFeedView() {
       return next;
     });
     try {
-      await fetch(`/api/posts/${postId}/reaction`, {
+      const res = await fetch(`/api/posts/${postId}/reaction`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({ reaction_type: key }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(`reaction API ${res.status}: ${body.error ?? "unknown"}`);
+      }
       if (!alreadyReacted) addXPFromReaction();
-    } catch {
+    } catch (err) {
+      console.error("[reaction]", err);
       // revert on failure
       setUserReactions((prev) => ({ ...prev, [postId]: { ...prev[postId], [key]: alreadyReacted } }));
       setReactionCounts((prev) => ({
@@ -376,21 +437,44 @@ export default function SocialFeedView() {
     }
   };
 
+  const handleImagePick = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setComposerImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/posts/upload", { method: "POST", credentials: "include", body: fd });
+      if (res.ok) {
+        const { url } = await res.json();
+        setComposerImage(url);
+      }
+    } finally {
+      setComposerImageUploading(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  };
+
   const handleSubmitPost = async () => {
     const text = composerText.trim();
     if (!text) return;
     setComposerText("");
+    const tickerToSend = composerTicker.trim().toUpperCase() || undefined;
+    const imageToSend = composerImage || undefined;
+    setComposerTicker("");
+    setComposerTickerInput(false);
+    setComposerImage(null);
     try {
       const res = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ content: text }),
+        body: JSON.stringify({ content: text, ticker: tickerToSend, image_url: imageToSend }),
       });
       if (!res.ok) return;
       const data = await res.json();
       if (data.post) {
-        const postWithVerified = { ...data.post, author: { ...data.post.author, verified: user?.isVerified ?? false } };
+        const postWithVerified = { ...data.post, author: { ...data.post.author, verified: user?.isVerified ?? false, isFounder: user?.isFounder ?? data.post.author?.isFounder ?? false } };
         setPosts((prev) => [postWithVerified, ...prev]);
         setReactionCounts((prev) => ({ ...prev, [data.post.id]: data.reactionCounts ?? {} }));
         setUserReactions((prev) => ({ ...prev, [data.post.id]: data.userReactions ?? {} }));
@@ -456,7 +540,7 @@ export default function SocialFeedView() {
       )}
       <div className="flex">
         <main className="min-h-screen flex-1">
-          <div className="mx-auto max-w-2xl px-4 py-6">
+          <div className="mx-auto max-w-4xl px-4 py-6">
             {/* Live counter + Leaderboard + Streak pill */}
             <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
               <p className="shrink-0 text-xs text-zinc-500">👁 {liveCount} traders active right now</p>
@@ -623,66 +707,71 @@ export default function SocialFeedView() {
                   <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)]">
                     {user ? getInitials(user) : "?"}
                   </div>
-                  {user && isSpecialAccount(user.email) && (
-                    <span
-                      className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500/90 text-amber-950"
-                      title="Founder"
-                      aria-label="Founder"
-                    >
-                      <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-                        <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" />
-                      </svg>
-                    </span>
-                  )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <textarea
-                    placeholder="What's on your mind?"
+                    placeholder="What's on your mind? Use $AAPL to tag tickers."
                     value={composerText}
                     onChange={(e) => setComposerText(e.target.value)}
-                    rows={2}
+                    rows={3}
                     className="w-full resize-none rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none transition-colors duration-200 focus:border-[var(--accent-color)]/50"
                   />
+                  {/* Ticker tag row */}
+                  {composerTickerInput && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-xs text-zinc-500">$</span>
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="AAPL"
+                        value={composerTicker}
+                        onChange={(e) => setComposerTicker(e.target.value.toUpperCase().replace(/[^A-Z0-9.]/g, ""))}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setComposerTickerInput(false); }}
+                        maxLength={10}
+                        className="w-28 rounded-lg border border-[var(--accent-color)]/40 bg-black/30 px-2 py-1 text-xs font-semibold text-[var(--accent-color)] outline-none"
+                      />
+                      {composerTicker && (
+                        <span className="rounded-full bg-[var(--accent-color)]/15 px-2 py-0.5 text-xs font-bold text-[var(--accent-color)]">${composerTicker}</span>
+                      )}
+                    </div>
+                  )}
+                  {/* Image preview */}
+                  {composerImage && (
+                    <div className="relative mt-2 overflow-hidden rounded-xl border border-white/10">
+                      <Image src={composerImage} alt="attachment" width={600} height={300} className="max-h-48 w-full object-cover" unoptimized />
+                      <button
+                        type="button"
+                        onClick={() => setComposerImage(null)}
+                        className="absolute right-2 top-2 rounded-full bg-black/60 p-1 text-xs text-white hover:bg-black/80"
+                      >✕</button>
+                    </div>
+                  )}
+                  <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImagePick} />
                   <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {/* Image upload */}
                     <button
                       type="button"
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
-                      title="Chart image"
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={composerImageUploading}
+                      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)] disabled:opacity-50"
+                      title="Add image"
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      Chart
+                      {composerImageUploading ? "Uploading…" : "Image"}
                     </button>
+                    {/* Ticker tag */}
                     <button
                       type="button"
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
-                      title="Poll"
+                      onClick={() => setComposerTickerInput((v) => !v)}
+                      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-white/5 ${composerTicker ? "text-[var(--accent-color)]" : "text-zinc-400 hover:text-[var(--accent-color)]"}`}
+                      title="Tag a ticker"
                     >
                       <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                       </svg>
-                      Poll
-                    </button>
-                    <button
-                      type="button"
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
-                      title="Trade Idea"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-                      </svg>
-                      Trade Idea
-                    </button>
-                    <button
-                      type="button"
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
-                      title="Link"
-                    >
-                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                      </svg>
-                      Link
+                      {composerTicker ? `$${composerTicker}` : "Ticker"}
                     </button>
                     <button
                       type="button"
@@ -718,13 +807,23 @@ export default function SocialFeedView() {
                 .map((post) => (
                 <article
                   key={post.id}
-                  className="animate-[fadeIn_0.35s_ease-out] rounded-2xl border border-white/10 p-4 transition-colors duration-200 hover:border-white/15"
+                  className="animate-[fadeIn_0.35s_ease-out] relative rounded-2xl border border-white/10 p-4 transition-colors duration-200 hover:border-white/15"
                   style={{
                     backgroundColor: CARD_BG_VAR,
                     borderLeftWidth: post.author.verified ? 3 : undefined,
                     borderLeftColor: post.author.verified ? "#3B82F6" : undefined,
                   }}
                 >
+                  {/* Ticker badge in top-right corner */}
+                  {post.ticker && (
+                    <a
+                      href={`/search/${post.ticker}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-4 top-4 flex items-center gap-1 rounded-full border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-2.5 py-1 text-xs font-bold text-[var(--accent-color)] hover:bg-[var(--accent-color)]/20 transition-colors"
+                    >
+                      ${post.ticker}
+                    </a>
+                  )}
                   <div className="flex gap-3">
                     <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-zinc-400">
                       {post.author.avatar ? (
@@ -738,6 +837,9 @@ export default function SocialFeedView() {
                         <span className="font-semibold text-zinc-100">{post.author.name}</span>
                         {post.author.verified && (
                           <VerifiedBadgeWithTooltip />
+                        )}
+                        {(post.author.isFounder || (post.author.handle === user?.username && user?.isFounder)) && (
+                          <FounderBadge />
                         )}
                         <span className="text-xs text-zinc-500">@{post.author.handle}</span>
                         <span className="text-xs text-zinc-500">·</span>
@@ -753,7 +855,7 @@ export default function SocialFeedView() {
                           <TrackRecordVerifiedBadge size={12} showLabel label="Verified Track Record" />
                         </p>
                       )}
-                      <p className="mt-1.5 whitespace-pre-wrap text-sm text-zinc-300">{post.content}</p>
+                      <p className="mt-1.5 whitespace-pre-wrap text-sm text-zinc-300">{renderPostContent(post.content)}</p>
                       {post.image && (
                         <div className="mt-3 overflow-hidden rounded-xl border border-white/10">
                           <Image src={post.image} alt="" width={600} height={340} className="w-full object-cover" unoptimized />

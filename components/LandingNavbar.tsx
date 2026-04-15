@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useAuth } from "./AuthContext";
 import { MarketTickerBar } from "./MarketTickerBar";
-import { QuantivTradeLogo } from "./XchangeLogo";
+import { QuantivTradeLogo } from "./QuantivTradeLogo";
 
 export function LandingNavbar() {
   const { user } = useAuth();
@@ -18,7 +18,7 @@ export function LandingNavbar() {
       role="banner"
     >
       <nav
-        className="mx-auto flex max-w-6xl items-center gap-4 px-6 py-4.5 lg:px-8"
+        className="flex w-full items-center gap-4 px-6 py-4.5 lg:px-8"
         aria-label="Main navigation"
       >
         <div className="flex shrink-0 items-center gap-4">

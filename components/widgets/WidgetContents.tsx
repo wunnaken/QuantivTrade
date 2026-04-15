@@ -1155,31 +1155,136 @@ export function CryptoDashboardWidget({ onLoaded }: WidgetContentProps) {
   );
 }
 
+type WidgetPost = {
+  id: string;
+  author_id: string;
+  content: string;
+  author: { handle: string; verified: boolean };
+  timestamp: string;
+  reactions: Record<string, number>;
+  comments: number;
+};
+
+const WIDGET_REACTIONS: { key: string; emoji: string; label: string }[] = [
+  { key: "bullish", emoji: "📈", label: "Bullish" },
+  { key: "bearish", emoji: "📉", label: "Bearish" },
+  { key: "informative", emoji: "💡", label: "Informative" },
+  { key: "risky", emoji: "⚠️", label: "Risky" },
+  { key: "interesting", emoji: "⭐", label: "Interesting" },
+];
+
+function mapWidgetPost(p: { id: string; author_id?: string; content?: string; author?: { handle?: string; verified?: boolean }; timestamp?: string; comments?: number }, rc: Record<string, number> = {}): WidgetPost {
+  return {
+    id: p.id,
+    author_id: p.author_id ?? "",
+    content: (p.content ?? "").slice(0, 100),
+    author: { handle: p.author?.handle ?? "?", verified: p.author?.verified ?? false },
+    timestamp: p.timestamp ?? "",
+    reactions: rc,
+    comments: p.comments ?? 0,
+  };
+}
+
 export function CommunityFeedWidget({ onLoaded }: WidgetContentProps) {
-  const [posts, setPosts] = useState<{ id: string; content: string; author: { handle: string }; timestamp: string }[]>([]);
+  const { user } = useAuth();
+  const [posts, setPosts] = useState<WidgetPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [composerText, setComposerText] = useState("");
+  const [posting, setPosting] = useState(false);
+
   useEffect(() => {
     fetch("/api/posts?limit=5").then((r) => r.json()).then((d) => {
-      const list = Array.isArray(d?.posts) ? d.posts : [];
-      setPosts(list.slice(0, 4).map((p: { id: string; content?: string; author?: { handle?: string }; timestamp?: string }) => ({ id: p.id, content: (p.content ?? "").slice(0, 80), author: { handle: p.author?.handle ?? "?" }, timestamp: p.timestamp ?? "" })));
+      const list: { id: string; content?: string; author?: { handle?: string; verified?: boolean }; author_id?: string; timestamp?: string; comments?: number }[] = Array.isArray(d?.posts) ? d.posts : [];
+      const rc: Record<string, Record<string, number>> = d?.reactionCounts ?? {};
+      setPosts(list.slice(0, 4).map((p) => mapWidgetPost(p, rc[p.id] ?? {})));
       setLoading(false);
       onLoaded?.();
     }).catch(() => { setLoading(false); onLoaded?.(); });
   }, [onLoaded]);
+
+  const handlePost = async () => {
+    const text = composerText.trim();
+    if (!text || posting) return;
+    setPosting(true);
+    try {
+      const res = await fetch("/api/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ content: text }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.post) {
+          setPosts((prev) => [mapWidgetPost(data.post, data.reactionCounts ?? {}), ...prev].slice(0, 4));
+        }
+        setComposerText("");
+      }
+    } finally {
+      setPosting(false);
+    }
+  };
+
   if (loading) return <div className="flex h-24 items-center justify-center"><div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--accent-color)] border-t-transparent" /></div>;
   return (
-    <div className="space-y-1 overflow-hidden p-2">
-      {posts.length === 0 ? (
-        <p className="text-xs text-zinc-500">No posts yet.</p>
-      ) : (
-        posts.map((p) => (
-          <Link key={p.id} href="/feed" className="block rounded px-2 py-1.5 text-xs hover:bg-white/5">
-            <span className="line-clamp-2 text-zinc-200">{p.content}{p.content.length >= 80 ? "…" : ""}</span>
-            <span className="text-[10px] text-zinc-500">@{p.author.handle}</span>
-          </Link>
-        ))
-      )}
-      <Link href="/feed" className="mt-2 block text-center text-[11px] text-[var(--accent-color)] hover:underline">Open full feed</Link>
+    <div className="flex h-full flex-col gap-2 overflow-hidden p-2">
+      {/* Mini composer */}
+      <div className="rounded-lg border border-white/10 bg-white/5 p-2">
+        <textarea
+          value={composerText}
+          onChange={(e) => setComposerText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) handlePost(); }}
+          placeholder="What's on your mind?"
+          rows={2}
+          className="w-full resize-none bg-transparent text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+        />
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={handlePost}
+            disabled={!composerText.trim() || posting}
+            className="rounded-full bg-[var(--accent-color)] px-3 py-1 text-[11px] font-semibold text-[#020308] disabled:opacity-40"
+          >
+            {posting ? "Posting…" : "Post"}
+          </button>
+        </div>
+      </div>
+      {/* Post list */}
+      <div className="flex-1 space-y-1 overflow-y-auto">
+        {posts.length === 0 ? (
+          <p className="text-xs text-zinc-500">No posts yet. Be the first!</p>
+        ) : (
+          posts.map((p) => (
+            <Link key={p.id} href="/feed" className="block rounded-lg border border-white/5 px-2 py-2 hover:bg-white/5">
+              {/* Author row */}
+              <div className="mb-1 flex items-center gap-1">
+                <span className="text-[11px] font-medium text-zinc-300">@{p.author.handle}</span>
+                {(p.author_id === user?.id ? (user?.isVerified ?? p.author.verified) : p.author.verified) && (
+                  <span className="rounded bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-bold text-blue-400">✓ Verified</span>
+                )}
+              </div>
+              {/* Content */}
+              <p className="line-clamp-2 text-xs text-zinc-200">{p.content}{p.content.length >= 100 ? "…" : ""}</p>
+              {/* Reactions + comments */}
+              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                {WIDGET_REACTIONS.map(({ key, emoji, label }) => {
+                  const count = p.reactions[key] ?? 0;
+                  if (count === 0) return null;
+                  return (
+                    <span key={key} title={label} className="flex items-center gap-0.5 rounded-full border border-white/10 bg-black/20 px-1.5 py-0.5 text-[10px] text-zinc-400">
+                      {emoji} {count}
+                    </span>
+                  );
+                })}
+                <span className="flex items-center gap-1 text-[11px] text-zinc-400">
+                  💬 <span>{p.comments} Comments</span>
+                </span>
+              </div>
+            </Link>
+          ))
+        )}
+      </div>
+      <Link href="/feed" className="block text-center text-[11px] text-[var(--accent-color)] hover:underline">Open full feed</Link>
     </div>
   );
 }

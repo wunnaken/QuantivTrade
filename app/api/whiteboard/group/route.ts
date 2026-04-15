@@ -22,11 +22,31 @@ function normalizeBoardId(raw: string): string | null {
 }
 
 // GET — fetch group boards where current user is creator or allowed member
-export async function GET() {
+// ?boardId=X  → lightweight single-board scene fetch for real-time polling
+export async function GET(request: NextRequest) {
   const userId = await getCurrentProfileId();
   if (!userId) return bad("Unauthorized", 401);
 
   const supabase = createServerClient();
+
+  // Single-board fast path for scene sync polling
+  const rawBoardId = request.nextUrl.searchParams.get("boardId");
+  if (rawBoardId) {
+    const boardIdForDb = normalizeBoardId(rawBoardId);
+    if (!boardIdForDb) return bad("Invalid boardId");
+    const { data: board } = await supabase
+      .from("whiteboard_boards")
+      .select("id, scene, updated_at, user_id, allowed_members")
+      .eq("id", boardIdForDb)
+      .single();
+    if (!board) return bad("Not found", 404);
+    const b = board as { user_id: string; allowed_members: string[] | null; scene: unknown; updated_at: string; id: unknown };
+    const isCreator = b.user_id === userId;
+    const isMember = Array.isArray(b.allowed_members) && b.allowed_members.includes(userId);
+    if (!isCreator && !isMember) return bad("Forbidden", 403);
+    return NextResponse.json({ scene: b.scene, updated_at: b.updated_at });
+  }
+
   const sel = "id, name, scene, updated_at, is_group, community_id, allowed_members, permissions, user_id, creator_name";
 
   // Run two queries and merge to avoid fragile or+cs PostgREST syntax
@@ -159,9 +179,10 @@ export async function PATCH(request: NextRequest) {
   const isCreator = b.user_id === userId;
   const isMember = Array.isArray(b.allowed_members) && b.allowed_members.includes(userId);
 
-  // Member management actions require creator
+  // Member management actions require creator, except "leave" which any member can do to themselves
   if (body.action) {
-    if (!isCreator) return bad("Only the board creator can manage members", 403);
+    const isSelfLeave = body.action === "remove_member" && body.memberId === userId;
+    if (!isCreator && !isSelfLeave) return bad("Only the board creator can manage members", 403);
     const members: string[] = Array.isArray(b.allowed_members) ? b.allowed_members : [];
 
     if (body.action === "add_member") {

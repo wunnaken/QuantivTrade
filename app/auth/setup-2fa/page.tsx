@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../../components/AuthContext";
 import { createClient } from "@/lib/supabase/client";
-import { QuantivTradeLogo } from "../../../components/XchangeLogo";
+import { QuantivTradeLogo } from "../../../components/QuantivTradeLogo";
 
 type Phase =
   | { id: "loading" }

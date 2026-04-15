@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { QuantivTradeLogoImage } from "../../components/XchangeLogoImage";
+import { QuantivTradeLogoImage } from "../../components/QuantivTradeLogoImage";
 
 export default function MissionPage() {
   return (

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { QuantivTradeLogoImage } from "./XchangeLogoImage";
+import { QuantivTradeLogoImage } from "./QuantivTradeLogoImage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { MarketTickerBar } from "./MarketTickerBar";
@@ -217,6 +217,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [notificationCount, setNotificationCount] = useState(0);
   type BoardInvite = { id: string; board_id: string; board_name: string; inviter_name: string | null; permissions: string; created_at: string };
   const [boardInvites, setBoardInvites] = useState<BoardInvite[]>([]);
+  const [expandedInvite, setExpandedInvite] = useState<BoardInvite | null>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const messagesDropdownRef = useRef<HTMLDivElement>(null);
@@ -373,6 +374,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ id, action }),
     });
     setBoardInvites(prev => prev.filter(i => i.id !== id));
+    if (action === "accept") {
+      window.dispatchEvent(new Event("whiteboard-group-boards-changed"));
+    }
   };
 
   const isNarrowScreen = windowWidth < 1024;
@@ -803,34 +807,23 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 {boardInvites.length > 0 && (
                   <>
                     {boardInvites.map((invite) => (
-                      <div key={invite.id} className="px-4 py-3 border-b border-white/5">
-                        <div className="flex items-start gap-2 mb-2">
+                      <button
+                        key={invite.id}
+                        type="button"
+                        onClick={() => { setExpandedInvite(invite); setNotificationsOpen(false); }}
+                        className="w-full px-4 py-3 border-b border-white/5 text-left hover:bg-white/5 transition-colors"
+                      >
+                        <div className="flex items-start gap-2">
                           <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium text-zinc-200">Board invite</p>
                             <p className="text-xs text-zinc-400 mt-0.5">
                               {invite.inviter_name ? `@${invite.inviter_name}` : "Someone"} invited you to <span className="font-medium text-zinc-300">{invite.board_name}</span>
                             </p>
-                            <p className="text-[10px] text-zinc-600 mt-0.5">{invite.permissions === "edit" ? "Can edit" : "View only"}</p>
+                            <p className="text-[10px] text-zinc-500 mt-0.5">Tap to review</p>
                           </div>
                         </div>
-                        <div className="flex gap-2 pl-4">
-                          <button
-                            type="button"
-                            onClick={() => handleBoardInviteAction(invite.id, "accept")}
-                            className="flex-1 rounded-lg bg-[var(--accent-color)]/20 py-1.5 text-xs font-medium text-[var(--accent-color)] hover:bg-[var(--accent-color)]/30 transition-colors"
-                          >
-                            Accept
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleBoardInviteAction(invite.id, "decline")}
-                            className="flex-1 rounded-lg border border-white/10 py-1.5 text-xs text-zinc-500 hover:text-zinc-300 hover:border-white/20 transition-colors"
-                          >
-                            Decline
-                          </button>
-                        </div>
-                      </div>
+                      </button>
                     ))}
                     <div className="my-1 h-px bg-white/10" />
                   </>
@@ -1156,6 +1149,75 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <main className={pathname === "/ceos" || pathname === "/messages" ? "h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden" : "min-h-[calc(100vh-3.5rem)]"}>{children}</main>
       {pathname !== "/ceos" && pathname !== "/messages" && pathname !== "/feed" && <SiteFooter />}
       <SiteHelpBot />
+
+      {/* Board invite expanded modal */}
+      {expandedInvite && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4" onClick={() => setExpandedInvite(null)}>
+          <div
+            className="w-full max-w-sm rounded-2xl border border-white/10 bg-[var(--app-card)] p-6 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Icon */}
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/15 border border-blue-500/25">
+              <svg className="h-6 w-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+              </svg>
+            </div>
+
+            <h2 className="text-base font-semibold text-zinc-100">Whiteboard Invite</h2>
+            <p className="mt-1 text-sm text-zinc-400">
+              {expandedInvite.inviter_name ? `@${expandedInvite.inviter_name}` : "Someone"} has invited you to collaborate on a whiteboard.
+            </p>
+
+            <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-zinc-600">Board</span>
+                <span className="text-sm font-medium text-zinc-200">{expandedInvite.board_name}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase tracking-wider text-zinc-600">Access</span>
+                <span className={`text-xs font-medium ${expandedInvite.permissions === "edit" ? "text-emerald-400" : "text-amber-400"}`}>
+                  {expandedInvite.permissions === "edit" ? "Can edit" : "View only"}
+                </span>
+              </div>
+              {expandedInvite.created_at && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase tracking-wider text-zinc-600">Received</span>
+                  <span className="text-xs text-zinc-500">{new Date(expandedInvite.created_at).toLocaleDateString()}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <button
+                type="button"
+                onClick={() => { handleBoardInviteAction(expandedInvite.id, "decline"); setExpandedInvite(null); }}
+                className="flex-1 rounded-xl border border-white/10 py-2.5 text-sm text-zinc-400 hover:border-white/20 hover:text-zinc-200 transition-colors"
+              >
+                Decline
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const res = await fetch("/api/board-invites", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: expandedInvite.id, action: "accept" }),
+                  });
+                  setBoardInvites(prev => prev.filter(i => i.id !== expandedInvite.id));
+                  setExpandedInvite(null);
+                  // Hard navigate so the whiteboard page fetches fresh data from DB
+                  // ?refresh=1 tells the page to retry after a short delay in case the DB write hasn't propagated yet
+                  window.location.href = "/whiteboard?refresh=1";
+                }}
+                className="flex-1 rounded-xl bg-[var(--accent-color)]/20 py-2.5 text-sm font-semibold text-[var(--accent-color)] hover:bg-[var(--accent-color)]/30 transition-colors"
+              >
+                Accept
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

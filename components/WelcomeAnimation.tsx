@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useCallback } from "react";
-import { QuantivTradeLogoImage } from "./XchangeLogoImage";
+import { QuantivTradeLogoImage } from "./QuantivTradeLogoImage";
 
 const BG = "var(--app-bg)";
 const TOTAL_DURATION_MS = 6500;

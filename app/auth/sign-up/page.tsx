@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "../../../components/AuthContext";
-import { QuantivTradeLogo } from "../../../components/XchangeLogo";
+import { QuantivTradeLogo } from "../../../components/QuantivTradeLogo";
 
 function GoogleIcon() {
   return (

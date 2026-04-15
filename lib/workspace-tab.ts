@@ -20,8 +20,3 @@ export function setLastWorkspaceTab(tab: WorkspaceTab): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, tab);
 }
-
-export function getWorkspaceRedirectPath(): string {
-  const tab = getLastWorkspaceTab();
-  return tab === "ai" ? "/ai" : tab === "dashboard" ? "/dashboard" : "/whiteboard";
-}

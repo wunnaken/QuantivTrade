@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { QuantivTradeLogoImage } from "./XchangeLogoImage";
+import { QuantivTradeLogoImage } from "./QuantivTradeLogoImage";
 
 export function QuantivTradeLogo() {
   return (

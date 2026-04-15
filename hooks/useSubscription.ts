@@ -36,10 +36,11 @@ export function useSubscription() {
   // Returns true if the user's current tier meets or exceeds the required tier
   const canAccess = useCallback(
     (requiredTier: SubscriptionTier): boolean => {
+      if (user?.isFounder) return true;
       if (!isActive && tier !== "free") return false;
       return TIER_RANK[tier] >= TIER_RANK[requiredTier];
     },
-    [tier, isActive]
+    [tier, isActive, user]
   );
 
   const openUpgradeModal = useCallback(

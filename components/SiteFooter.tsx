@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { QuantivTradeLogoImage } from "./XchangeLogoImage";
+import { QuantivTradeLogoImage } from "./QuantivTradeLogoImage";
 import { useAuth } from "./AuthContext";
 import { APP_VERSION } from "../lib/version";
 

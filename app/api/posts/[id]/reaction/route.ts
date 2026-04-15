@@ -43,12 +43,17 @@ export async function POST(
   const hadReaction = !!existing;
 
   if (hadReaction) {
-    await supabase
+    const { error: delErr } = await supabase
       .from("user_post_reactions")
       .delete()
       .eq("user_id", profileId)
       .eq("post_id", postId)
       .eq("reaction_type", reactionType);
+
+    if (delErr) {
+      console.error("[reaction] delete user_post_reactions:", delErr);
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
 
     const { data: row } = await supabase
       .from("post_reactions")
@@ -58,18 +63,27 @@ export async function POST(
       .single();
 
     const newCount = Math.max(0, (row?.count ?? 1) - 1);
-    await supabase
+    const { error: upsertErr } = await supabase
       .from("post_reactions")
       .upsert(
-        { post_id: postId, reaction_type: reactionType, count: newCount, updated_at: new Date().toISOString() },
+        { post_id: postId, reaction_type: reactionType, count: newCount },
         { onConflict: "post_id,reaction_type" }
       );
+    if (upsertErr) {
+      console.error("[reaction] upsert post_reactions:", upsertErr);
+      return NextResponse.json({ error: upsertErr.message }, { status: 500 });
+    }
   } else {
-    await supabase.from("user_post_reactions").insert({
+    const { error: insErr } = await supabase.from("user_post_reactions").insert({
       user_id: profileId,
       post_id: postId,
       reaction_type: reactionType,
     });
+
+    if (insErr) {
+      console.error("[reaction] insert user_post_reactions:", insErr);
+      return NextResponse.json({ error: insErr.message }, { status: 500 });
+    }
 
     const { data: row } = await supabase
       .from("post_reactions")
@@ -79,12 +93,16 @@ export async function POST(
       .maybeSingle();
 
     const newCount = (row?.count ?? 0) + 1;
-    await supabase
+    const { error: upsertErr } = await supabase
       .from("post_reactions")
       .upsert(
-        { post_id: postId, reaction_type: reactionType, count: newCount, updated_at: new Date().toISOString() },
+        { post_id: postId, reaction_type: reactionType, count: newCount },
         { onConflict: "post_id,reaction_type" }
       );
+    if (upsertErr) {
+      console.error("[reaction] upsert post_reactions:", upsertErr);
+      return NextResponse.json({ error: upsertErr.message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ added: !hadReaction });

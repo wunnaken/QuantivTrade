@@ -664,7 +664,7 @@ export default function ProfileView() {
         </div>
       )}
     <div className="min-h-screen app-page font-[&quot;Times_New_Roman&quot;,serif]">
-      <div className="mx-auto max-w-3xl px-0 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-5xl px-0 sm:px-6 lg:px-8">
         <div className="mb-4" />
         {/* Banner */}
         <section className="relative h-48 w-full overflow-hidden rounded-t-2xl sm:rounded-t-3xl">
