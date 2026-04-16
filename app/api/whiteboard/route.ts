@@ -82,12 +82,26 @@ export async function POST(request: NextRequest) {
 
   const name = body.name.trim();
 
-  console.log("[whiteboard POST] called");
-  console.log("[whiteboard POST] userId:", userId);
-  console.log("[whiteboard POST] boardId:", boardId);
-  console.log("[whiteboard POST] name:", name);
-
   const supabase = createServerClient();
+
+  // Enforce 10 board limit (only for new boards, not updates)
+  const { data: existing } = await supabase
+    .from("whiteboard_boards")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("id", boardIdForDb)
+    .maybeSingle();
+
+  if (!existing) {
+    const { count } = await supabase
+      .from("whiteboard_boards")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId);
+    if (count !== null && count >= 10) {
+      return bad("Board limit reached (10 max). Delete an existing board to create a new one.", 403);
+    }
+  }
+
   const scene = normalizeScene(body.scene);
 
   const { data, error } = await supabase
@@ -103,8 +117,6 @@ export async function POST(request: NextRequest) {
       { onConflict: "id" }
     )
     .select("id,name,scene,updated_at");
-
-  console.log("[whiteboard POST] upsert result:", { data, error });
 
   if (error) return bad(error.message, 500);
 

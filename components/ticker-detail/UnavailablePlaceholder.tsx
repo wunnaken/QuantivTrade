@@ -1,7 +1,7 @@
 export function UnavailablePlaceholder({
   label,
   reason,
-  provider,
+  provider: _provider,
 }: {
   label: string;
   reason: string;
@@ -15,9 +15,6 @@ export function UnavailablePlaceholder({
       <div>
         <p className="text-xs font-medium text-zinc-400">{label}</p>
         <p className="text-xs text-zinc-600 mt-0.5">{reason}</p>
-        {provider && (
-          <p className="text-[10px] text-zinc-700 mt-0.5">Provider: {provider}</p>
-        )}
       </div>
     </div>
   );

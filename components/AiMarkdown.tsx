@@ -82,7 +82,8 @@ export function AiMarkdown({ content }: { content: string }) {
 
 function formatInline(text: string): React.ReactNode {
   const parts: React.ReactNode[] = [];
-  const re = /\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`/g;
+  // Match: **bold**, *italic*, `code`, [link text](url)
+  const re = /\*\*(.+?)\*\*|\*(.+?)\*|`([^`]+)`|\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
   let lastEnd = 0;
   let match: RegExpExecArray | null;
   let k = 0;
@@ -96,6 +97,21 @@ function formatInline(text: string): React.ReactNode {
       parts.push(<em key={k++}>{match[2]}</em>);
     } else if (match[3] !== undefined) {
       parts.push(<code key={k++} className="rounded bg-white/10 px-1 py-0.5 text-sm">{match[3]}</code>);
+    } else if (match[4] !== undefined && match[5] !== undefined) {
+      parts.push(
+        <a
+          key={k++}
+          href={match[5]}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-[var(--accent-color)] hover:underline"
+        >
+          {match[4]}
+          <svg className="inline h-3 w-3 shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </a>
+      );
     }
     lastEnd = match.index + match[0].length;
   }

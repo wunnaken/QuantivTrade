@@ -304,12 +304,13 @@ export function CountryDetailPanel({
 
   return (
     <div
-      className="flex w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-[var(--app-card)] shadow-xl"
+      className="flex w-full flex-col overflow-hidden rounded-2xl border shadow-xl transition-colors duration-300"
+      style={{ borderColor: "var(--app-border)", background: "var(--app-card)" }}
       role="region"
       aria-label={`Country details: ${countryName}`}
     >
       {/* Sticky header */}
-      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-white/10 bg-[var(--app-card)] px-4 py-3">
+      <div className="sticky top-0 z-10 flex shrink-0 items-center justify-between border-b px-4 py-3" style={{ borderColor: "var(--app-border)", background: "var(--app-card)" }}>
         <h2 className="flex items-center gap-2 truncate text-lg font-semibold text-zinc-100">
           <span className="text-2xl leading-none">{flag}</span>
           <span>{countryName}</span>
@@ -443,7 +444,7 @@ export function CountryDetailPanel({
 
         {/* 3. IMF forecast */}
         <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">IMF forecast</h3>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">Economic Forecast</h3>
           {imfLoading ? (
             <div className="mt-3 space-y-2">
               <div className="h-14 animate-pulse rounded-lg bg-white/10" />
@@ -479,7 +480,7 @@ export function CountryDetailPanel({
               )}
             </div>
           ) : (
-            <p className="mt-2 text-sm text-zinc-500">Data unavailable — showing World Bank latest above</p>
+            <p className="mt-2 text-sm text-zinc-500">Data unavailable — showing latest available above</p>
           )}
         </section>
 
@@ -582,8 +583,8 @@ export function CountryDetailPanel({
                 </svg>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-[#00C896]">Most Promising Outlook</h3>
               </div>
-              <p className="mt-2 font-semibold text-zinc-100">{projections.bestCase.headline}</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-zinc-300">{projections.bestCase.explanation}</p>
+              <p className="mt-2 font-semibold" style={{ color: "#f4f4f5" }}>{projections.bestCase.headline}</p>
+              <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "#d4d4d8" }}>{projections.bestCase.explanation}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-full bg-[#00C896]/20 px-2 py-0.5 text-[10px] font-medium text-[#00C896]">
                   {projections.bestCase.timeframe || "1-3 Year Outlook"}
@@ -604,8 +605,8 @@ export function CountryDetailPanel({
                 </svg>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-red-500">Key Risk Scenario</h3>
               </div>
-              <p className="mt-2 font-semibold text-zinc-100">{projections.worstCase.headline}</p>
-              <p className="mt-1.5 text-sm leading-relaxed text-zinc-300">{projections.worstCase.explanation}</p>
+              <p className="mt-2 font-semibold" style={{ color: "#f4f4f5" }}>{projections.worstCase.headline}</p>
+              <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "#d4d4d8" }}>{projections.worstCase.explanation}</p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span className="rounded-full px-2 py-0.5 text-[10px] font-medium text-red-400">
                   {projections.worstCase.timeframe || "1-3 Year Risk"}

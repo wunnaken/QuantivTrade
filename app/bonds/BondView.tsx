@@ -59,7 +59,7 @@ type BondsApiResponse = {
   lastUpdated: string;
 };
 
-const TAB_ORDER = ["us", "jp", "de", "uk", "cn", "em"] as const;
+const TAB_ORDER = ["us", "jp", "de", "em", "uk", "cn"] as const;
 const US_TREASURY_SERIES = [
   { label: "2Y", seriesId: "DGS2", color: "#3b82f6" },
   { label: "5Y", seriesId: "DGS5", color: "#22c55e" },
@@ -128,10 +128,10 @@ const NON_US_SERIES: Record<string, Array<{ label: string; seriesId: string; col
   ],
   cn: [{ label: "China 10Y", seriesId: "INTDSRCNM193N", color: "var(--accent-color)" }],
   em: [
-    { label: "Brazil 10Y", seriesId: "INTDSRBRM193N", color: "#3b82f6" },
-    { label: "India 10Y", seriesId: "INTDSRINM193N", color: "#22c55e" },
-    { label: "Mexico 10Y", seriesId: "INTDSRMXM193N", color: "var(--accent-color)" },
-    { label: "South Africa 10Y", seriesId: "INTDSRZAM193N", color: "#f59e0b" },
+    { label: "Brazil 10Y", seriesId: "INTGSTBRM193N", color: "#3b82f6" },
+    { label: "India 10Y", seriesId: "IRLTLT01INM156N", color: "#22c55e" },
+    { label: "Mexico 10Y", seriesId: "IRLTLT01MXM156N", color: "var(--accent-color)" },
+    { label: "South Africa 10Y", seriesId: "IRLTLT01ZAM156N", color: "#f59e0b" },
   ],
 };
 
@@ -269,6 +269,7 @@ export default function BondView() {
   );
   const chartRows = useMemo(() => {
     if (!data) return [];
+    const seriesIds = chartSeries.map((s) => s.seriesId);
     const byDate = new Map<string, Record<string, string | number | null>>();
     for (const s of chartSeries) {
       const points = data.historicalYields?.[s.seriesId] ?? [];
@@ -278,12 +279,21 @@ export default function BondView() {
         byDate.set(p.date, row);
       }
     }
-    return [...byDate.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    // Ensure every row has all series keys (null if missing) so lines connect properly
+    const rows = [...byDate.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    for (const row of rows) {
+      for (const id of seriesIds) {
+        if (!(id in row)) row[id] = null;
+      }
+    }
+    return rows;
   }, [data, chartSeries]);
 
   useEffect(() => {
     if (activeTab === "us") {
       setVisibleSeries(new Set(US_TREASURY_SERIES.map((s) => s.seriesId)));
+    } else {
+      setVisibleSeries(new Set((NON_US_SERIES[activeTab] ?? []).map((s) => s.seriesId)));
     }
   }, [activeTab]);
 
@@ -329,8 +339,8 @@ export default function BondView() {
             <span className={`rounded px-2 py-1 text-[10px] font-semibold ${data.yieldCurve.shape === "Inverted" ? "bg-red-500/15 text-red-400" : "bg-emerald-500/15 text-emerald-400"}`}>
               {data.yieldCurve.shape}
             </span>
-            <span className="rounded border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-zinc-300">
-              2s10s: {fmtYield(data.yieldCurve.twoTenSpread)}
+            <span className="rounded border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-zinc-300" title="Spread between the 2-year and 10-year Treasury yields. Negative = inverted curve (recession signal).">
+              2Y–10Y Spread: {fmtYield(data.yieldCurve.twoTenSpread)}
             </span>
           </div>
         </div>
@@ -462,11 +472,11 @@ export default function BondView() {
             <div className="mt-3">
               <p className="mb-1 text-[10px] font-medium uppercase tracking-wider text-zinc-500">Live Chart</p>
               <p className="mb-2 text-[11px] leading-relaxed text-zinc-500">
-                Each line is a maturity; the chart shows all available history for the selected market. US Treasury uses daily Treasury.gov data; other markets use FRED, World Bank, or official feeds where available.
+                Each line is a maturity; the chart shows all available history for the selected market.
               </p>
-              {activeTab === "us" && (
+              {chartSeries.length > 1 && (
                 <div className="mb-2 flex flex-wrap gap-1.5">
-                  {US_TREASURY_SERIES.map((item) => {
+                  {chartSeries.map((item) => {
                     const active = visibleSeries.has(item.seriesId);
                     return (
                       <button
@@ -533,7 +543,7 @@ export default function BondView() {
                       />
                       <Legend verticalAlign="bottom" />
                       {chartSeries
-                        .filter((s) => activeTab !== "us" || visibleSeries.has(s.seriesId))
+                        .filter((s) => visibleSeries.has(s.seriesId))
                         .map((s) => (
                           <Line
                             key={s.seriesId}
@@ -552,7 +562,12 @@ export default function BondView() {
                 </BondChartBox>
                 )}
               </div>
-              {activeTab !== "us" && (
+              {activeTab === "em" && (
+                <p className="mt-2 text-[10px] text-zinc-500">
+                  Note: Emerging market data updates monthly with a 1–2 month lag. Brazil uses a government securities rate proxy rather than a true 10Y bond yield.
+                </p>
+              )}
+              {activeTab !== "us" && activeTab !== "em" && (
                 <p className="mt-2 text-[10px] text-zinc-500">Note: international bond data updates monthly.</p>
               )}
             </div>
@@ -648,6 +663,9 @@ export default function BondView() {
               <p className="text-xs text-zinc-300">Fear & Greed Proxy</p>
               <p className={`mt-1 text-2xl font-semibold ${scoreColor}`}>{score.toFixed(0)}</p>
               <p className="text-[11px] text-zinc-500">{data.sentiment.label}</p>
+              <p className="mt-2 text-[10px] leading-relaxed text-zinc-600">
+                Measured by blending the 2Y–10Y yield curve slope (50% weight) with VIX volatility (50% weight) into a 0–100 score. A steeper curve and lower VIX push toward Greed; an inverted curve and high VIX push toward Fear.
+              </p>
             </div>
           </div>
 

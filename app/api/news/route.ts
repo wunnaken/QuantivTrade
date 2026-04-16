@@ -53,7 +53,7 @@ const CRYPTO_RSS_FEEDS = [
   "https://decrypt.co/feed",
 ];
 
-const CACHE_MS = 15 * 60 * 1000;
+const CACHE_MS = 5 * 60 * 1000;
 const cache = new Map<
   string,
   { data: MarketNewsArticle[]; fetchedAt: number }
@@ -109,10 +109,6 @@ async function fetchFromNewsData(
     .map(normalizeNewsDataResult)
     .filter((a): a is MarketNewsArticle => a != null)
     .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-}
-
-function isValidUrl(url: string): boolean {
-  return typeof url === "string" && (url.startsWith("http://") || url.startsWith("https://"));
 }
 
 function extractFirstUrl(block: string): string | null {

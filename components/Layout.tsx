@@ -21,8 +21,8 @@ import { usePriceContext } from "../lib/price-context";
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_BG = "var(--app-sidebar-bg)";
 
-const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "archive" | "marketplace" }[] = [
-  { href: "/social-feed", label: "Social Feed" },
+const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "archive" | "marketplace" | "social" }[] = [
+  { href: "/social-feed", label: "Social Feed", icon: "social" },
   { href: "/communities", label: "Communities" },
   { href: "/messages", label: "Messages" },
   { href: "/trade-rooms", label: "Trade Rooms" },
@@ -34,10 +34,10 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/futures", label: "Futures" },
   { href: "/crypto", label: "Crypto" },
   { href: "/market-relations", label: "Market Relations" },
-  { href: "/building-data", label: "Building Data" },
+  { href: "/building-gas", label: "Building & Gas" },
   { href: "/sentiment", label: "Sentiment Radar" },
   { href: "/insider-trades", label: "Insider Trades" },
-  { href: "/fiscalwatch", label: "FiscalWatch" },
+  { href: "/fiscalwatch", label: "Fiscal Watch" },
   { href: "/portfolios", label: "Portfolios" },
   { href: "/ceos", label: "CEOs" },
   { href: "/calendar", label: "Calendar" },
@@ -55,8 +55,8 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
 ];
 
 const SECTIONS: { id: string; label: string; hrefs: string[] }[] = [
-  { id: "community", label: "Community", hrefs: ["/social-feed", "/communities", "/messages", "/trade-rooms"] },
-  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/dividends", "/forex", "/futures", "/crypto", "/market-relations", "/building-data", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
+  { id: "community", label: "Community", hrefs: ["/communities", "/messages", "/trade-rooms"] },
+  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/dividends", "/forex", "/futures", "/crypto", "/market-relations", "/building-gas", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
   { id: "analytics", label: "Analytics", hrefs: ["/ceos", "/calendar", "/screener", "/supply-chain", "/backtest"] },
   { id: "personal", label: "Personal", hrefs: ["/journal", "/predict", "/watchlist", "/workspace", "/taxes"] },
 ];
@@ -93,7 +93,7 @@ function SidebarLogo({ narrow }: { narrow: boolean }) {
   );
 }
 
-function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "archive" | "marketplace"; isActive: boolean }) {
+function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "archive" | "marketplace" | "social"; isActive: boolean }) {
   const cls = "h-5 w-5";
   const stroke = "currentColor";
   if (icon === "home") return (
@@ -141,6 +141,11 @@ function NavItemIcon({ icon, isActive }: { icon?: "home" | "settings" | "feedbac
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
     </svg>
   );
+  if (icon === "social") return (
+    <svg className={cls} fill="none" stroke={stroke} viewBox="0 0 24 24" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+    </svg>
+  );
   return (
     <span className={`h-1.5 w-1.5 rounded-full transition-transform transition-opacity duration-200 ${isActive ? "scale-125 bg-[var(--accent-color)] opacity-100" : "bg-zinc-500 opacity-40 group-hover:opacity-100 group-hover:scale-125"}`} />
   );
@@ -158,7 +163,7 @@ function NavItem({
 }: {
   href: string;
   label: string;
-  icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "archive" | "marketplace";
+  icon?: "home" | "settings" | "feedback" | "verify" | "screener" | "forex" | "briefcase" | "archive" | "marketplace" | "social";
   isActive: boolean;
   collapsed: boolean;
   onClick?: () => void;
@@ -191,7 +196,7 @@ function NavItem({
         <button
           type="button"
           onClick={(e) => { e.preventDefault(); onHide?.(); }}
-          className="shrink-0 rounded p-1 text-zinc-500 hover:bg-white/10 hover:text-red-400"
+          className="shrink-0 rounded p-1 -ml-2 mr-1 text-zinc-500 hover:bg-white/10 hover:text-red-400"
           aria-label={`Hide ${label}`}
           title="Hide from sidebar"
         >
@@ -491,10 +496,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               onClick={() => setSidebarOpen(false)}
             />
             <NavItem
-              href="/brokers"
-              label="My Brokerages"
-              icon="briefcase"
-              isActive={isActive("/brokers")}
+              href="/social-feed"
+              label="Social Feed"
+              icon="social"
+              isActive={isActive("/social-feed")}
               collapsed={collapsed}
               onClick={() => setSidebarOpen(false)}
             />
@@ -503,6 +508,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
               label="Marketplace"
               icon="marketplace"
               isActive={isActive("/marketplace")}
+              collapsed={collapsed}
+              onClick={() => setSidebarOpen(false)}
+            />
+            <NavItem
+              href="/brokers"
+              label="My Brokerages"
+              icon="briefcase"
+              isActive={isActive("/brokers")}
               collapsed={collapsed}
               onClick={() => setSidebarOpen(false)}
             />
@@ -615,12 +628,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </button>
               )}
             </div>
-            {prefs.hidden.length > 0 && (
+            {prefs.hidden.length > 0 && !collapsed && (
               <div className="relative" ref={hiddenPanelRef}>
                 <button
                   type="button"
                   onClick={() => setHiddenPanelOpen((o) => !o)}
-                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-medium text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-400"
+                  className="flex w-full items-center gap-3 rounded-lg pl-4 pr-3 py-2 text-left text-xs font-medium text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-400"
                   aria-expanded={hiddenPanelOpen}
                   aria-label={`${prefs.hidden.length} hidden tabs`}
                 >
@@ -636,10 +649,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </button>
                 {hiddenPanelOpen && (
                   <div
-                    className={`absolute top-full z-50 mt-1 min-w-[180px] rounded-xl border border-white/10 bg-[var(--app-card)] py-2 shadow-xl ${collapsed ? "left-full ml-1" : "left-0"}`}
+                    className={`absolute top-full z-50 mt-1 overflow-hidden rounded-xl border border-white/10 bg-[var(--app-card)] py-2 shadow-xl ${collapsed ? "left-full ml-1 min-w-[180px]" : "left-0 right-0"}`}
                     role="menu"
                   >
-                    <p className="px-3 py-1.5 text-xs text-zinc-500">Click Restore to show again</p>
                     {hiddenItems.map((item) => (
                       <button
                         key={item.href}
@@ -745,7 +757,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               className="shrink-0 rounded-full p-1"
               title={
                 connectionState === "connected"
-                  ? "Live prices via Finnhub WebSocket"
+                  ? "Live prices connected"
                   : connectionState === "connecting"
                     ? "Reconnecting…"
                     : "Using cached prices"
@@ -1103,10 +1115,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
                         <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 opacity-40 transition-transform transition-opacity duration-200 group-hover:opacity-100 group-hover:scale-125" />
                       </span>
-                      <span className="flex items-center gap-1.5 transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">
-                        What&apos;s New
-                        <span className="rounded-full bg-[var(--accent-color)] px-1.5 py-0.5 text-[9px] font-bold text-[#020308]">NEW</span>
-                      </span>
+                      <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">What&apos;s New</span>
                     </button>
 
                     <div className="my-2 h-px bg-white/10" />

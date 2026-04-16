@@ -30,11 +30,11 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("user_id, username, name")
+    .select("user_id, username, name, avatar_url")
     .or(`username.ilike.%${q}%,name.ilike.%${q}%`)
     .neq("user_id", userId)
     .limit(10);
 
   if (error) return NextResponse.json([]);
-  return NextResponse.json((data ?? []).map((p: Record<string, unknown>) => ({ id: p.user_id, username: p.username, name: p.name })));
+  return NextResponse.json((data ?? []).map((p: Record<string, unknown>) => ({ id: p.user_id, username: p.username, name: p.name, avatar_url: p.avatar_url ?? null })));
 }

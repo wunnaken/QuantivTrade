@@ -466,7 +466,7 @@ function FinancialsSection({ detail, tech }: { detail: DetailData; tech: Technic
           {epsData.length === 0 ? (
             <UnavailablePlaceholder
               label="EPS data unavailable"
-              reason="No earnings data returned from Finnhub for this ticker."
+              reason="No earnings data available for this ticker."
             />
           ) : (
             <div style={{ height: 220 }}>
@@ -499,7 +499,7 @@ function FinancialsSection({ detail, tech }: { detail: DetailData; tech: Technic
           <div className="mt-4 space-y-2">
             <UnavailablePlaceholder
               label="Full Income Statement / Balance Sheet / Cash Flow (line items)"
-              reason="Detailed financial statements require Finnhub Standard plan or a Financial Modeling Prep API key."
+              reason="Detailed financial statements are not yet available for this ticker."
               provider="financialmodelingprep.com"
             />
           </div>
@@ -544,7 +544,7 @@ function DividendsSection({ detail }: { detail: DetailData }) {
     return (
       <UnavailablePlaceholder
         label="No dividend data found"
-        reason="This ticker may not pay dividends, or dividend data is unavailable from Finnhub for this symbol."
+        reason="This ticker may not pay dividends, or dividend data is currently unavailable."
       />
     );
   }
@@ -789,7 +789,7 @@ function TechnicalsSection({ tech, ticker }: { tech: TechnicalsData; ticker: str
         />
         <UnavailablePlaceholder
           label="Correlation to DXY / Yields / Sector ETF"
-          reason="Sector ETF and DXY correlation require additional Finnhub candle calls. Currently limited to SPY and QQQ to avoid rate limits."
+          reason="Sector ETF and DXY correlation coming soon. Currently limited to SPY and QQQ."
         />
         <UnavailablePlaceholder
           label="Performance in Rate Environments"
@@ -892,7 +892,7 @@ function SentimentSection({ sentiment, watchlistCount, news }: {
       ) : (
         <UnavailablePlaceholder
           label="Reddit Mention Velocity"
-          reason={sentiment?.unavailable ? "Finnhub social sentiment API returned no data for this ticker. This may require a Finnhub premium plan." : "No Reddit mention data available for this ticker in the last 30 days."}
+          reason={sentiment?.unavailable ? "Social sentiment data is not available for this ticker." : "No Reddit mention data available for this ticker in the last 30 days."}
           provider="finnhub.io"
         />
       )}
@@ -915,7 +915,7 @@ function SentimentSection({ sentiment, watchlistCount, news }: {
       ) : (
         <UnavailablePlaceholder
           label="X/Twitter Sentiment Over Time"
-          reason={sentiment?.unavailable ? "Finnhub social sentiment API returned no data. This may require a premium plan." : "No Twitter/X data available for this ticker."}
+          reason={sentiment?.unavailable ? "Social sentiment data is not available for this ticker." : "No Twitter/X data available for this ticker."}
           provider="finnhub.io"
         />
       )}
@@ -1088,7 +1088,7 @@ function InsiderSection({ transactions, purchases, sales, congressTrades, instit
       {institutional?.thirteenFUnavailable && (
         <UnavailablePlaceholder
           label="13F Institutional Holdings (fund-by-fund, QoQ changes)"
-          reason={institutional.thirteenFReason ?? "Requires Finnhub premium or SEC EDGAR API integration."}
+          reason={institutional.thirteenFReason ?? "Institutional holding details coming soon."}
           provider="sec.gov/cgi-bin/browse-edgar"
         />
       )}
@@ -1096,7 +1096,7 @@ function InsiderSection({ transactions, purchases, sales, congressTrades, instit
       {/* Institutional ownership % */}
       <UnavailablePlaceholder
         label="Institutional Ownership % (precise)"
-        reason="Aggregate institutional ownership percentage requires Finnhub premium tier or a dedicated data vendor."
+        reason="Aggregate institutional ownership data coming soon."
         provider="finnhub.io"
       />
     </div>
@@ -1113,7 +1113,7 @@ function MacroSection({ ticker, industry }: { ticker: string; industry?: string 
       </p>
       <UnavailablePlaceholder
         label="Correlation Matrix vs Benchmarks (DXY, Yields, Sector ETF)"
-        reason="Requires FRED API for yield data, plus additional Finnhub candle calls for DXY/sector ETFs beyond current rate limits."
+        reason="Macro correlation analysis coming soon."
         provider="fred.stlouisfed.org"
       />
       <UnavailablePlaceholder
@@ -1123,7 +1123,7 @@ function MacroSection({ ticker, industry }: { ticker: string; industry?: string 
       />
       <UnavailablePlaceholder
         label="Performance During Rate Hike / Recession / Dollar Strength Cycles"
-        reason="Requires FRED Fed Funds Rate history cross-referenced with price history and NBER recession dates. Planned via FRED API integration."
+        reason="Requires Fed Funds Rate history cross-referenced with price history and recession dates. Coming soon."
         provider="fred.stlouisfed.org"
       />
       {industry && (
@@ -1325,7 +1325,7 @@ export function TickerDetailSections({ ticker, aiSlot }: { ticker: string; aiSlo
         />
         <UnavailablePlaceholder
           label="CEO Name & HQ Location"
-          reason="Requires Finnhub Premium (~$50/mo) or a financial data vendor such as Intrinio."
+          reason="This data is not yet available."
           provider="finnhub.io/pricing"
         />
       </div>

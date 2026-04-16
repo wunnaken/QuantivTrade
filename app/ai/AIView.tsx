@@ -16,35 +16,35 @@ import {
 } from "../../lib/ai-chat-storage";
 import { setLastWorkspaceTab } from "../../lib/workspace-tab";
 
-const QUICK_TOPICS: { label: string; message: string; badge: string }[] = [
-  { label: "Markets Overview", message: "Give me a concise markets overview: key indices, sectors, and what’s driving price action lately.", badge: "📈" },
-  { label: "Crypto Analysis", message: "What should I know about crypto right now—BTC, ETH, macro drivers, and key levels?", badge: "🪙" },
-  { label: "Global Macro", message: "Summarize the main global macro themes affecting markets: rates, growth, and geopolitics.", badge: "🌍" },
-  { label: "Technical Analysis", message: "Explain the main concepts of technical analysis and how I can use them in my trading.", badge: "📊" },
-  { label: "Portfolio Strategy", message: "What are sound portfolio strategy principles for a retail investor?", badge: "💼" },
-  { label: "Trading Psychology", message: "What are the biggest trading psychology pitfalls and how can I avoid them?", badge: "🧠" },
-  { label: "News Impact", message: "How does news flow typically impact markets and how can I trade around it?", badge: "📰" },
-  { label: "Learn Trading", message: "I’m new to trading. What are the first concepts I should learn and in what order?", badge: "🎓" },
+const QUICK_TOPICS: { label: string; message: string }[] = [
+  { label: "Markets Overview", message: "Give me a concise markets overview: key indices, sectors, and what’s driving price action lately." },
+  { label: "Crypto Analysis", message: "What should I know about crypto right now—BTC, ETH, macro drivers, and key levels?" },
+  { label: "Global Macro", message: "Summarize the main global macro themes affecting markets: rates, growth, and geopolitics." },
+  { label: "Technical Analysis", message: "Explain the main concepts of technical analysis and how I can use them in my trading." },
+  { label: "Portfolio Strategy", message: "What are sound portfolio strategy principles for a retail investor?" },
+  { label: "Trading Psychology", message: "What are the biggest trading psychology pitfalls and how can I avoid them?" },
+  { label: "News Impact", message: "How does news flow typically impact markets and how can I trade around it?" },
+  { label: "Learn Trading", message: "I’m new to trading. What are the first concepts I should learn and in what order?" },
 ];
 
 const WELCOME_CHIPS = [
-  "📈 Explain the current market conditions",
-  "🔍 What is a P/E ratio?",
-  "⚡ Best ETFs for a moderate investor",
-  "🌍 How do interest rates affect stocks?",
-  "📓 Review my trading style",
-  "🚨 What are the biggest market risks now?",
+  "Explain the current market conditions",
+  "What is a P/E ratio?",
+  "Best ETFs for a moderate investor",
+  "How do interest rates affect stocks?",
+  "Review my trading style",
+  "What are the biggest market risks now?",
 ];
 
 const TOPIC_BADGES: Record<string, string> = {
-  market: "📈 Discussing: Equities",
-  crypto: "🪙 Discussing: Crypto",
-  macro: "🌍 Discussing: Global Macro",
-  technical: "📊 Discussing: Technical Analysis",
-  portfolio: "💼 Discussing: Portfolio",
-  psychology: "🧠 Discussing: Psychology",
-  news: "📰 Discussing: News Impact",
-  learn: "🎓 Discussing: Learn Trading",
+  market: "Discussing: Equities",
+  crypto: "Discussing: Crypto",
+  macro: "Discussing: Global Macro",
+  technical: "Discussing: Technical Analysis",
+  portfolio: "Discussing: Portfolio",
+  psychology: "Discussing: Psychology",
+  news: "Discussing: News Impact",
+  learn: "Discussing: Learn Trading",
 };
 
 type ChatMessage = { role: "user" | "assistant"; content: string; id: string };
@@ -60,14 +60,15 @@ function getInitials(name: string | undefined, username: string | undefined, ema
 
 function detectTopic(lastContent: string): string | null {
   const lower = lastContent.toLowerCase();
-  if (/\b(equit(y|ies)|stock|index|etf|s&p|nasdaq)\b/.test(lower)) return TOPIC_BADGES.market;
-  if (/\b(crypto|bitcoin|btc|eth|token)\b/.test(lower)) return TOPIC_BADGES.crypto;
-  if (/\b(macro|rates|fed|inflation|geopolitic)\b/.test(lower)) return TOPIC_BADGES.macro;
-  if (/\b(technical|chart|support|resistance|rsi|macd)\b/.test(lower)) return TOPIC_BADGES.technical;
-  if (/\b(portfolio|diversif|allocation)\b/.test(lower)) return TOPIC_BADGES.portfolio;
-  if (/\b(psycholog|emotion|discipline)\b/.test(lower)) return TOPIC_BADGES.psychology;
-  if (/\b(news|headline|earnings)\b/.test(lower)) return TOPIC_BADGES.news;
-  if (/\b(learn|beginner|basics)\b/.test(lower)) return TOPIC_BADGES.learn;
+  // Check specific topics first, broad "market/equities" last
+  if (/\b(crypto|bitcoin|btc|ethereum|eth\b|solana|token|blockchain|defi)\b/.test(lower)) return TOPIC_BADGES.crypto;
+  if (/\b(technical analysis|chart pattern|support and resistance|rsi\b|macd\b|moving average|fibonacci|bollinger)\b/.test(lower)) return TOPIC_BADGES.technical;
+  if (/\b(psycholog|emotion|discipline|fear|greed|bias|overtrading)\b/.test(lower)) return TOPIC_BADGES.psychology;
+  if (/\b(portfolio|diversif|allocation|rebalance|risk.adjusted)\b/.test(lower)) return TOPIC_BADGES.portfolio;
+  if (/\b(learn|beginner|basics|getting started|new to trading)\b/.test(lower)) return TOPIC_BADGES.learn;
+  if (/\b(fed\b|federal reserve|inflation|gdp\b|interest rate|central bank|recession|monetary policy|fiscal|geopolitic|tariff)\b/.test(lower)) return TOPIC_BADGES.macro;
+  if (/\b(earnings|revenue|quarterly|guidance|eps\b|beat|miss)\b/.test(lower)) return TOPIC_BADGES.news;
+  if (/\b(stock|equit|index|etf|s&p|nasdaq|dow|market)\b/.test(lower)) return TOPIC_BADGES.market;
   return null;
 }
 
@@ -138,6 +139,8 @@ export default function AIView() {
     }
     return true;
   });
+  const [leftWidth, setLeftWidth] = useState(200);
+  const [rightWidth, setRightWidth] = useState(200);
   const [autoSaving, setAutoSaving] = useState(false);
   const [autoSaveFailed, setAutoSaveFailed] = useState(false);
   const [autoSaveRetryInSec, setAutoSaveRetryInSec] = useState<number | null>(null);
@@ -632,7 +635,7 @@ export default function AIView() {
 
   const handleShare = useCallback((content: string) => {
     if (typeof window === "undefined") return;
-    const text = `💡 QuantivTrade insight:\n\n${content}`;
+    const text = `QuantivTrade insight:\n\n${content}`;
     try {
       sessionStorage.setItem(AI_SHARE_KEY, JSON.stringify({ content: text }));
     } catch {
@@ -660,12 +663,13 @@ export default function AIView() {
   const username = user?.name || user?.username || "there";
 
   return (
-    <div className="flex h-[calc(100vh-3.5rem)] min-h-0 overflow-hidden app-page">
+    <div className="flex h-full min-h-0 overflow-hidden">
       {/* Left panels: Quick topics + Recent chats (hidden on mobile) */}
       <div
-        className={`hidden min-h-0 flex-col border-r border-white/10 bg-[var(--app-bg)] transition-all duration-200 lg:flex ${
-          leftPanelOpen ? "lg:w-[200px]" : "lg:w-0 lg:overflow-hidden"
+        className={`hidden min-h-0 flex-col border-r border-white/10 bg-[var(--app-bg)] lg:flex ${
+          leftPanelOpen ? "" : "lg:w-0 lg:overflow-hidden"
         }`}
+        style={leftPanelOpen ? { width: leftWidth, minWidth: 140, maxWidth: 360 } : undefined}
       >
         <div className="flex h-10 flex-shrink-0 items-center justify-between border-b border-white/10 px-3">
           <span className="text-xs font-medium text-zinc-400">Quick topics</span>
@@ -689,7 +693,6 @@ export default function AIView() {
               disabled={loading}
               className="w-full rounded-lg px-2 py-2 text-left text-xs text-zinc-300 transition hover:bg-white/5 hover:text-[var(--accent-color)] disabled:opacity-50"
             >
-              <span className="mr-1">{t.badge}</span>
               {t.label}
             </button>
           ))}
@@ -704,11 +707,27 @@ export default function AIView() {
           </button>
         </div>
       </div>
+      {/* Resize handle for left panel */}
+      {leftPanelOpen && (
+        <div
+          className="hidden lg:block w-1 cursor-col-resize hover:bg-[var(--accent-color)]/30 active:bg-[var(--accent-color)]/50 transition-colors"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            const startX = e.clientX;
+            const startW = leftWidth;
+            const onMove = (ev: MouseEvent) => setLeftWidth(Math.max(140, Math.min(360, startW + ev.clientX - startX)));
+            const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+            document.addEventListener("mousemove", onMove);
+            document.addEventListener("mouseup", onUp);
+          }}
+        />
+      )}
       {/* Recent chats panel */}
       <div
-        className={`hidden min-h-0 flex-col border-r border-white/10 bg-[var(--app-bg)]/80 transition-all duration-200 lg:flex ${
-          recentPanelOpen ? "lg:w-[200px]" : "lg:w-0 lg:overflow-hidden"
+        className={`hidden min-h-0 flex-col border-r border-white/10 bg-[var(--app-bg)]/80 lg:flex ${
+          recentPanelOpen ? "" : "lg:w-0 lg:overflow-hidden"
         }`}
+        style={recentPanelOpen ? { width: rightWidth, minWidth: 140, maxWidth: 360 } : undefined}
       >
         <div className="flex h-10 flex-shrink-0 items-center justify-between border-b border-white/10 px-3">
           <span className="text-xs font-medium text-zinc-400">Recent chats</span>
@@ -862,6 +881,21 @@ export default function AIView() {
           )}
         </div>
       </div>
+      {/* Resize handle for recent panel */}
+      {recentPanelOpen && (
+        <div
+          className="hidden lg:block w-1 cursor-col-resize hover:bg-[var(--accent-color)]/30 active:bg-[var(--accent-color)]/50 transition-colors"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            const startX = e.clientX;
+            const startW = rightWidth;
+            const onMove = (ev: MouseEvent) => setRightWidth(Math.max(140, Math.min(360, startW + (ev.clientX - startX))));
+            const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+            document.addEventListener("mousemove", onMove);
+            document.addEventListener("mouseup", onUp);
+          }}
+        />
+      )}
       {/* Main chat column */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--app-bg)]">
         {/* AI Assistant header + reopen panels strip just below it */}
@@ -884,9 +918,6 @@ export default function AIView() {
                 </span>
               )}
             </div>
-            <p className="mt-0.5 truncate text-xs text-zinc-500">
-              Ask me anything about markets, trading, economics, or your portfolio
-            </p>
           </div>
           <div className="flex flex-shrink-0 items-center gap-2">
             <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] text-zinc-500">
@@ -983,17 +1014,25 @@ export default function AIView() {
                 >
                   {m.role === "user" ? (
                     <>
+                      {user?.profilePicture ? (
+                        <img
+                          src={user.profilePicture}
+                          alt=""
+                          className="h-8 w-8 flex-shrink-0 rounded-full object-cover ring-1 ring-white/20"
+                        />
+                      ) : (
+                        <div
+                          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-[var(--accent-color)] ring-1 ring-white/20"
+                          style={{ backgroundColor: "color-mix(in srgb, var(--accent-color) 25%, transparent)" }}
+                        >
+                          {user ? getInitials(user.name, user.username, user.email) : "?"}
+                        </div>
+                      )}
                       <div
                         className="max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2.5 text-sm text-white"
                         style={{ backgroundColor: "var(--accent-color)" }}
                       >
                         {m.content}
-                      </div>
-                      <div
-                        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold text-[var(--accent-color)] ring-1 ring-white/20"
-                        style={{ backgroundColor: "color-mix(in srgb, var(--accent-color) 25%, transparent)" }}
-                      >
-                        {user ? getInitials(user.name, user.username, user.email) : "?"}
                       </div>
                     </>
                   ) : (
@@ -1017,13 +1056,6 @@ export default function AIView() {
                             className="rounded px-2 py-0.5 text-[10px] text-zinc-500 hover:bg-white/5 hover:text-zinc-300"
                           >
                             {copiedId === m.id ? "Copied!" : "Copy"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleShare(m.content)}
-                            className="rounded px-2 py-0.5 text-[10px] text-zinc-500 hover:bg-white/5 hover:text-[var(--accent-color)]"
-                          >
-                            Share
                           </button>
                         </div>
                         {followUps[m.id]?.length ? (

@@ -4,6 +4,47 @@ export const dynamic = "force-dynamic";
 
 const FINNHUB = process.env.FINNHUB_API_KEY ?? "";
 
+let sentimentCache: { data: unknown; fetchedAt: number } | null = null;
+const CACHE_MS = 5 * 60 * 1000;
+
+// ─── News sentiment helpers ──────────────────────────────────────────────────
+
+const POS_WORDS = new Set(["surge","rally","gain","rise","jump","boom","growth","profit","beat","record","bullish","upgrade","strong","soar","advance","positive","outperform","robust","recovery","expand","high","win","optimism","rebound"]);
+const NEG_WORDS = new Set(["crash","drop","fall","decline","slump","loss","miss","bearish","downgrade","weak","plunge","tumble","retreat","fear","sell","negative","recession","deficit","risk","warning","cut","layoff","default","concern","tariff","crisis"]);
+
+function scoreHeadlines(headlines: string[]): number {
+  if (headlines.length === 0) return 50;
+  let total = 0;
+  for (const h of headlines) {
+    const words = h.toLowerCase().split(/\W+/);
+    let s = 0;
+    for (const w of words) {
+      if (POS_WORDS.has(w)) s++;
+      if (NEG_WORDS.has(w)) s--;
+    }
+    total += s;
+  }
+  // Normalize: each headline contributes roughly ±3 points to a 50-centered score
+  return Math.max(10, Math.min(90, 50 + (total / headlines.length) * 8));
+}
+
+async function fetchNewsForSymbol(symbol: string): Promise<string[]> {
+  if (!FINNHUB) return [];
+  try {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 86400000);
+    const from = weekAgo.toISOString().slice(0, 10);
+    const to = now.toISOString().slice(0, 10);
+    const r = await fetch(
+      `https://finnhub.io/api/v1/company-news?symbol=${symbol}&from=${from}&to=${to}&token=${FINNHUB}`,
+      { cache: "no-store", signal: AbortSignal.timeout(8000) }
+    );
+    if (!r.ok) return [];
+    const news = await r.json() as Array<{ headline?: string }>;
+    return (news ?? []).slice(0, 20).map(n => n.headline ?? "").filter(Boolean);
+  } catch { return []; }
+}
+
 // ─── Finnhub helpers ──────────────────────────────────────────────────────────
 
 async function fQuote(symbol: string): Promise<{ c: number; d: number; dp: number; pc: number } | null> {
@@ -11,7 +52,7 @@ async function fQuote(symbol: string): Promise<{ c: number; d: number; dp: numbe
   try {
     const r = await fetch(
       `https://finnhub.io/api/v1/quote?symbol=${encodeURIComponent(symbol)}&token=${FINNHUB}`,
-      { next: { revalidate: 300 } }
+      { cache: "no-store" }
     );
     if (!r.ok) return null;
     const d = await r.json() as { c?: number; d?: number; dp?: number; pc?: number };
@@ -27,7 +68,7 @@ async function fCandles(symbol: string, days: number): Promise<{ t: number[]; c:
   try {
     const r = await fetch(
       `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(symbol)}&resolution=D&from=${from}&to=${to}&token=${FINNHUB}`,
-      { next: { revalidate: 300 } }
+      { cache: "no-store" }
     );
     if (!r.ok) return null;
     const d = await r.json() as { t?: number[]; c?: number[]; s?: string };
@@ -49,8 +90,26 @@ interface ScoreResult {
   hist: [number, number]; // [weekAgo, monthAgo]
 }
 
+/** Continuous score: blends distance from SMA20 (40%), SMA50 (30%), and day % change (30%) */
+function continuousScore(price: number, sma20Val: number, sma50Val: number | null, dayPctChange: number): number {
+  // SMA20 component: how far price is from 20-day MA, scaled to 0-100
+  const pctFrom20 = ((price - sma20Val) / sma20Val) * 100;
+  const sma20Score = 50 + pctFrom20 * 5; // ±2% from SMA20 = ±10 points
+
+  // SMA50 component
+  const sma50Score = sma50Val
+    ? 50 + ((price - sma50Val) / sma50Val) * 100 * 4
+    : sma20Score;
+
+  // Day change component: ±2% daily move = ±20 points
+  const dayScore = 50 + dayPctChange * 10;
+
+  const raw = sma20Score * 0.4 + sma50Score * 0.3 + dayScore * 0.3;
+  return Math.max(5, Math.min(95, Math.round(raw)));
+}
+
 async function scoreETF(symbol: string, label: string): Promise<ScoreResult> {
-  const [quote, candles] = await Promise.all([fQuote(symbol), fCandles(symbol, 65)]);
+  const [quote, candles, headlines] = await Promise.all([fQuote(symbol), fCandles(symbol, 65), fetchNewsForSymbol(symbol)]);
 
   if (!quote) return { score: 50, detail: `${label} data unavailable`, hist: [50, 50] };
 
@@ -64,25 +123,26 @@ async function scoreETF(symbol: string, label: string): Promise<ScoreResult> {
     const sma20 = sma(closes, 20)!;
     const sma50 = sma(closes, Math.min(50, n));
 
-    const above20 = current > sma20;
-    const above50 = sma50 ? current > sma50 : true;
+    const technicalScore = continuousScore(current, sma20, sma50, dp);
+    // Blend: 70% technical + 30% news sentiment
+    const newsScore = scoreHeadlines(headlines);
+    const score = Math.round(technicalScore * 0.7 + newsScore * 0.3);
 
-    const posScore = above20 && above50 ? 70 : above20 ? 58 : above50 ? 44 : 28;
-    const dayAdj = dp > 2 ? 14 : dp > 1 ? 7 : dp > 0 ? 3 : dp > -1 ? -3 : dp > -2 ? -7 : -14;
-    const score = Math.max(10, Math.min(90, posScore + dayAdj));
+    // Week ago: reconstruct score at ~5 trading days back
+    const wIdx = Math.max(0, n - 6);
+    const weekClose = closes[wIdx];
+    const wSma20 = wIdx >= 20 ? sma(closes.slice(0, wIdx + 1), 20)! : sma20;
+    const wSma50 = wIdx >= 50 ? sma(closes.slice(0, wIdx + 1), 50) : null;
+    const wDayDp = wIdx > 0 ? ((weekClose - closes[wIdx - 1]) / closes[wIdx - 1]) * 100 : 0;
+    const weekScore = continuousScore(weekClose, wSma20, wSma50, wDayDp);
 
-    // Week ago: price ~5 trading days back
-    const weekClose = n >= 6 ? closes[n - 6] : current;
-    const wSma20 = n >= 25 ? sma(closes.slice(0, n - 5), 20)! : sma20;
-    const wAbove20 = weekClose > wSma20;
-    const weekScore = Math.max(10, Math.min(90, (wAbove20 ? 65 : 35) + (weekClose < current ? 5 : -5)));
-
-    // Month ago: ~21 trading days back
-    const monthClose = n >= 22 ? closes[n - 22] : current;
-    const mSma20Arr = closes.slice(0, Math.max(0, n - 21));
-    const mSma20 = mSma20Arr.length >= 20 ? sma(mSma20Arr, 20)! : sma20;
-    const mAbove20 = monthClose > mSma20;
-    const monthScore = Math.max(10, Math.min(90, (mAbove20 ? 65 : 35) + (monthClose < current ? 5 : -5)));
+    // Month ago: reconstruct score at ~21 trading days back
+    const mIdx = Math.max(0, n - 22);
+    const monthClose = closes[mIdx];
+    const mSma20 = mIdx >= 20 ? sma(closes.slice(0, mIdx + 1), 20)! : sma20;
+    const mSma50 = mIdx >= 50 ? sma(closes.slice(0, mIdx + 1), 50) : null;
+    const mDayDp = mIdx > 0 ? ((monthClose - closes[mIdx - 1]) / closes[mIdx - 1]) * 100 : 0;
+    const monthScore = continuousScore(monthClose, mSma20, mSma50, mDayDp);
 
     const dir = dp >= 0 ? "+" : "";
     const tone = score > 65 ? "strong uptrend" : score > 50 ? "mild positive bias" : score > 35 ? "mild weakness" : "downtrend";
@@ -94,12 +154,12 @@ async function scoreETF(symbol: string, label: string): Promise<ScoreResult> {
   }
 
   // Fallback: day change only
-  const score = dp > 2 ? 80 : dp > 1 ? 68 : dp > 0.2 ? 56 : dp > -0.2 ? 46 : dp > -1 ? 34 : dp > -2 ? 22 : 12;
+  const score = continuousScore(quote.c, quote.c * 0.99, null, dp);
   const dir = dp >= 0 ? "+" : "";
   return {
     score,
     detail: `${label} ${dir}${dp.toFixed(2)}% today`,
-    hist: [score, score],
+    hist: [score - 3, score - 6], // slight decay for fallback
   };
 }
 
@@ -112,6 +172,10 @@ function scoreToLabel(score: number): string {
 }
 
 export async function GET() {
+  if (sentimentCache && Date.now() - sentimentCache.fetchedAt < CACHE_MS) {
+    return NextResponse.json(sentimentCache.data);
+  }
+
   const [
     tech, realEstate, energy, healthcare, finance, consumer, industrials, materials,
     usa, europe, china, japan, uk, emerging,
@@ -152,7 +216,7 @@ export async function GET() {
 
   const overallScore = Math.round(sectors.reduce((s, d) => s + d.score, 0) / sectors.length);
 
-  return NextResponse.json({
+  const responseData = {
     current,
     weekAgo,
     monthAgo,
@@ -177,5 +241,7 @@ export async function GET() {
       emerging: { score: emerging.score, weekAgo: emerging.hist[0], monthAgo: emerging.hist[1], detail: emerging.detail },
     },
     lastUpdated: new Date().toISOString(),
-  });
+  };
+  sentimentCache = { data: responseData, fetchedAt: Date.now() };
+  return NextResponse.json(responseData);
 }

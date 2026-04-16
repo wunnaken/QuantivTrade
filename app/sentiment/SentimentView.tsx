@@ -3,9 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-  Legend, Tooltip, ResponsiveContainer,
+  Tooltip, ResponsiveContainer,
   LineChart, Line, XAxis, YAxis, ReferenceLine,
-  PieChart, Pie, Cell,
 } from "recharts";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -68,21 +67,13 @@ const SCORE_CONFIG = [
 ];
 
 const COUNTRY_META = [
-  { key: "usa"      as const, label: "United States",  flag: "🇺🇸", etf: "SPY"  },
-  { key: "europe"   as const, label: "Europe",          flag: "🇪🇺", etf: "VGK"  },
-  { key: "china"    as const, label: "China",            flag: "🇨🇳", etf: "FXI"  },
-  { key: "japan"    as const, label: "Japan",            flag: "🇯🇵", etf: "EWJ"  },
-  { key: "uk"       as const, label: "United Kingdom",   flag: "🇬🇧", etf: "EWU"  },
-  { key: "emerging" as const, label: "Emerging Markets", flag: "🌍", etf: "VWO"  },
+  { key: "usa"      as const, label: "United States",  flag: "🇺🇸" },
+  { key: "europe"   as const, label: "Europe",          flag: "🇪🇺" },
+  { key: "china"    as const, label: "China",            flag: "🇨🇳" },
+  { key: "japan"    as const, label: "Japan",            flag: "🇯🇵" },
+  { key: "uk"       as const, label: "United Kingdom",   flag: "🇬🇧" },
+  { key: "emerging" as const, label: "Emerging Markets", flag: null  },
 ];
-
-const TIMEFRAME_OPTIONS = [
-  { key: "all",      label: "All" },
-  { key: "current",  label: "Today" },
-  { key: "weekAgo",  label: "1W Ago" },
-  { key: "monthAgo", label: "1M Ago" },
-] as const;
-type TFKey = typeof TIMEFRAME_OPTIONS[number]["key"];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -92,18 +83,17 @@ function getScoreConfig(score: number) {
 
 function toRadarData(
   current: SentimentDimensions,
-  weekAgo?: SentimentDimensions,
-  monthAgo?: SentimentDimensions
+  weekAgo: SentimentDimensions,
+  monthAgo: SentimentDimensions,
 ) {
   return (Object.keys(DIM_LABELS) as Array<keyof SentimentDimensions>).map((k) => ({
     dimension: DIM_LABELS[k],
-    current:  current[k],
-    weekAgo:  weekAgo?.[k],
-    monthAgo: monthAgo?.[k],
+    current: current[k],
+    weekAgo: weekAgo[k],
+    monthAgo: monthAgo[k],
   }));
 }
 
-// Deterministic seeded random — avoids SSR/client hydration mismatch
 function seededRand(seed: number): number {
   const x = Math.sin(seed) * 10000;
   return x - Math.floor(x);
@@ -125,191 +115,136 @@ function buildHistory(current: number): Array<{ idx: number; score: number; labe
   return points.sort((a, b) => a.idx - b.idx);
 }
 
-function tfDateLabel(tfFilter: TFKey): string | null {
-  if (tfFilter === "weekAgo") {
-    const d = new Date(Date.now() - 7 * 86400000);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
-  if (tfFilter === "monthAgo") {
-    const d = new Date(Date.now() - 30 * 86400000);
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
-  return null;
+function fmtDelta(d: number): string {
+  if (d === 0) return "—";
+  return `${d > 0 ? "+" : ""}${d}`;
+}
+
+// ─── Globe icon (replaces emoji for Emerging Markets) ─────────────────────────
+
+function GlobeIcon() {
+  return (
+    <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <path d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" />
+    </svg>
+  );
 }
 
 // ─── Gauge (PieChart semicircle) ────────────────────────────────────────────────
 
-function SentimentGauge({
-  score,
-  label,
-  cfg,
-}: {
-  score: number;
-  label: string;
-  cfg: ReturnType<typeof getScoreConfig>;
-}) {
-  const gaugeData = [
-    { value: score,       fill: cfg.color },
-    { value: 100 - score, fill: "rgba(255,255,255,0.06)" },
-  ];
+function SentimentGauge({ score, label, cfg }: { score: number; label: string; cfg: ReturnType<typeof getScoreConfig> }) {
+  // Pure SVG gauge — no Recharts collision issues
+  const radius = 80;
+  const stroke = 14;
+  const cx = 100;
+  const cy = 95;
+  const startAngle = Math.PI;
+  const endAngle = 0;
+  const filledAngle = startAngle - ((score / 100) * Math.PI);
+
+  const arcPath = (start: number, end: number) => {
+    const x1 = cx + radius * Math.cos(start);
+    const y1 = cy - radius * Math.sin(start);
+    const x2 = cx + radius * Math.cos(end);
+    const y2 = cy - radius * Math.sin(end);
+    const largeArc = start - end > Math.PI ? 1 : 0;
+    return `M ${x1} ${y1} A ${radius} ${radius} 0 ${largeArc} 1 ${x2} ${y2}`;
+  };
+
   return (
-    <div className="relative flex flex-col items-center">
-      <ResponsiveContainer width="100%" height={150}>
-        <PieChart>
-          <Pie
-            data={gaugeData}
-            cx="50%" cy="100%"
-            startAngle={180} endAngle={0}
-            innerRadius="62%" outerRadius="88%"
-            paddingAngle={0}
-            dataKey="value"
-            stroke="none"
-          >
-            {gaugeData.map((entry, i) => (
-              <Cell key={i} fill={entry.fill} />
-            ))}
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
-      <div className="absolute bottom-2 flex flex-col items-center pointer-events-none">
-        <span className="text-4xl font-black tabular-nums" style={{ color: cfg.color }}>{score}</span>
-        <span className="mt-0.5 text-xs font-semibold" style={{ color: cfg.color }}>{label}</span>
+    <div className="flex flex-col items-center">
+      <svg viewBox="0 0 200 110" className="w-full max-w-[240px]">
+        {/* Background arc */}
+        <path d={arcPath(startAngle, endAngle)} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={stroke} strokeLinecap="round" />
+        {/* Filled arc */}
+        <path d={arcPath(startAngle, filledAngle)} fill="none" stroke={cfg.color} strokeWidth={stroke} strokeLinecap="round" />
+      </svg>
+      <div className="-mt-12 flex flex-col items-center">
+        <span className="text-3xl font-black tabular-nums" style={{ color: cfg.color }}>{score}</span>
+        <span className="text-[11px] font-semibold" style={{ color: cfg.color }}>{label}</span>
       </div>
     </div>
   );
 }
 
-// ─── Main radar chart ──────────────────────────────────────────────────────────
+// ─── Main radar chart (large, single layer) ──────────────────────────────────
 
-function MainRadarChart({ data, tfFilter }: { data: SentimentData; tfFilter: TFKey }) {
+function MainRadarChart({ data }: { data: SentimentData }) {
   const radarData = toRadarData(data.current, data.weekAgo, data.monthAgo);
-  const showAll = tfFilter === "all";
   const accent = "var(--accent-color)";
 
   return (
     <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-2">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--accent-color)]/70">Sector Analysis</p>
           <h2 className="text-sm font-semibold text-zinc-100 mt-0.5">Market Sentiment Radar</h2>
         </div>
-        {showAll && (
-          <div className="flex gap-3 text-[10px] text-zinc-500">
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-4 border-t-2 border-[var(--accent-color)]" />Today
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-4 border-t border-blue-400 border-dashed" />1W
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-4 border-t border-amber-400" style={{ borderStyle: "dotted" }} />1M
-            </span>
-          </div>
-        )}
+        <div className="flex gap-3 text-[10px] text-zinc-500">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-4 border-t-2 border-[var(--accent-color)]" />Today
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-4 border-t border-blue-400 border-dashed" />1W Ago
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-4 border-t border-amber-400" style={{ borderStyle: "dotted" }} />1M Ago
+          </span>
+        </div>
       </div>
-      <ResponsiveContainer width="100%" height={380}>
-        <RadarChart data={radarData} margin={{ top: 16, right: 28, bottom: 16, left: 28 }}>
+      <ResponsiveContainer width="100%" height={480}>
+        <RadarChart data={radarData} margin={{ top: 24, right: 40, bottom: 24, left: 40 }}>
           <PolarGrid stroke="rgba(255,255,255,0.08)" />
-          <PolarAngleAxis dataKey="dimension" tick={{ fill: "#94a3b8", fontSize: 11, fontWeight: 500 }} />
-          <PolarRadiusAxis domain={[0, 100]} tickCount={4} tick={false} axisLine={false} />
+          <PolarAngleAxis dataKey="dimension" tick={{ fill: "#94a3b8", fontSize: 12, fontWeight: 600 }} />
+          <PolarRadiusAxis domain={[0, 100]} tickCount={5} tick={{ fontSize: 9, fill: "#52525b" }} axisLine={false} />
           <Tooltip
-            contentStyle={{ background: "var(--app-bg)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 11 }}
-            formatter={(v, name) => [`${v}`, String(name)]}
+            contentStyle={{ background: "var(--app-bg)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 12 }}
+            formatter={(v, name) => [`${v} / 100`, String(name)]}
           />
-          {(showAll || tfFilter === "monthAgo") && (
-            <Radar
-              name="1M Ago" dataKey="monthAgo"
-              stroke="#f59e0b" fill="#f59e0b"
-              fillOpacity={showAll ? 0.05 : 0.18}
-              strokeWidth={showAll ? 1 : 2}
-              strokeDasharray={showAll ? "2 3" : undefined}
-            />
-          )}
-          {(showAll || tfFilter === "weekAgo") && (
-            <Radar
-              name="1W Ago" dataKey="weekAgo"
-              stroke="#60a5fa" fill="#60a5fa"
-              fillOpacity={showAll ? 0.08 : 0.18}
-              strokeWidth={showAll ? 1.5 : 2}
-              strokeDasharray={showAll ? "4 2" : undefined}
-            />
-          )}
-          {(showAll || tfFilter === "current") && (
-            <Radar
-              name="Today" dataKey="current"
-              stroke={accent} fill={accent}
-              fillOpacity={showAll ? 0.15 : 0.25}
-              strokeWidth={2}
-            />
-          )}
-          {showAll && (
-            <Legend
-              iconType="line" iconSize={12}
-              formatter={(v) => <span style={{ fontSize: 10, color: "#94a3b8" }}>{v}</span>}
-            />
-          )}
+          <Radar name="1M Ago" dataKey="monthAgo" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.04} strokeWidth={1} strokeDasharray="2 3" />
+          <Radar name="1W Ago" dataKey="weekAgo" stroke="#60a5fa" fill="#60a5fa" fillOpacity={0.06} strokeWidth={1.5} strokeDasharray="4 2" />
+          <Radar name="Today" dataKey="current" stroke={accent} fill={accent} fillOpacity={0.18} strokeWidth={2.5} dot={{ r: 4, fill: accent, stroke: accent }} />
         </RadarChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-// ─── Country cards ─────────────────────────────────────────────────────────────
+// ─── Regional sentiment ───────────────────────────────────────────────────────
 
-function CountryCards({
-  countries,
-  tfFilter,
-}: {
-  countries: SentimentData["countries"] | undefined;
-  tfFilter: TFKey;
-}) {
-  if (!countries) return null;
-  const dateLabel = tfDateLabel(tfFilter);
-  const isHistoric = tfFilter === "weekAgo" || tfFilter === "monthAgo";
-
+function RegionalSentiment({ countries }: { countries: SentimentData["countries"] }) {
   return (
-    <div>
-      <div className="flex items-baseline gap-2 mb-3">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600">Regional Sentiment</p>
-        {dateLabel && (
-          <span className="text-[9px] text-zinc-700">as of {dateLabel}</span>
-        )}
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-3">Regional Sentiment</p>
+      <div className="space-y-1.5">
         {COUNTRY_META.map((c) => {
           const country = countries[c.key];
-          const score = isHistoric
-            ? (tfFilter === "weekAgo" ? country.weekAgo : country.monthAgo)
-            : country.score;
-          // delta = how much it changed from that period to today
-          const compareScore = isHistoric ? score : country.weekAgo;
-          const delta = isHistoric ? country.score - score : country.score - country.weekAgo;
-          const cfg = getScoreConfig(score);
-
+          const cfg = getScoreConfig(country.score);
+          const weekDelta = country.score - country.weekAgo;
+          const monthDelta = country.score - country.monthAgo;
           return (
             <div
               key={c.key}
-              className="rounded-xl bg-[var(--app-card-alt)] p-3 border"
-              style={{ borderColor: `${cfg.color}28` }}
+              className="flex items-center gap-3 rounded-lg border px-3 py-2.5"
+              style={{ borderColor: `${cfg.color}25`, background: `${cfg.color}08` }}
             >
-              <div className="flex items-center justify-between mb-1.5">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base leading-none">{c.flag}</span>
-                  <span className="text-[11px] font-medium text-zinc-300 leading-none">{c.label}</span>
-                </div>
-                <span className="text-sm font-bold tabular-nums" style={{ color: cfg.color }}>{score}</span>
+              {c.flag ? (
+                <span className="text-base leading-none">{c.flag}</span>
+              ) : (
+                <GlobeIcon />
+              )}
+              <span className="text-xs font-medium text-zinc-300 w-32 shrink-0">{c.label}</span>
+              <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${country.score}%`, background: cfg.color }} />
               </div>
-              <div className="h-1 w-full rounded-full bg-white/5 overflow-hidden mb-1.5">
-                <div className="h-full rounded-full transition-all duration-700" style={{ width: `${score}%`, background: cfg.color }} />
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] text-zinc-600">{cfg.label}</span>
-                {delta !== 0 && (
-                  <span className={`text-[9px] font-medium ${delta > 0 ? "text-emerald-400" : "text-red-400"}`}>
-                    {delta > 0 ? "↑" : "↓"}{Math.abs(delta)} {isHistoric ? "since" : "vs 1W"}
-                  </span>
-                )}
-              </div>
+              <span className="text-sm font-bold tabular-nums w-8 text-right" style={{ color: cfg.color }}>{country.score}</span>
+              <span className={`text-[10px] font-medium tabular-nums w-12 text-right ${weekDelta > 0 ? "text-emerald-400" : weekDelta < 0 ? "text-red-400" : "text-zinc-600"}`}>
+                {fmtDelta(weekDelta)} <span className="text-zinc-600">1W</span>
+              </span>
+              <span className={`text-[10px] font-medium tabular-nums w-12 text-right ${monthDelta > 0 ? "text-emerald-400" : monthDelta < 0 ? "text-red-400" : "text-zinc-600"}`}>
+                {fmtDelta(monthDelta)} <span className="text-zinc-600">1M</span>
+              </span>
             </div>
           );
         })}
@@ -318,45 +253,42 @@ function CountryCards({
   );
 }
 
-// ─── Dimension card ────────────────────────────────────────────────────────────
+// ─── Sector breakdown ─────────────────────────────────────────────────────────
 
-function DimensionCard({
-  dimKey,
-  selected,
-  current,
-  interp,
-  isHistoric,
-}: {
-  dimKey: keyof SentimentDimensions;
-  selected: SentimentDimensions;
+function SectorBreakdown({ current, weekAgo, monthAgo, interpretations }: {
   current: SentimentDimensions;
-  interp: string;
-  isHistoric: boolean;
+  weekAgo: SentimentDimensions;
+  monthAgo: SentimentDimensions;
+  interpretations: Record<keyof SentimentDimensions, string>;
 }) {
-  const score = selected[dimKey];
-  const delta = current[dimKey] - selected[dimKey]; // change from that period to today
-  const cfg = getScoreConfig(score);
-
   return (
-    <div className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3 flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-zinc-300">{DIM_LABELS[dimKey]}</span>
-        <div className="flex items-center gap-2">
-          {isHistoric && delta !== 0 && (
-            <span className={`text-[10px] font-medium ${delta > 0 ? "text-emerald-400" : "text-red-400"}`}>
-              {delta > 0 ? "↑" : "↓"}{Math.abs(delta)} since
-            </span>
-          )}
-          <span className="text-sm font-bold tabular-nums" style={{ color: cfg.color }}>{score}</span>
-        </div>
-      </div>
-      <div className="h-1 w-full rounded-full bg-white/5 overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${score}%`, background: cfg.color }}
-        />
-      </div>
-      <p className="text-[10px] leading-relaxed text-zinc-500 line-clamp-2">{interp}</p>
+    <div className="space-y-1.5">
+      {(Object.keys(DIM_LABELS) as Array<keyof SentimentDimensions>).map((k) => {
+        const score = current[k];
+        const cfg = getScoreConfig(score);
+        const weekDelta = score - weekAgo[k];
+        const monthDelta = score - monthAgo[k];
+        return (
+          <div key={k} className="rounded-xl border p-3" style={{ borderColor: `${cfg.color}25`, background: `${cfg.color}08` }}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-medium text-zinc-300">{DIM_LABELS[k]}</span>
+              <div className="flex items-center gap-3">
+                <span className={`text-[10px] font-medium tabular-nums ${weekDelta > 0 ? "text-emerald-400" : weekDelta < 0 ? "text-red-400" : "text-zinc-600"}`}>
+                  {fmtDelta(weekDelta)} <span className="text-zinc-600">1W</span>
+                </span>
+                <span className={`text-[10px] font-medium tabular-nums ${monthDelta > 0 ? "text-emerald-400" : monthDelta < 0 ? "text-red-400" : "text-zinc-600"}`}>
+                  {fmtDelta(monthDelta)} <span className="text-zinc-600">1M</span>
+                </span>
+                <span className="text-sm font-bold tabular-nums" style={{ color: cfg.color }}>{score}</span>
+              </div>
+            </div>
+            <div className="h-1 w-full rounded-full bg-white/5 overflow-hidden mb-1.5">
+              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${score}%`, background: cfg.color }} />
+            </div>
+            <p className="text-[10px] leading-relaxed text-zinc-500 line-clamp-2">{interpretations[k] ?? ""}</p>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -411,6 +343,137 @@ function LiveBadge({ lastUpdated }: { lastUpdated: string }) {
   );
 }
 
+// ─── Economic Sentiment Indicators ───────────────��───────────────────────────
+
+type EconIndicator = {
+  id: string;
+  label: string;
+  category: string;
+  frequency: string;
+  value: number;
+  date: string;
+  change: number | null;
+  changePct: number | null;
+  signal: "bullish" | "bearish" | "neutral";
+  history: Array<{ date: string; value: number }>;
+};
+
+const SIGNAL_COLORS = {
+  bullish: { text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/25", dot: "#10b981" },
+  bearish: { text: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/25", dot: "#ef4444" },
+  neutral: { text: "text-zinc-400", bg: "bg-zinc-500/10", border: "border-zinc-500/25", dot: "#71717a" },
+};
+
+function EconomicIndicators() {
+  const [indicators, setIndicators] = useState<EconIndicator[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedCat, setExpandedCat] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const r = await fetch("/api/sentiment/indicators", { cache: "no-store" });
+        if (r.ok) {
+          const data = await r.json() as { indicators: EconIndicator[] };
+          setIndicators(data.indicators ?? []);
+        }
+      } catch { /* ignore */ }
+      finally { setLoading(false); }
+    }
+    load();
+    const id = setInterval(load, 15 * 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Group by category
+  const grouped = indicators.reduce<Record<string, EconIndicator[]>>((acc, ind) => {
+    (acc[ind.category] ??= []).push(ind);
+    return acc;
+  }, {});
+
+  const categories = Object.keys(grouped);
+
+  // Category-level signal: majority rules
+  function catSignal(items: EconIndicator[]): "bullish" | "bearish" | "neutral" {
+    let b = 0, bear = 0;
+    for (const i of items) { if (i.signal === "bullish") b++; else if (i.signal === "bearish") bear++; }
+    if (b > bear) return "bullish";
+    if (bear > b) return "bearish";
+    return "neutral";
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-1">Economic Sentiment Indicators</p>
+      <p className="text-[10px] text-zinc-600 mb-3">Survey-based readings from businesses, consumers, housing, labor, and global economies.</p>
+      {loading ? (
+        <div className="space-y-2">
+          {[1,2,3,4,5].map(i => <div key={i} className="h-12 animate-pulse rounded-lg bg-white/5" />)}
+        </div>
+      ) : categories.length === 0 ? (
+        <p className="text-xs text-zinc-500">Indicator data unavailable</p>
+      ) : (
+        <div className="space-y-2">
+          {categories.map((cat) => {
+            const items = grouped[cat];
+            const sig = catSignal(items);
+            const colors = SIGNAL_COLORS[sig];
+            const isOpen = expandedCat === cat;
+            const bullCount = items.filter(i => i.signal === "bullish").length;
+            const bearCount = items.filter(i => i.signal === "bearish").length;
+
+            return (
+              <div key={cat}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedCat(isOpen ? null : cat)}
+                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition ${colors.border} ${colors.bg}`}
+                >
+                  <span className="h-2 w-2 rounded-full shrink-0" style={{ background: colors.dot }} />
+                  <span className="flex-1 text-xs font-medium text-zinc-200">{cat}</span>
+                  <span className="text-[10px] text-zinc-500">{items.length} indicators</span>
+                  {bullCount > 0 && <span className="text-[10px] font-medium text-emerald-400">+{bullCount}</span>}
+                  {bearCount > 0 && <span className="text-[10px] font-medium text-red-400">-{bearCount}</span>}
+                  <svg
+                    className={`h-3.5 w-3.5 text-zinc-500 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {isOpen && (
+                  <div className="mt-1 space-y-1 pl-5">
+                    {items.map((ind) => {
+                      const ic = SIGNAL_COLORS[ind.signal];
+                      return (
+                        <div key={ind.id} className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${ic.border} ${ic.bg}`}>
+                          <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: ic.dot }} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-medium text-zinc-300 truncate">{ind.label}</p>
+                            <p className="text-[9px] text-zinc-600">{ind.frequency} · {ind.date}</p>
+                          </div>
+                          <span className="text-xs font-bold tabular-nums text-zinc-200">
+                            {Math.abs(ind.value) >= 10000 ? (ind.value / 1000).toFixed(0) + "k" : ind.value.toFixed(1)}
+                          </span>
+                          {ind.change !== null && (
+                            <span className={`text-[10px] font-medium tabular-nums ${ind.change >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                              {ind.change >= 0 ? "+" : ""}{ind.change.toFixed(1)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main page ─────────────────────────────────────────────────────────────────
 
 const EMPTY_DIMS: SentimentDimensions = {
@@ -426,12 +489,11 @@ const EMPTY_COUNTRIES = {
 export default function SentimentView() {
   const [data, setData] = useState<SentimentData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tfFilter, setTfFilter] = useState<TFKey>("all");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/api/sentiment/radar");
+      const r = await fetch("/api/sentiment/radar", { cache: "no-store" });
       if (r.ok) setData(await r.json() as SentimentData);
     } catch { /* keep previous */ }
     finally { setLoading(false); }
@@ -453,19 +515,7 @@ export default function SentimentView() {
     lastUpdated: new Date().toISOString(),
   };
 
-  const isHistoric = tfFilter === "weekAgo" || tfFilter === "monthAgo";
-  const selectedDims = tfFilter === "weekAgo" ? d.weekAgo : tfFilter === "monthAgo" ? d.monthAgo : d.current;
-
-  // Compute score and label for the selected period
-  const selectedScore = isHistoric
-    ? Math.round(Object.values(selectedDims).reduce((a, b) => a + b, 0) / 8)
-    : d.overallScore;
-  const selectedLabel = isHistoric
-    ? (selectedScore >= 80 ? "Extreme Greed" : selectedScore >= 60 ? "Greed" : selectedScore >= 40 ? "Neutral" : selectedScore >= 20 ? "Fear" : "Extreme Fear")
-    : d.label;
-
-  const cfg = getScoreConfig(selectedScore);
-  const dateLabel = tfDateLabel(tfFilter);
+  const cfg = getScoreConfig(d.overallScore);
 
   return (
     <div className="min-h-screen app-page">
@@ -476,14 +526,16 @@ export default function SentimentView() {
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.25em] text-[var(--accent-color)]/80">Market Psychology</p>
             <h1 className="mt-1 text-xl font-semibold tracking-tight text-zinc-50 sm:text-2xl">Sentiment Radar</h1>
-            <p className="mt-1 text-xs text-zinc-400">Sector-based market sentiment updated every 5 minutes.</p>
+            <p className="mt-1 text-xs text-zinc-400">
+              Sector sentiment scored from ETF technicals, news headlines, and economic surveys.
+            </p>
           </div>
           {data && <LiveBadge lastUpdated={d.lastUpdated} />}
         </div>
 
         {loading ? (
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-5">
-            <div className="h-96 animate-pulse rounded-2xl bg-white/5" />
+            <div className="h-[560px] animate-pulse rounded-2xl bg-white/5" />
             <div className="space-y-3">
               <div className="h-48 animate-pulse rounded-2xl bg-white/5" />
               <div className="h-48 animate-pulse rounded-2xl bg-white/5" />
@@ -494,34 +546,15 @@ export default function SentimentView() {
 
             {/* ── LEFT COLUMN ── */}
             <div className="space-y-4">
-
-              {/* Timeframe filter */}
-              <div className="flex gap-1 rounded-lg border border-white/10 bg-white/[0.02] p-1 w-fit">
-                {TIMEFRAME_OPTIONS.map((t) => (
-                  <button
-                    key={t.key}
-                    onClick={() => setTfFilter(t.key)}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                      tfFilter === t.key ? "bg-white/10 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Main radar */}
-              <MainRadarChart data={d} tfFilter={tfFilter} />
-
-              {/* Regional sentiment */}
-              <CountryCards countries={d.countries} tfFilter={tfFilter} />
-
+              <MainRadarChart data={d} />
+              <RegionalSentiment countries={d.countries} />
+              <EconomicIndicators />
             </div>
 
             {/* ── RIGHT COLUMN ── */}
             <div className="space-y-4">
 
-              {/* Overall sentiment gauge — colored border + bg based on score */}
+              {/* Overall sentiment gauge */}
               <div
                 className="rounded-2xl p-5"
                 style={{
@@ -529,46 +562,33 @@ export default function SentimentView() {
                   background: `linear-gradient(145deg, var(--app-card-alt) 55%, ${cfg.color}10 100%)`,
                 }}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: cfg.color, opacity: 0.8 }}>
-                    Overall Sentiment
-                  </p>
-                  {dateLabel && (
-                    <span className="text-[9px] text-zinc-600">as of {dateLabel}</span>
-                  )}
-                </div>
-                <SentimentGauge score={selectedScore} label={selectedLabel} cfg={cfg} />
-                <div className="mt-2 flex justify-center gap-2 flex-wrap">
+                <p className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: cfg.color, opacity: 0.8 }}>
+                  Overall Sentiment
+                </p>
+                <SentimentGauge score={d.overallScore} label={d.label} cfg={cfg} />
+                <div className="mt-1 flex justify-center gap-2 flex-wrap">
                   {SCORE_CONFIG.map((c) => (
                     <span key={c.label} className="text-[9px] font-medium" style={{ color: c.color }}>{c.label}</span>
                   ))}
                 </div>
+                <p className="mt-3 text-[10px] text-zinc-600 text-center leading-relaxed">
+                  Average of all 8 sector scores. Each sector blends ETF technicals (70%) with recent news sentiment (30%). Technical score uses SMA crossovers and daily momentum.
+                </p>
               </div>
 
               {/* Sector breakdown */}
               <div>
-                {isHistoric && (
-                  <p className="text-[9px] text-zinc-600 mb-2 px-0.5">
-                    Showing values from {dateLabel} · arrows show change to today
-                  </p>
-                )}
-                <div className="space-y-2">
-                  {(Object.keys(DIM_LABELS) as Array<keyof SentimentDimensions>).map((k) => (
-                    <DimensionCard
-                      key={k}
-                      dimKey={k}
-                      selected={selectedDims}
-                      current={d.current}
-                      interp={d.interpretations[k] ?? ""}
-                      isHistoric={isHistoric}
-                    />
-                  ))}
-                </div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-600 mb-2">Sector Breakdown</p>
+                <SectorBreakdown
+                  current={d.current}
+                  weekAgo={d.weekAgo}
+                  monthAgo={d.monthAgo}
+                  interpretations={d.interpretations}
+                />
               </div>
 
               {/* 30-day history */}
               <HistoryChart score={d.overallScore} />
-
             </div>
           </div>
         )}

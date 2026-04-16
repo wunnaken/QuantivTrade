@@ -9,6 +9,16 @@ const GRADES = [
   { id: "GASDESW",    label: "Diesel",   color: "#f97316" },
 ];
 
+// Regional regular gas prices — EIA API series
+const EIA_BASE = "https://api.eia.gov/v2/petroleum/pri/gnd/data/";
+const REGIONS = [
+  { id: "R10", label: "East Coast",     color: "#60a5fa" },
+  { id: "R20", label: "Midwest",        color: "#22c55e" },
+  { id: "R30", label: "Gulf Coast",     color: "#f59e0b" },
+  { id: "R40", label: "Rocky Mountain", color: "#a78bfa" },
+  { id: "R50", label: "West Coast",     color: "#ef4444" },
+];
+
 async function fetchFred(seriesId: string, key: string, limit = 208) {
   const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${key}&file_type=json&limit=${limit}&sort_order=desc`;
   const res = await fetch(url, { next: { revalidate: 3600 } });
@@ -28,7 +38,6 @@ export async function GET() {
   try {
     const [gradeResults, crudeResult] = await Promise.allSettled([
       Promise.allSettled(GRADES.map((g) => fetchFred(g.id, key, 208))),
-      // WTI crude daily — fetch ~1200 days to cover 4 years with weekends/holidays
       fetchFred("DCOILWTICO", key, 1200),
     ]);
 
@@ -86,13 +95,60 @@ export async function GET() {
     const pumpSpread = regular.current !== null && latestCrudePerGal !== null
       ? Math.round((regular.current - latestCrudePerGal) * 1000) / 1000 : null;
 
+    // Regional gas prices via EIA API
+    const eiaKey = process.env.EIA_API_KEY?.trim();
+    let regions: Array<{ id: string; label: string; color: string; current: number | null; asOf: string | null; wowChange: number | null; history: Array<{ date: string; value: number }> }> = [];
+
+    if (eiaKey) {
+      try {
+        // Fetch all PADD regions for regular gasoline, weekly frequency
+        const eiaUrl = `${EIA_BASE}?api_key=${eiaKey}&frequency=weekly&data[0]=value&facets[product][]=EPM0&facets[duoarea][]=R10&facets[duoarea][]=R20&facets[duoarea][]=R30&facets[duoarea][]=R40&facets[duoarea][]=R50&sort[0][column]=period&sort[0][direction]=desc&length=150`;
+        const eiaRes = await fetch(eiaUrl, { cache: "no-store", signal: AbortSignal.timeout(10000) });
+        if (eiaRes.ok) {
+          const eiaJson = await eiaRes.json() as { response?: { data?: Array<{ period: string; duoarea: string; value: number }> } };
+          const eiaData = eiaJson.response?.data ?? [];
+
+          regions = REGIONS.map((r) => {
+            const rows = eiaData
+              .filter((d) => d.duoarea === r.id && d.value != null)
+              .map((d) => ({ date: d.period, value: Number(d.value) }))
+              .filter((d) => Number.isFinite(d.value))
+              .reverse(); // oldest first
+            const current = rows[rows.length - 1] ?? null;
+            const prev = rows.length >= 2 ? rows[rows.length - 2] : null;
+            return {
+              id: r.id, label: r.label, color: r.color,
+              current: current?.value ?? null,
+              asOf: current?.date ?? null,
+              wowChange: current && prev ? Math.round((current.value - prev.value) * 1000) / 1000 : null,
+              history: rows.slice(-26),
+            };
+          });
+        }
+      } catch { /* EIA unavailable, skip regional */ }
+    }
+
+    // Add US average from FRED as the first entry
+    const usAvg = grades[0]; // regular grade = US average
+    if (usAvg) {
+      const usCurrent = usAvg.history[usAvg.history.length - 1] ?? null;
+      const usPrev = usAvg.history.length >= 2 ? usAvg.history[usAvg.history.length - 2] : null;
+      regions.unshift({
+        id: "US", label: "US Average", color: "#4f9cf9",
+        current: usCurrent?.value ?? null,
+        asOf: usCurrent?.date ?? null,
+        wowChange: usCurrent && usPrev ? Math.round((usCurrent.value - usPrev.value) * 1000) / 1000 : null,
+        history: usAvg.history.slice(-26),
+      });
+    }
+
     return NextResponse.json({
       grades,
       allGradesHistory,
+      regions,
       latestCrudePerGal: latestCrudePerGal !== null ? Math.round(latestCrudePerGal * 1000) / 1000 : null,
       pumpSpread,
-      source: "U.S. Energy Information Administration via FRED (St. Louis Fed)",
-      updateSchedule: "Updated weekly — data as of Monday of prior week",
+      updateSchedule: "Updated weekly",
     });
   } catch (e) {
     console.error("[market-rates/gas]", e);

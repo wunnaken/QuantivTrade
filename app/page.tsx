@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { motion, useInView } from "framer-motion";
+import { motion, useInView, AnimatePresence } from "framer-motion";
 import { QuantivTradeLogoImage } from "../components/QuantivTradeLogoImage";
 import "./landing.css";
 import { SiteFooter } from "../components/SiteFooter";
 import { NewsletterSignup } from "../components/NewsletterSignup";
+import { WhatsNewTimeline } from "../components/WhatsNewTimeline";
 
 // ─── Ticker background ────────────────────────────────────────────────────────
 
@@ -1145,7 +1146,19 @@ function ToolbarShowcaseInner() {
   return (
     <div ref={ref} style={{ width: "min(96vw, 1300px)", margin: "0 auto", paddingBottom: "48px" }}>
 
-      {/* Whiteboard — full-width feature card, no section label */}
+      {/* Section header */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+        transition={{ duration: 0.5 }}
+        style={{ textAlign: "center", marginBottom: "36px" }}
+      >
+        <p className="overline-label" style={{ marginBottom: "12px" }}>Explore the toolkit</p>
+        <p style={{ fontFamily: "var(--font-lora), Georgia, serif", fontSize: "clamp(20px, 2.4vw, 28px)", fontWeight: 600, color: "#fff" }}>
+          Some of our features
+        </p>
+      </motion.div>
+
+      {/* Whiteboard — full-width feature card */}
       <motion.div
         initial={{ opacity: 0, y: 14 }} animate={inView ? { opacity: 1, y: 0 } : {}}
         transition={{ duration: 0.5 }}
@@ -1408,10 +1421,71 @@ function QuizCTASection() {
   );
 }
 
+// ─── What's New Panel ─────────────────────────────────────────────────────────
+
+function WhatsNewPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  useEffect(() => {
+    if (!open) return;
+    const handleKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [open, onClose]);
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={onClose}
+            style={{ position: "fixed", inset: 0, zIndex: 9998, background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+          />
+          {/* Panel */}
+          <motion.div
+            initial={{ opacity: 0, x: "100%" }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 300 }}
+            style={{
+              position: "fixed", top: 0, right: 0, bottom: 0, width: "min(520px, 92vw)", zIndex: 9999,
+              background: "var(--app-bg, #0a0e17)", borderLeft: "1px solid rgba(255,255,255,0.08)",
+              display: "flex", flexDirection: "column", overflow: "hidden",
+            }}
+          >
+            {/* Header */}
+            <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+              <div>
+                <h2 style={{ fontFamily: "var(--font-lora), Georgia, serif", fontSize: "18px", fontWeight: 600, color: "#fff", margin: 0 }}>What&apos;s New</h2>
+                <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.35)", marginTop: "4px" }}>A running log of every update, improvement, and fix.</p>
+              </div>
+              <button onClick={onClose} style={{
+                width: 32, height: 32, borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)",
+                background: "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.5)", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                transition: "border-color 0.2s, color 0.2s",
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(232,132,106,0.4)"; e.currentTarget.style.color = "#fff"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"; e.currentTarget.style.color = "rgba(255,255,255,0.5)"; }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+            {/* Scrollable content */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+              <WhatsNewTimeline />
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+}
+
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
 export default function Home() {
   const [ready, setReady] = useState(false);
+  const [whatsNewOpen, setWhatsNewOpen] = useState(false);
 
   useEffect(() => {
     // If Supabase redirected an OAuth code to this page instead of /auth/callback,
@@ -1445,6 +1519,37 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* What's New floating button — always visible */}
+      {ready && (
+        <motion.button
+          onClick={() => setWhatsNewOpen(true)}
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.3, duration: 0.3 }}
+          whileHover={{ scale: 1.08, boxShadow: "0 0 28px rgba(232,132,106,0.4)", transition: { duration: 0.15 } }}
+          whileTap={{ scale: 0.95, transition: { duration: 0.08 } }}
+          style={{
+            position: "fixed", bottom: 24, right: 24, zIndex: 900,
+            display: "flex", alignItems: "center", gap: "8px",
+            padding: "10px 18px", borderRadius: "12px",
+            border: "1px solid rgba(232,132,106,0.3)",
+            background: "rgba(10,14,23,0.85)", backdropFilter: "blur(12px)",
+            color: "var(--accent-color)", cursor: "pointer",
+            fontFamily: "var(--font-lora)", fontSize: "13px", fontWeight: 600,
+            letterSpacing: "0.02em",
+          }}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </svg>
+          What&apos;s New
+        </motion.button>
+      )}
+
+      {/* What's New slide-out panel */}
+      <WhatsNewPanel open={whatsNewOpen} onClose={() => setWhatsNewOpen(false)} />
+
       <SiteFooter />
     </div>
   );

@@ -127,10 +127,7 @@ export function ProfileIcon() {
                 <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
                   <span className={DOT_CLASS} />
                 </span>
-                <span className={TEXT_CLASS}>
-                  What&apos;s New
-                  <span className="ml-1.5 rounded-full bg-[var(--accent-color)] px-1.5 py-0.5 text-[9px] font-bold text-[#020308]">NEW</span>
-                </span>
+                <span className={TEXT_CLASS}>What&apos;s New</span>
               </Link>
 
               <div className="my-2 h-px bg-white/10" />

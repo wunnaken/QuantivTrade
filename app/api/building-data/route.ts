@@ -190,7 +190,14 @@ const MATERIALS_STOCKS = [
   { symbol: "URI", name: "United Rentals" },
 ];
 
+let buildingDataCache: { data: unknown; fetchedAt: number } | null = null;
+const CACHE_MS = 5 * 60 * 1000;
+
 export async function GET() {
+  if (buildingDataCache && Date.now() - buildingDataCache.fetchedAt < CACHE_MS) {
+    return NextResponse.json(buildingDataCache.data);
+  }
+
   const fredKey = process.env.FRED_API_KEY?.trim();
   const finnhubKey = process.env.FINNHUB_API_KEY?.trim();
 
@@ -199,24 +206,22 @@ export async function GET() {
   }
 
   // Fetch all data in parallel
-  const [mort30, mort15, mort5, fedFundsHist, primeHist, lumberRaw, steelRaw, copperRaw] =
+  const [mort30, mort15, mort5, fedFundsHist, primeHist, lumberRaw, steelRaw, copperRaw, concreteRaw, housingStartsRaw, buildingPermitsRaw] =
     await Promise.all([
-      // Mortgage series from 2020 so all three series share a common date range.
-      // NOTE: MORTGAGE5US was discontinued by Freddie Mac in Nov 2022.
       fredFrom("MORTGAGE30US", fredKey, "2020-01-01"),
       fredFrom("MORTGAGE15US", fredKey, "2020-01-01"),
       fredFrom("MORTGAGE5US", fredKey, "2020-01-01"),
-      // FEDFUNDS monthly from 2020 (to overlay on mortgage chart)
       fredFrom("FEDFUNDS", fredKey, "2020-01-01"),
-      // Prime rate — last 5 values is enough for current reading
       fredLast("DPRIME", fredKey, 5),
-      // PPI series from 2019 (6 years for timeframe toggle in UI)
-      // Lumber: WPS0811 was discontinued; fall through to NAICS-based Sawmills series
       fredWithFallbacks(["WPS0811", "PCU321113321113", "PCU3219--3219--"], fredKey, "2019-01-01"),
-      // Steel: primary WPS1013, fallback to PCU331110331110 (NAICS Steel Mills)
       fredWithFallbacks(["WPS1013", "PCU331110331110", "PCU3312--3312--"], fredKey, "2019-01-01"),
-      // Copper: primary WPS1322, fallback to PCU331420331420 (NAICS Copper Rolling/Drawing)
       fredWithFallbacks(["WPS1322", "PCU331420331420", "PCU3314--3314--"], fredKey, "2019-01-01"),
+      // Concrete/Cement PPI
+      fredWithFallbacks(["PCU327310327310", "WPU1332", "PCU3273--3273--"], fredKey, "2019-01-01"),
+      // Housing Starts (thousands, seasonally adjusted annual rate)
+      fredLast("HOUST", fredKey, 24),
+      // Building Permits (thousands, seasonally adjusted annual rate)
+      fredLast("PERMIT", fredKey, 24),
     ]);
 
   const mortgageHistory = buildMortgageHistory(mort30, mort15, mort5, fedFundsHist);
@@ -243,7 +248,7 @@ export async function GET() {
     stocks = { homebuilders: hbQ, homeImprovement: hiQ, materials: matQ };
   }
 
-  return NextResponse.json({
+  const responseData = {
     mortgageRates: {
       current: {
         rate30: latestMort30?.value ?? null,
@@ -262,7 +267,14 @@ export async function GET() {
       lumber: buildPpiSeries(lumberRaw),
       steel: buildPpiSeries(steelRaw),
       copper: buildPpiSeries(copperRaw),
+      concrete: buildPpiSeries(concreteRaw),
+    },
+    housing: {
+      starts: buildPpiSeries(housingStartsRaw),
+      permits: buildPpiSeries(buildingPermitsRaw),
     },
     stocks,
-  });
+  };
+  buildingDataCache = { data: responseData, fetchedAt: Date.now() };
+  return NextResponse.json(responseData);
 }

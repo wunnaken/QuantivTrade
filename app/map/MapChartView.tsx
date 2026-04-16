@@ -28,6 +28,7 @@ export function MapChartView({ layerData, activeLayer, isLoading, dataAsOf, getD
   const [selected, setSelected] = useState<string[]>([]);
 
   // All countries that have a value, sorted highest → lowest
+  // Check both byName and byIso3 (World Bank layers only populate byIso3)
   const masterList = useMemo(() => {
     const seen = new Set<string>();
     const out: { name: string; value: number }[] = [];
@@ -39,8 +40,45 @@ export function MapChartView({ layerData, activeLayer, isLoading, dataAsOf, getD
       }
     }
 
+    // For WB layers: byIso3 has the data, use getDisplayValueForCountry to resolve names
+    if (out.length === 0 && Object.keys(layerData.byIso3).length > 0) {
+      // Build a reverse map from ISO3 to country name using the topology
+      const ISO3_TO_NAME: Record<string, string> = {
+        usa: "United States of America", gbr: "United Kingdom", deu: "Germany", fra: "France",
+        jpn: "Japan", chn: "China", ind: "India", can: "Canada", aus: "Australia", bra: "Brazil",
+        kor: "South Korea", ita: "Italy", esp: "Spain", mex: "Mexico", idn: "Indonesia",
+        nld: "Netherlands", tur: "Turkey", che: "Switzerland", sau: "Saudi Arabia", zaf: "South Africa",
+        rus: "Russia", twn: "Taiwan", pol: "Poland", swe: "Sweden", bel: "Belgium", arg: "Argentina",
+        nor: "Norway", tha: "Thailand", mys: "Malaysia", phl: "Philippines", sgp: "Singapore",
+        nzl: "New Zealand", col: "Colombia", per: "Peru", chl: "Chile", egy: "Egypt", pak: "Pakistan",
+        ngr: "Nigeria", nga: "Nigeria", bgd: "Bangladesh", vnm: "Vietnam", irn: "Iran", irq: "Iraq",
+        ukr: "Ukraine", rom: "Romania", rou: "Romania", cze: "Czech Republic", czk: "Czech Republic",
+        prt: "Portugal", grc: "Greece", hun: "Hungary", isr: "Israel", irl: "Ireland", aut: "Austria",
+        dnk: "Denmark", fin: "Finland", ken: "Kenya", eth: "Ethiopia", tza: "Tanzania", gha: "Ghana",
+        mar: "Morocco", dza: "Algeria", tun: "Tunisia", are: "United Arab Emirates", qat: "Qatar",
+        kwt: "Kuwait", bhr: "Bahrain", omn: "Oman", lka: "Sri Lanka", mmr: "Myanmar", khm: "Cambodia",
+        lao: "Laos", npl: "Nepal", ury: "Uruguay", pry: "Paraguay", bol: "Bolivia", ecu: "Ecuador",
+        ven: "Venezuela", cri: "Costa Rica", pan: "Panama", dom: "Dominican Republic", gtm: "Guatemala",
+        hnd: "Honduras", slv: "El Salvador", nic: "Nicaragua", jam: "Jamaica", tto: "Trinidad and Tobago",
+        hrv: "Croatia", srb: "Serbia", bgr: "Bulgaria", svk: "Slovakia", svn: "Slovenia", ltu: "Lithuania",
+        lva: "Latvia", est: "Estonia", blr: "Belarus", geo: "Georgia", arm: "Armenia", aze: "Azerbaijan",
+        kaz: "Kazakhstan", uzb: "Uzbekistan", tkm: "Turkmenistan", mng: "Mongolia", jor: "Jordan",
+        lbn: "Lebanon", syr: "Syria", yem: "Yemen", afg: "Afghanistan", cmr: "Cameroon", civ: "Ivory Coast",
+        sen: "Senegal", mli: "Mali", bfa: "Burkina Faso", ner: "Niger", tcd: "Chad", cod: "DR Congo",
+        ago: "Angola", moz: "Mozambique", mdg: "Madagascar", zmb: "Zambia", zwe: "Zimbabwe",
+        bwa: "Botswana", nam: "Namibia", mus: "Mauritius", rwa: "Rwanda", uga: "Uganda",
+      };
+      for (const [iso3, value] of Object.entries(layerData.byIso3)) {
+        const name = ISO3_TO_NAME[iso3];
+        if (name && typeof value === "number" && !Number.isNaN(value) && !seen.has(name)) {
+          seen.add(name);
+          out.push({ name, value });
+        }
+      }
+    }
+
     return out.sort((a, b) => b.value - a.value);
-  }, [layerData.byName]);
+  }, [layerData.byName, layerData.byIso3]);
 
   const defaultSelected = useMemo(() => masterList.slice(0, DEFAULT_COUNT).map((r) => r.name), [masterList]);
   const activeSelection = new Set(selected.length > 0 ? selected : defaultSelected);
@@ -70,7 +108,7 @@ export function MapChartView({ layerData, activeLayer, isLoading, dataAsOf, getD
   return (
     <div
       className="flex w-full overflow-hidden"
-      style={{ height: "calc(100vh - 160px)", minHeight: 600, background: "var(--app-card-alt)" }}
+      style={{ height: "calc(100vh - 160px)", minHeight: 600, background: "var(--app-card)" }}
     >
       {/* Sidebar */}
       <div className="flex w-64 shrink-0 flex-col border-r border-white/5">

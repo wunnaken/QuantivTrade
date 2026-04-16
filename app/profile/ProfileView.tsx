@@ -21,7 +21,7 @@ import { BriefingPreferencesForm } from "../../components/BriefingPreferencesFor
 import { fetchBriefingPreferences, type BriefingPreferences } from "../../lib/briefing-preferences";
 import { loadStreaks } from "../../lib/engagement/streaks";
 import { STREAK_BADGES } from "../../lib/engagement/constants";
-import { getOrCreateInviteCode, getInvitedCount } from "../../lib/engagement/invite";
+import { getOrCreateInviteCode, getInvitedCount, isEarlyMember } from "../../lib/engagement/invite";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { getTrades, computePnL, formatPercent } from "../../lib/journal";
 
@@ -222,6 +222,161 @@ function ProfileMonetizeSection() {
         <button type="button" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200">
           Coming with full launch
         </button>
+      </div>
+    </section>
+  );
+}
+
+// ─── All Platform Badges ───────────────────────────────────────────────────────
+
+type BadgeDef = {
+  id: string;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  earned: boolean;
+  color: string;       // accent for earned state
+  bgEarned: string;    // bg when earned
+  borderEarned: string;
+};
+
+function BadgesSection({ user, streakData }: { user: User; streakData: ReturnType<typeof loadStreaks> }) {
+  const tier = user.subscription_tier ?? "free";
+  const early = isEarlyMember() || !!user.isFounder;
+  const maxStreak = Math.max(streakData.loginStreak, streakData.journalStreak, streakData.briefingStreak);
+  const invitedCount = getInvitedCount();
+
+  const badges: BadgeDef[] = [
+    {
+      id: "starter",
+      label: "Starter",
+      description: "Subscribed to the Starter plan",
+      icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>,
+      earned: tier === "starter" || tier === "pro" || tier === "elite",
+      color: "text-emerald-400",
+      bgEarned: "bg-emerald-500/10",
+      borderEarned: "border-emerald-500/30",
+    },
+    {
+      id: "pro",
+      label: "Pro",
+      description: "Subscribed to the Pro plan",
+      icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+      earned: tier === "pro" || tier === "elite",
+      color: "text-[var(--accent-color)]",
+      bgEarned: "bg-[var(--accent-color)]/10",
+      borderEarned: "border-[var(--accent-color)]/30",
+    },
+    {
+      id: "elite",
+      label: "Elite",
+      description: "Subscribed to the Elite plan",
+      icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M2 4l3 12h14l3-12-5 4-5-6-5 6-5-4z"/><path d="M5 16l-1 4h16l-1-4"/></svg>,
+      earned: tier === "elite",
+      color: "text-amber-400",
+      bgEarned: "bg-amber-400/10",
+      borderEarned: "border-amber-400/30",
+    },
+    {
+      id: "verified",
+      label: "Verified Trader",
+      description: "Identity and track record confirmed",
+      icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+      earned: !!user.isVerified,
+      color: "text-blue-400",
+      bgEarned: "bg-blue-500/10",
+      borderEarned: "border-blue-500/30",
+    },
+    {
+      id: "early",
+      label: "Early Member",
+      description: "Joined during the early days of QuantivTrade",
+      icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+      earned: early,
+      color: "text-amber-400",
+      bgEarned: "bg-amber-400/10",
+      borderEarned: "border-amber-400/30",
+    },
+    {
+      id: "founder",
+      label: "Founder",
+      description: "Founding member of QuantivTrade",
+      icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>,
+      earned: !!user.isFounder,
+      color: "text-amber-300",
+      bgEarned: "bg-amber-400/10",
+      borderEarned: "border-amber-400/30",
+    },
+    {
+      id: "streak-30",
+      label: "Monthly Master",
+      description: "Achieve a 30-day streak",
+      icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.5-6.5C12 5 13 7 13 7s1.5-2.5 3-3c.5 2 1 4 1 5 0 2-.5 4-3 6a5 5 0 003 1.5"/></svg>,
+      earned: maxStreak >= 30,
+      color: "text-orange-400",
+      bgEarned: "bg-orange-500/10",
+      borderEarned: "border-orange-500/30",
+    },
+    {
+      id: "streak-365",
+      label: "Legend",
+      description: "Achieve a 365-day streak",
+      icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.5-6.5C12 5 13 7 13 7s1.5-2.5 3-3c.5 2 1 4 1 5 0 2-.5 4-3 6a5 5 0 003 1.5"/></svg>,
+      earned: maxStreak >= 365,
+      color: "text-yellow-300",
+      bgEarned: "bg-yellow-400/10",
+      borderEarned: "border-yellow-400/30",
+    },
+    {
+      id: "networker",
+      label: "Networker",
+      description: "Invited 3 or more friends to the platform",
+      icon: <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>,
+      earned: invitedCount >= 3,
+      color: "text-violet-400",
+      bgEarned: "bg-violet-500/10",
+      borderEarned: "border-violet-500/30",
+    },
+  ];
+
+  const earnedCount = badges.filter(b => b.earned).length;
+
+  return (
+    <section className="mb-6" aria-label="Badges">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-zinc-50">Badges</h2>
+        <span className="text-xs text-zinc-500">{earnedCount}/{badges.length} earned</span>
+      </div>
+      <p className="mt-0.5 mb-4 text-xs text-zinc-500">All badges on QuantivTrade. Earned badges are highlighted.</p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {badges.map((b) => (
+          <div
+            key={b.id}
+            className={`relative rounded-xl border p-4 transition-colors ${
+              b.earned
+                ? `${b.bgEarned} ${b.borderEarned}`
+                : "border-white/[0.06] bg-white/[0.02]"
+            }`}
+            title={b.description}
+          >
+            <div className={`mb-2.5 ${b.earned ? b.color : "text-zinc-600"}`}>
+              {b.icon}
+            </div>
+            <p className={`text-xs font-semibold ${b.earned ? "text-zinc-100" : "text-zinc-500"}`}>
+              {b.label}
+            </p>
+            <p className={`mt-0.5 text-[10px] leading-relaxed ${b.earned ? "text-zinc-400" : "text-zinc-600"}`}>
+              {b.description}
+            </p>
+            {!b.earned && (
+              <div className="absolute right-2.5 top-2.5">
+                <svg className="h-3.5 w-3.5 text-zinc-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                </svg>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -1048,6 +1203,10 @@ export default function ProfileView() {
         <div className="mb-12 mt-8 rounded-2xl border px-6 pb-8 pt-6 transition-colors duration-300 sm:rounded-3xl sm:px-8" style={{ backgroundColor: "var(--app-card-alt)", borderColor: "var(--app-border)" }}>
         {user?.isVerified && <ProfilePerformanceCard />}
         {user?.isVerified && <ProfileMonetizeSection />}
+
+        {/* Badges */}
+        <BadgesSection user={user} streakData={streakData} />
+
         {/* Your Streaks — aligned with this card, slightly bigger */}
           <section className="mb-6" aria-label="Your streaks">
             <h2 className="text-sm font-semibold text-zinc-50">Your Streaks</h2>

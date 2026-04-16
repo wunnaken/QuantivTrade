@@ -1072,7 +1072,7 @@ export default function WhiteboardPage() {
         setGroupBoards(prev => prev.map(b =>
           b.id === activeId ? { ...b, name: effectiveName, scene: payload, updated_at: new Date().toISOString() } : b
         ));
-        toast.showToast("Board saved", "success");
+        // saved silently
       } else {
         const res = await fetch("/api/whiteboard", {
           method: "POST",
@@ -1088,7 +1088,7 @@ export default function WhiteboardPage() {
           const idx = prev.findIndex(b => b.id === activeId);
           return idx >= 0 ? prev.map(b => b.id === activeId ? updated : b) : [updated, ...prev];
         });
-        toast.showToast("Whiteboard saved", "success");
+        // saved silently
       }
     } catch {
       if (!activeBoard?.is_group) {
@@ -1238,22 +1238,24 @@ export default function WhiteboardPage() {
       <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden bg-[var(--app-bg)]">
         {/* Header */}
         <header
-          className="flex h-12 shrink-0 items-center justify-between gap-4 border-b border-white/10 px-4"
+          className="relative flex h-12 shrink-0 items-center justify-between gap-4 border-b border-white/10 px-4"
           style={{ backgroundColor: TOP_BAR_BG }}
         >
           <div className="flex min-w-0 items-center gap-0 rounded-lg border border-white/10 bg-white/5 p-0.5">
             <Link href="/ai" className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]">AI Chat</Link>
             <span className="rounded-md bg-white/10 px-3 py-1.5 text-sm font-medium text-zinc-100">Whiteboard</span>
           </div>
+          {saving && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="text-xs font-medium text-zinc-400">Saving…</span>
+            </div>
+          )}
           <div className="flex items-center gap-3">
             {isGroupBoard && <ActiveMembersBar activeMembers={activeMembers} allMembers={boardAllMembers} />}
             {isViewOnly && (
               <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
                 View Only
               </span>
-            )}
-            {saving && (
-              <span className="text-[10px] text-zinc-500">Saving…</span>
             )}
           </div>
         </header>

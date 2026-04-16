@@ -1126,7 +1126,7 @@ export default function InsiderTradesView() {
 
                 {/* Footer */}
                 <div className="border-t border-white/5 px-4 py-2 text-[10px] text-zinc-600">
-                  Source: SEC Form 4 via Finnhub · Open-market transactions only · Click any row to expand trade history · Not investment advice
+                  Source: SEC Form 4 filings · Open-market transactions only · Click any row to expand trade history · Not investment advice
                 </div>
               </div>
             );

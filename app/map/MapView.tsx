@@ -181,13 +181,20 @@ function polygonCentroid(coords: number[][][]): [number, number] {
 
 function getTerritoryDisplayName(poly: CountryPoly): string {
   const g = poly.geometry;
-  const coords: number[][][] =
-    g.type === "Polygon"
-      ? (g.coordinates as number[][][])
-      : g.type === "MultiPolygon"
-        ? ((g as { coordinates: number[][][][] }).coordinates)[0]
-        : [];
-  const [cLat, cLng] = polygonCentroid(coords);
+  let allRings: number[][][][] = [];
+  if (g.type === "Polygon") {
+    allRings = [g.coordinates as number[][][]];
+  } else if (g.type === "MultiPolygon") {
+    allRings = (g as { coordinates: number[][][][] }).coordinates;
+  }
+  if (allRings.length === 0) return poly.name;
+
+  // Use the largest sub-polygon (by vertex count) as the representative — this is the mainland
+  let largest = allRings[0];
+  for (const ring of allRings) {
+    if (ring[0] && ring[0].length > (largest[0]?.length ?? 0)) largest = ring;
+  }
+  const [cLat, cLng] = polygonCentroid(largest);
   for (const t of TERRITORY_OVERRIDES) {
     if (
       poly.name === t.parentName &&
@@ -294,7 +301,7 @@ export default function MapView() {
   const [tradeDataLoading, setTradeDataLoading] = useState(false);
   const [lastTradeUpdate, setLastTradeUpdate] = useState<string | null>(null);
   const [globeReadyTick, setGlobeReadyTick] = useState(0);
-  const [viewMode, setViewMode] = useState<"chart" | "globe">("chart");
+  const [viewMode, setViewMode] = useState<"chart" | "globe">("globe");
   const [layerDataAsOf, setLayerDataAsOf] = useState<string>("");
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1096,7 +1103,7 @@ export default function MapView() {
     <div className="flex w-full flex-col gap-0">
       <style>{LEAFLET_STYLE}</style>
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-white/5 bg-black px-2 py-2 md:px-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-t-2xl border-b px-2 py-2 md:px-3" style={{ borderColor: "var(--app-border)", background: "var(--app-card)" }}>
         <div className="flex gap-2">
           <button
             type="button"
@@ -1126,11 +1133,9 @@ export default function MapView() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" />
             </svg>
             International Trade
+            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-400">Soon</span>
           </button>
         </div>
-        <p className="ml-auto mr-1 max-w-[11rem] text-right text-[10px] leading-snug text-zinc-500">
-          Map data refreshes every 2 minutes (World Bank / layer sources).
-        </p>
 
         {mapMode === "market" && (
           <div className="flex flex-wrap items-center gap-2">
@@ -1202,7 +1207,7 @@ export default function MapView() {
       </div>
 
       {mapMode === "market" && (
-        <div className="flex flex-col gap-2 border-b border-white/5 bg-black px-2 py-2 md:flex-row md:items-end md:px-3">
+        <div className="flex flex-col gap-2 border-b px-2 py-2 md:flex-row md:items-end md:px-3" style={{ borderColor: "var(--app-border)", background: "var(--app-card)" }}>
           <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "thin" }}>
             {LAYERS.map((layer) => (
               <button
@@ -1232,17 +1237,6 @@ export default function MapView() {
           <div className="ml-auto flex shrink-0 items-center gap-1 rounded-lg border border-white/10 bg-white/5 p-1">
             <button
               type="button"
-              onClick={() => setViewMode("chart")}
-              title="Flat map"
-              className={`rounded-md p-1.5 transition ${viewMode === "chart" ? "bg-white/10 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
-            >
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <rect x="2" y="3" width="20" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8M12 17v4" />
-              </svg>
-            </button>
-            <button
-              type="button"
               onClick={() => setViewMode("globe")}
               title="3D globe"
               className={`rounded-md p-1.5 transition ${viewMode === "globe" ? "bg-white/10 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
@@ -1250,6 +1244,17 @@ export default function MapView() {
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2 12h20M12 2a15.3 15.3 0 010 20M12 2a15.3 15.3 0 000 20" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("chart")}
+              title="Bar chart"
+              className={`rounded-md p-1.5 transition ${viewMode === "chart" ? "bg-white/10 text-zinc-200" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <rect x="2" y="3" width="20" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 21h8M12 17v4" />
               </svg>
             </button>
           </div>
@@ -1277,13 +1282,29 @@ export default function MapView() {
           width: "100%",
           height: "calc(100vh - 160px)",
           minHeight: 600,
-          background: "var(--app-card-alt)",
+          background: "#0a0e17",
           borderRadius: "1rem",
           overflow: "hidden",
           display: mapMode === "market" && viewMode === "chart" ? "none" : "block",
         }}
       >
         <div ref={containerRef} className="absolute inset-0" />
+
+        {mapMode === "trade" && (
+          <div className="absolute inset-0 z-[2000] flex items-center justify-center bg-black/60 backdrop-blur-sm" style={{ borderRadius: "inherit" }}>
+            <div className="text-center">
+              <p className="text-lg font-semibold text-zinc-100">Coming Soon</p>
+              <p className="mt-1 text-sm text-zinc-400">International Trade view is being refined and will be available shortly.</p>
+              <button
+                type="button"
+                onClick={switchToMarketMap}
+                className="mt-4 rounded-lg border border-[var(--accent-color)]/50 bg-[var(--accent-color)]/10 px-4 py-2 text-sm font-medium text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20"
+              >
+                Back to Market Map
+              </button>
+            </div>
+          </div>
+        )}
 
         {layerLoading && mapMode === "market" && (
           <div className="absolute inset-0 z-[900] flex flex-col items-center justify-center gap-2 bg-black/70">
@@ -1295,6 +1316,12 @@ export default function MapView() {
           <div className="absolute inset-0 z-[900] flex flex-col items-center justify-center gap-2 bg-black/35">
             <div className="h-7 w-7 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
             <p className="text-sm text-zinc-300">Loading live trade data...</p>
+          </div>
+        )}
+
+        {mapMode === "market" && viewMode === "globe" && !selected && !layerLoading && (
+          <div className="pointer-events-none absolute left-1/2 top-4 z-[900] -translate-x-1/2 rounded-lg border border-white/10 bg-[var(--app-bg)]/90 px-3 py-1.5 text-[11px] text-zinc-400 backdrop-blur">
+            Click on a country to reveal more data below
           </div>
         )}
 
@@ -1506,8 +1533,8 @@ export default function MapView() {
         <div className="pointer-events-none absolute bottom-2 right-3 z-[1000] text-[9px] text-zinc-600">
           {mapMode === "market"
             ? activeLayer.wbIndicator
-              ? "Data: World Bank · Globe"
-              : "Data: Various · Globe"
+              ? "Globe"
+              : "Globe"
             : "International Trade · Globe"}
         </div>
 
@@ -1747,7 +1774,7 @@ export default function MapView() {
       )}
 
       {mapMode === "market" && compareMode && compareCountries.length > 0 && !isMobile && (
-        <div className="animate-[fadeIn_0.2s_ease-out] mt-2 rounded-2xl border border-white/10 bg-[var(--app-card)] p-4">
+        <div className="animate-[fadeIn_0.2s_ease-out] mt-2 rounded-2xl border p-4 transition-colors duration-300" style={{ borderColor: "var(--app-border)", background: "var(--app-card)" }}>
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-zinc-200">Compare countries</h3>
             <div className="flex gap-2">

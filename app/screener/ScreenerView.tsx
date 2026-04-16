@@ -991,7 +991,7 @@ function DetailPanel({
           rel="noopener noreferrer"
           className="flex items-center gap-1 text-sm text-[var(--accent-color)] hover:underline"
         >
-          View {stock.symbol} news on Finnhub →
+          View {stock.symbol} latest news →
         </a>
       </div>
     </div>

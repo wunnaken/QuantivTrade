@@ -13,5 +13,9 @@ const AIView = dynamic(() => import("./AIView"), {
 });
 
 export default function AIPage() {
-  return <AIView />;
+  return (
+    <div className="h-[calc(100vh-3.5rem)] overflow-hidden">
+      <AIView />
+    </div>
+  );
 }

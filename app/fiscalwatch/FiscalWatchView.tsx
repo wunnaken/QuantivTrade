@@ -352,7 +352,6 @@ export default function FiscalWatchView() {
           <h1 className="text-2xl font-bold text-zinc-100 sm:text-3xl">FiscalWatch</h1>
           <p className="mt-1 text-sm text-zinc-500">
             Live US national debt, federal spending, real-time government contracts, and fiscal risk indicators.
-            Data: US Treasury · USASpending.gov · OMB · IMF.
           </p>
         </div>
 
@@ -708,7 +707,7 @@ export default function FiscalWatchView() {
           <div className="rounded-2xl border border-white/10 bg-[var(--app-bg)] p-5">
             <h2 className="mb-1 text-base font-semibold text-zinc-100">Debt / GDP — Global Comparison</h2>
             <p className="mb-4 text-xs text-zinc-500">
-              General government gross debt as % of GDP · IMF WEO April 2025
+              General government gross debt as % of GDP
             </p>
             <div className="space-y-2.5">
               {COUNTRY_DEBT_GDP.map((c) => (
@@ -822,7 +821,7 @@ export default function FiscalWatchView() {
 
         {/* Footer */}
         <p className="text-center text-[11px] text-zinc-700">
-          Sources: US Treasury Fiscal Data API · USASpending.gov API · Congressional Budget Office · OMB Historical Tables · IMF World Economic Outlook 2025. FY2025 data reflects fiscal year ending September 30, 2025.
+          FY2025 data reflects fiscal year ending September 30, 2025.
         </p>
 
       </div>

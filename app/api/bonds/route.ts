@@ -288,7 +288,7 @@ async function fetchBisPolicyRate(countryCode: string): Promise<PolicyRateResult
 async function fetchFedEffectiveRate(): Promise<{ value: number | null; date: string | null; source: string | null; threeMonthChange?: number | null }> {
   const bis = await fetchBisPolicyRate("US");
   if (bis != null && bis.value != null && Number.isFinite(bis.value)) {
-    console.log("[bonds] fed rate (BIS WS_CBPOL US):", bis.value, "as of", bis.lastUpdated);
+    // fed rate resolved via BIS
     return { value: bis.value, date: bis.lastUpdated, source: "Bank for International Settlements", threeMonthChange: bis.threeMonthChange };
   }
   console.error("[bonds] fed rate unavailable — all sources failed");
@@ -453,14 +453,6 @@ function centralBankCard(label: string, res: PolicyRateResult | null): CentralBa
   return { label, value: res.value, source: res.source, lastUpdated: res.lastUpdated, threeMonthChange: res.threeMonthChange ?? null };
 }
 
-function logPolicyRate(name: string, res: PolicyRateResult | null) {
-  if (res != null) {
-    console.log(`[bonds] ${name} rate: ${res.value}% as of ${res.lastUpdated}`);
-  } else {
-    console.log(`[bonds] ${name} rate: unavailable`);
-  }
-}
-
 type FredObservation = { date: string; value: string };
 type FredResponse = { observations?: FredObservation[] };
 
@@ -496,10 +488,10 @@ const INTL_SPARK_HISTORY_KEY: Record<string, string> = {
   DEAM10Y: "DEAM10Y",
   DEAM30Y: "DEAM30Y",
   INTDSRCNM193N: "INTDSRCNM193N",
-  INTDSRBRM193N: "INTDSRBRM193N",
-  INTDSRINM193N: "INTDSRINM193N",
-  INTDSRMXM193N: "INTDSRMXM193N",
-  INTDSRZAM193N: "INTDSRZAM193N",
+  INTGSTBRM193N: "INTGSTBRM193N",
+  IRLTLT01INM156N: "IRLTLT01INM156N",
+  IRLTLT01MXM156N: "IRLTLT01MXM156N",
+  IRLTLT01ZAM156N: "IRLTLT01ZAM156N",
 };
 
 const COUNTRY_CONFIG: BondCountryConfig[] = [
@@ -555,10 +547,10 @@ const COUNTRY_CONFIG: BondCountryConfig[] = [
     id: "em",
     label: "Emerging Markets",
     maturities: [
-      { label: "Brazil 10Y", seriesId: "INTDSRBRM193N" },
-      { label: "India 10Y", seriesId: "INTDSRINM193N" },
-      { label: "Mexico 10Y", seriesId: "INTDSRMXM193N" },
-      { label: "South Africa 10Y", seriesId: "INTDSRZAM193N" },
+      { label: "Brazil 10Y", seriesId: "INTGSTBRM193N" },
+      { label: "India 10Y", seriesId: "IRLTLT01INM156N" },
+      { label: "Mexico 10Y", seriesId: "IRLTLT01MXM156N" },
+      { label: "South Africa 10Y", seriesId: "IRLTLT01ZAM156N" },
     ],
     tvSymbol: "TVC:BR10Y",
   },
@@ -1055,7 +1047,6 @@ async function fetchMofJgbHistorical(maturity: string): Promise<Array<{ date: st
   }
 
   combined.sort((a, b) => a.date.localeCompare(b.date));
-  console.log(`[bonds] MoF JGB ${maturity}: ${combined.length} points`);
   return combined;
 }
 
@@ -1125,8 +1116,15 @@ async function fetchEcbGermany10YHistorical(): Promise<Array<{ date: string; val
   }
 }
 
+let bondsCache: { data: unknown; fetchedAt: number } | null = null;
+const BONDS_CACHE_MS = 5 * 60 * 1000; // 5 minutes
+
 export async function GET() {
-  console.log("[bonds] route hit, FRED key present:", !!process.env.FRED_API_KEY?.trim());
+  // Return cached response if fresh
+  if (bondsCache && Date.now() - bondsCache.fetchedAt < BONDS_CACHE_MS) {
+    return NextResponse.json(bondsCache.data);
+  }
+
   const fredKey = process.env.FRED_API_KEY?.trim();
   if (!fredKey) return NextResponse.json({ error: "Missing FRED_API_KEY" }, { status: 500 });
   const newsKey = process.env.NEWSDATA_API_KEY?.trim() ?? "";
@@ -1157,7 +1155,23 @@ export async function GET() {
       pbocPolicy,
       vixSnap,
     ] = await Promise.all([
-      Promise.all(uniqueSeries.map(async (sid) => [sid, await fredRecentChronological(fredKey, sid, 600)] as const)),
+      Promise.all(uniqueSeries.map(async (sid) => {
+        // Try primary series, then fallback alternatives for EM
+        let rows = await fredRecentChronological(fredKey, sid, 36);
+        if (rows.length === 0) {
+          const fallbacks: Record<string, string[]> = {
+            INTGSTBRM193N: ["INTDSRBRM193N", "IRLTLT01BRM156N"],
+            IRLTLT01INM156N: ["INDIRLTLT01STM", "INTDSRINM193N"],
+            IRLTLT01MXM156N: ["INTDSRMXM193N"],
+            IRLTLT01ZAM156N: ["INTDSRZAM193N"],
+          };
+          for (const alt of fallbacks[sid] ?? []) {
+            rows = await fredRecentChronological(fredKey, alt, 36);
+            if (rows.length > 0) break;
+          }
+        }
+        return [sid, rows] as const;
+      })),
       Promise.all(TREASURY_CURVE_LABELS.map(async (label) => [label, await fetchTreasuryYields(label)] as const)),
       safePolicyRateFetch("fed", fetchFedPolicyRate),
       safePolicyRateFetch("ecb", fetchEcbPolicyRate),
@@ -1170,11 +1184,6 @@ export async function GET() {
       (typeof TREASURY_CURVE_LABELS)[number],
       Array<{ date: string; value: number }>
     >;
-    logPolicyRate("fed", fedPolicy);
-    logPolicyRate("ecb", ecbPolicy);
-    logPolicyRate("boj", bojPolicy);
-    logPolicyRate("boe", boePolicy);
-    logPolicyRate("pboc", pbocPolicy);
 
     const seriesHistory = new Map(seriesHistoryEntries);
     for (const m of CURVE_SERIES) {
@@ -1233,11 +1242,7 @@ export async function GET() {
       ["MOF_JP_10Y", () => fetchMofJgbHistorical("10Y")] as const,
       ["MOF_JP_20Y", () => fetchMofJgbHistorical("20Y")] as const,
       ["MOF_JP_30Y", () => fetchMofJgbHistorical("30Y")] as const,
-      ["INTDSRCNM193N", () => fetchWorldBankRates("CN")] as const,
-      ["INTDSRBRM193N", () => fetchWorldBankRates("BR")] as const,
-      ["INTDSRINM193N", () => fetchWorldBankRates("IN")] as const,
-      ["INTDSRMXM193N", () => fetchWorldBankRates("MX")] as const,
-      ["INTDSRZAM193N", () => fetchWorldBankRates("ZA")] as const,
+      // EM + China: use FRED data (via back-fill below) instead of World Bank direct fetch — FRED updates monthly vs WB annual lag
     ];
 
     const [bondNews, intlHistoricalEntries] = await Promise.all([
@@ -1245,29 +1250,22 @@ export async function GET() {
       Promise.all(
         intlHistoricalSpec.map(async ([key, fn]) => {
           const rows = await fn();
-          console.log(`[bonds] historical intl ${key}: ${rows.length} points`);
           return [key, rows] as const;
         }),
       ),
     ]);
 
-    for (const [sid, rows] of usHistoricalEntries) {
-      console.log(`[bonds] historical Treasury ${sid}: ${rows.length} points`);
-    }
-
-    const historicalYields = Object.fromEntries([...usHistoricalEntries, ...intlHistoricalEntries]);
+    const historicalYields = Object.fromEntries([...usHistoricalEntries, ...intlHistoricalEntries]) as Record<string, Array<{ date: string; value: number }>>;
     // Back-fill from FRED for any intl series not covered by spec fetches above
     for (const country of COUNTRY_CONFIG) {
       if (country.id === "us") continue;
       for (const m of country.maturities) {
-        if (!historicalYields[m.seriesId]) {
+        if (!historicalYields[m.seriesId] || historicalYields[m.seriesId].length === 0) {
           const hist = seriesHistory.get(m.seriesId);
           if (hist?.length) historicalYields[m.seriesId] = hist;
         }
       }
     }
-    console.log("[bonds] historicalYields keys:", Object.keys(historicalYields));
-    console.log("[bonds] sample DGS10 points:", historicalYields.DGS10?.length ?? 0);
 
     const bondsByCountry = Object.fromEntries(
       COUNTRY_CONFIG.map((country) => {
@@ -1353,15 +1351,7 @@ export async function GET() {
       pboc: centralBankCard("PBOC", pbocPolicy),
     };
 
-    console.log("[bonds] response shape check:", {
-      hasSpreads: !!spreads,
-      hasCentralBankRates: !!centralBankRates,
-      hasBondsByCountry: !!bondsByCountry,
-      usMaturityCount: bondsByCountry.us?.maturities?.length ?? 0,
-      fedRate: centralBankRates.fed?.value,
-    });
-
-    return NextResponse.json({
+    const responseData = {
       yieldCurve: {
         current: curveCurrent.map((x) => ({ maturity: x.maturity, value: x.current })),
         monthAgo: curveCurrent.map((x) => ({ maturity: x.maturity, value: x.oneMonthAgo })),
@@ -1379,7 +1369,9 @@ export async function GET() {
       historicalYields,
       news: bondNews,
       lastUpdated: new Date().toISOString(),
-    });
+    };
+    bondsCache = { data: responseData, fetchedAt: Date.now() };
+    return NextResponse.json(responseData);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { countryToIsoLoose } from "../../../lib/country-mapping";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -65,15 +64,16 @@ export async function GET(request: NextRequest) {
   }
 
   let articles: NewsArticle[] = [];
-  const iso = countryToIsoLoose(country);
-  if (iso) {
-    articles = await fetchNewsSearch(`${country} OR ${iso}`, apiKey, 5);
-  }
+  // Use country name with economic context for relevant results
+  articles = await fetchNewsSearch(`${country} economy OR ${country} market OR ${country} GDP OR ${country} government`, apiKey, 5);
   if (articles.length === 0) {
-    articles = await fetchNewsSearch(country, apiKey, 4);
-  }
-  if (articles.length === 0 && country) {
     articles = await fetchNewsSearch(`${country} news`, apiKey, 4);
+  }
+  // Filter out articles that don't actually mention the country in the title
+  const countryLower = country.toLowerCase();
+  const relevant = articles.filter((a) => a.title.toLowerCase().includes(countryLower));
+  if (relevant.length >= 2) {
+    articles = relevant;
   }
 
   cache.set(cacheKey, { data: articles, fetchedAt: Date.now() });

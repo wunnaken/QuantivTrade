@@ -4,7 +4,7 @@
 
 const BOARDS_KEY = "quantivtrade-whiteboard-boards";
 const BANNER_KEY = "quantivtrade-whiteboard-banner-dismissed";
-export const MAX_BOARDS = 5;
+export const MAX_BOARDS = 10;
 
 export type SavedBoard = {
   id: string;

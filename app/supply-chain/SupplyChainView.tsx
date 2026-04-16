@@ -152,7 +152,7 @@ function EnergyTab() {
   }>("/api/supply-chain/energy");
 
   if (loading) return <div className="space-y-4">{[1, 2, 3].map(i => <div key={i} className="h-64 animate-pulse rounded-xl bg-zinc-800/40" />)}</div>;
-  if (error || data?.error) return <DataUnavailable message={data?.message ?? error ?? "Failed to load energy data"} setupUrl="https://www.eia.gov/opendata/register.php" />;
+  if (error || data?.error) return <DataUnavailable message={data?.message ?? error ?? "Failed to load energy data"} />;
 
   const crude = data!.crudeOil;
   const gas = data!.natGas;
@@ -359,7 +359,7 @@ function AgricultureTab() {
         <h3 className="mb-1 text-base font-semibold text-zinc-100">Crop Condition Monitor</h3>
         <p className="mb-4 text-xs text-zinc-500">Percentage of crop rated excellent — higher = better supply = bearish for crop prices</p>
         {cp?.error ? (
-          <DataUnavailable message={cp.message ?? cp.error} setupUrl="https://quickstats.nass.usda.gov/api" />
+          <DataUnavailable message={cp.message ?? cp.error} />
         ) : cp?.data && cp.data.length > 0 ? (
           <>
             <ResponsiveContainer width="100%" height={200}>
@@ -431,7 +431,7 @@ function AgricultureTab() {
         <p className="text-xs text-zinc-500 mb-3">Urea, DAP (diammonium phosphate), and potash spot prices are a key input cost leading indicator for farmer planting decisions and crop commodity supply.</p>
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-xs text-amber-400">
           <p className="font-semibold mb-1">Data Source Unavailable</p>
-          <p>Fertilizer spot prices (urea, DAP, potash) require commodity broker data subscriptions. World Bank commodity data is available annually with significant lag. Showing corn/soybean pricing as demand proxy in the WASDE section above is the best available free alternative.</p>
+          <p>Fertilizer spot prices (urea, DAP, potash) are not yet available. Corn/soybean pricing shown in the WASDE section above serves as a demand proxy.</p>
         </div>
       </section>
     </div>
@@ -452,7 +452,7 @@ function ManufacturingTab() {
   }>("/api/supply-chain/manufacturing");
 
   if (loading) return <div className="space-y-4">{[1, 2, 3].map(i => <div key={i} className="h-64 animate-pulse rounded-xl bg-zinc-800/40" />)}</div>;
-  if (error || data?.error) return <DataUnavailable message={data?.message ?? error ?? "Failed to load manufacturing data"} setupUrl="https://fred.stlouisfed.org/docs/api/api_key.html" />;
+  if (error || data?.error) return <DataUnavailable message={data?.message ?? error ?? "Failed to load manufacturing data"} />;
 
   const s = data!.series;
   const pmi = s["NAPM"];
@@ -505,7 +505,7 @@ function ManufacturingTab() {
             </div>
           ))}
         </div>
-        <SourceLabel label="ISM Manufacturing Report on Business via FRED" schedule="Released 1st business day of month" type="delayed" />
+        <SourceLabel label="ISM Manufacturing Report on Business" schedule="Released 1st business day of month" type="delayed" />
       </section>
 
       {/* New Orders / Shipments */}
@@ -525,7 +525,7 @@ function ManufacturingTab() {
               <Line type="monotone" dataKey="unfilled" stroke={CHART_THEME.amber} strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} strokeDasharray="3 2" name="Unfilled Orders" />
             </LineChart>
           </ResponsiveContainer>
-          <SourceLabel label="US Census Bureau Manufacturers' Shipments, Inventories & Orders via FRED" schedule="Monthly — released ~4 weeks after month end" type="delayed" />
+          <SourceLabel label="US Census Bureau Manufacturers' Shipments, Inventories & Orders" schedule="Monthly — released ~4 weeks after month end" type="delayed" />
         </section>
       )}
 
@@ -557,7 +557,7 @@ function ManufacturingTab() {
               <Area type="monotone" dataKey="value" stroke={CHART_THEME.amber} fill="url(#isratioGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
-          <SourceLabel label="US Census Bureau via FRED" schedule="Monthly" type="delayed" />
+          <SourceLabel label="US Census Bureau" schedule="Monthly" type="delayed" />
         </section>
       )}
 
@@ -579,7 +579,7 @@ function ManufacturingTab() {
               <Bar dataKey="value" fill={CHART_THEME.purple} radius={[2, 2, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
-          <SourceLabel label="US Census Bureau Advance Report on Durable Goods via FRED" schedule="Monthly — released ~4 weeks after month end" type="delayed" />
+          <SourceLabel label="US Census Bureau Advance Report on Durable Goods" schedule="Monthly — released ~4 weeks after month end" type="delayed" />
         </section>
       )}
 
@@ -624,7 +624,7 @@ function ManufacturingTab() {
               </AreaChart>
             </ResponsiveContainer>
           )}
-          <SourceLabel label="Federal Reserve via FRED (INDPRO, TCU)" schedule="Monthly — released ~mid-month" type="delayed" />
+          <SourceLabel label="Federal Reserve" schedule="Monthly — released ~mid-month" type="delayed" />
         </section>
       )}
 
@@ -658,7 +658,7 @@ function ManufacturingTab() {
               <Area type="monotone" dataKey="value" stroke={CHART_THEME.purple} fill="url(#awhmGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
-          <SourceLabel label="BLS via FRED (AWHMAN)" schedule="Monthly — released first Friday of month" type="delayed" />
+          <SourceLabel label="BLS" schedule="Monthly — released first Friday of month" type="delayed" />
         </section>
       )}
 
@@ -678,7 +678,7 @@ function ManufacturingTab() {
             </div>
           ))}
         </div>
-        <SourceLabel label="Federal Reserve Banks (NY, Philadelphia, Kansas City) via FRED" schedule="Released monthly — early ISM signal" type="delayed" />
+        <SourceLabel label="Federal Reserve Banks (NY, Philadelphia, Kansas City)" schedule="Released monthly — early ISM signal" type="delayed" />
       </section>
     </div>
   );
@@ -830,7 +830,7 @@ function ShippingTab() {
             </div>
           </div>
         ))}
-        <SourceLabel label="Finnhub — equity market proxies, NOT actual trucking spot rates" type="proxy" />
+        <SourceLabel label="equity market proxies, NOT actual trucking spot rates" type="proxy" />
       </section>
 
       {/* BDI Proxy */}
@@ -869,7 +869,7 @@ function ShippingTab() {
             </AreaChart>
           </ResponsiveContainer>
         )}
-        <SourceLabel label="Finnhub — BDRY ETF market price proxy" schedule={bdi.updateFrequency} type="proxy" />
+        <SourceLabel label="BDRY ETF market price proxy" schedule={bdi.updateFrequency} type="proxy" />
       </section>
 
       {/* Container Shipping */}
@@ -891,7 +891,7 @@ function ShippingTab() {
             </div>
           ))}
         </div>
-        <SourceLabel label="Finnhub — equity market proxies, NOT direct shipping rates" type="proxy" />
+        <SourceLabel label="equity market proxies, NOT direct shipping rates" type="proxy" />
       </section>
 
       {/* Port Congestion */}
@@ -918,7 +918,7 @@ function ShippingTab() {
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-400">
           {data!.portCongestion.marineTaffic.message}
         </div>
-        <SourceLabel label="NewsData.io news volume proxy — NOT official port data" type="proxy" />
+        <SourceLabel label="news volume proxy — NOT official port data" type="proxy" />
       </section>
     </div>
   );
@@ -1039,7 +1039,7 @@ function SemiconductorsTab() {
             </AreaChart>
           </ResponsiveContainer>
         )}
-        <SourceLabel label="Finnhub — SOXX ETF market proxy for Philadelphia Semiconductor Index" schedule={sox.updateFrequency} type="proxy" />
+        <SourceLabel label="SOXX ETF market proxy for Philadelphia Semiconductor Index" schedule={sox.updateFrequency} type="proxy" />
       </section>
 
       {/* Paywalled */}
@@ -1138,7 +1138,7 @@ function ConsumerTab() {
               <Line type="monotone" dataKey="confidence" stroke={CHART_THEME.amber} strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} name="Conference Board CCI" />
             </LineChart>
           </ResponsiveContainer>
-          <SourceLabel label="University of Michigan / OECD-Conference Board via FRED" schedule="Monthly" type="delayed" />
+          <SourceLabel label="University of Michigan / OECD-Conference Board" schedule="Monthly" type="delayed" />
         </section>
       )}
 
@@ -1162,7 +1162,7 @@ function ConsumerTab() {
               <Area type="monotone" dataKey="value" stroke={CHART_THEME.amber} fill="url(#invSalesGrad)" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0 }} />
             </AreaChart>
           </ResponsiveContainer>
-          <SourceLabel label="US Census Bureau via FRED" schedule="Monthly" type="delayed" />
+          <SourceLabel label="US Census Bureau" schedule="Monthly" type="delayed" />
         </section>
       )}
 
@@ -1340,7 +1340,7 @@ function MacroTab() {
   }>("/api/supply-chain/macro");
 
   if (loading) return <div className="space-y-4">{[1, 2, 3].map(i => <div key={i} className="h-64 animate-pulse rounded-xl bg-zinc-800/40" />)}</div>;
-  if (error || data?.error) return <DataUnavailable message={data?.message ?? error ?? "FRED API key required"} setupUrl="https://fred.stlouisfed.org/docs/api/api_key.html" />;
+  if (error || data?.error) return <DataUnavailable message={data?.message ?? error ?? "Data temporarily unavailable"} />;
 
   const { joblessClaims, cpi, ppiFinal, ppiAll, yieldCurve, unemployment } = data!;
 

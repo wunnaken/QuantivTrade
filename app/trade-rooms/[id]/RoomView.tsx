@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "../../../components/AuthContext";
 import { createClient } from "../../../lib/supabase/client";
 import { getProfileInfo } from "../../../lib/get-profile-id";
+import { LiveStream } from "../../../components/LiveStream";
 
 type Room = {
   id: number;
@@ -264,7 +265,11 @@ export default function RoomView({ roomId }: { roomId: number }) {
   async function toggleLive() {
     setGoingLive(true);
     try {
-      await fetch(`/api/rooms/${roomId}/go-live`, { method: "PATCH" });
+      await fetch(`/api/rooms/${roomId}/go-live`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isLive: !room?.is_live }),
+      });
     } finally {
       setGoingLive(false);
     }
@@ -536,8 +541,15 @@ export default function RoomView({ roomId }: { roomId: number }) {
 
       {/* Main content */}
       <div className="flex flex-1 min-h-0">
-        {/* Left panel: messages */}
+        {/* Left panel: stream + messages */}
         <div className="flex flex-1 flex-col min-w-0 border-r border-white/10">
+          {/* Live stream area */}
+          {(room.is_live || isHost) && (
+            <div className={`shrink-0 border-b border-white/10 ${room.is_live ? "h-[45%] min-h-[240px]" : "h-[120px]"}`}>
+              <LiveStream roomId={roomId} isHost={isHost} isLive={room.is_live} />
+            </div>
+          )}
+
           {/* Trade calls strip */}
           {tradeCalls.length > 0 && (
             <div className="shrink-0 border-b border-white/10 bg-[var(--app-card-alt)] px-4 py-2">

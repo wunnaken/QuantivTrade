@@ -20,7 +20,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/futures": "Futures",
   "/crypto": "Crypto",
   "/market-relations": "Market Relations",
-  "/building-data": "Building Data",
+  "/building-gas": "Building & Gas",
   "/sentiment": "Sentiment Radar",
   "/insider-trades": "Insider Trades",
   "/fiscalwatch": "FiscalWatch",

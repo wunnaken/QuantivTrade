@@ -58,6 +58,11 @@ interface MarketRatesData {
     lumber: PpiSeries;
     steel: PpiSeries;
     copper: PpiSeries;
+    concrete?: PpiSeries;
+  };
+  housing?: {
+    starts: PpiSeries;
+    permits: PpiSeries;
   };
   stocks: {
     homebuilders: StockQuote[];
@@ -373,12 +378,19 @@ interface GasGrade {
   history: { date: string; value: number }[];
 }
 
+interface GasRegion {
+  id: string; label: string; color: string;
+  current: number | null; asOf: string | null;
+  wowChange: number | null;
+  history: { date: string; value: number }[];
+}
+
 interface GasData {
   grades: GasGrade[];
   allGradesHistory: { date: string; regular: number | null; midgrade: number | null; premium: number | null; diesel: number | null; crude: number | null }[];
+  regions?: GasRegion[];
   latestCrudePerGal: number | null;
   pumpSpread: number | null;
-  source: string;
   updateSchedule: string;
 }
 
@@ -530,7 +542,7 @@ function GasPricesTab() {
                 All Grades + Crude — Price Trend
               </p>
               <p className="mt-0.5 text-[10px] text-zinc-600">
-                Weekly US avg retail price ($/gal) · Crude = WTI ÷ 42 per-gal equiv · {data.source}
+                Weekly US avg retail price ($/gal) · Crude = WTI ÷ 42 per-gal equiv
               </p>
             </div>
             <TimeframeToggle
@@ -588,6 +600,41 @@ function GasPricesTab() {
         <p className="mt-3 text-[10px] text-zinc-600">{data.updateSchedule}</p>
       </div>
 
+      {/* Regional Gas Prices */}
+      {data.regions && data.regions.length > 0 && (
+        <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] px-4 pb-4 pt-4">
+          <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-zinc-400">Regional Gas Prices</p>
+          <p className="mb-3 text-[10px] text-zinc-600">Regular gasoline by PADD region ($/gal)</p>
+          <div className="space-y-1.5">
+            {data.regions.map((r) => (
+              <div key={r.id} className="flex items-center gap-3 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2">
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ background: r.color }} />
+                <span className="text-xs font-medium text-zinc-300 w-32 shrink-0">{r.label}</span>
+                <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  {r.current !== null && (
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${Math.min(100, (r.current / 6) * 100)}%`,
+                        background: r.color,
+                      }}
+                    />
+                  )}
+                </div>
+                <span className="text-sm font-bold tabular-nums text-zinc-200 w-16 text-right">
+                  {r.current !== null ? `$${Number(r.current).toFixed(3)}` : "—"}
+                </span>
+                {r.wowChange !== null && (
+                  <span className={`text-[10px] font-medium tabular-nums w-16 text-right ${Number(r.wowChange) >= 0 ? "text-red-400" : "text-emerald-400"}`}>
+                    {Number(r.wowChange) >= 0 ? "+" : ""}{Number(r.wowChange).toFixed(3)} WoW
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* How Gas Prices Connect to the Other Tabs */}
       <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-4">
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-zinc-400">How Gas Prices Connect to the Other Tabs</p>
@@ -625,7 +672,7 @@ export default function MarketRatesView() {
   const [data, setData] = useState<MarketRatesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("rates");
+  const [tab, setTab] = useState<Tab>("gas");
   const [ppiRange, setPpiRange] = useState<PpiRange>("3Y");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
@@ -667,15 +714,18 @@ export default function MarketRatesView() {
     const lf = filterPpiByYears(data.ppi.lumber.history, years);
     const sf = filterPpiByYears(data.ppi.steel.history, years);
     const cf = filterPpiByYears(data.ppi.copper.history, years);
-    const dates = [...new Set([...lf.map((d) => d.date), ...sf.map((d) => d.date), ...cf.map((d) => d.date)])].sort();
+    const ccf = data.ppi.concrete ? filterPpiByYears(data.ppi.concrete.history, years) : [];
+    const dates = [...new Set([...lf.map((d) => d.date), ...sf.map((d) => d.date), ...cf.map((d) => d.date), ...ccf.map((d) => d.date)])].sort();
     const lm = Object.fromEntries(lf.map((d) => [d.date, d.value]));
     const sm = Object.fromEntries(sf.map((d) => [d.date, d.value]));
     const cm = Object.fromEntries(cf.map((d) => [d.date, d.value]));
+    const ccm = Object.fromEntries(ccf.map((d) => [d.date, d.value]));
     return dates.map((date) => ({
       date,
       lumber: lm[date] ?? null,
       steel: sm[date] ?? null,
       copper: cm[date] ?? null,
+      concrete: ccm[date] ?? null,
     }));
   }, [data, ppiRange]);
 
@@ -706,9 +756,9 @@ export default function MarketRatesView() {
   const { mortgageRates, keyRates, ppi, stocks } = data;
 
   const TABS: { id: Tab; label: string }[] = [
+    { id: "gas", label: "Gas Prices" },
     { id: "rates", label: "Mortgage & Rates" },
     { id: "materials", label: "Building Materials" },
-    { id: "gas", label: "Gas Prices" },
     { id: "stocks", label: "Construction Stocks" },
   ];
 
@@ -825,13 +875,13 @@ export default function MarketRatesView() {
               Mortgage Rate History (Since 2020)
             </p>
             <p className="mb-1 text-[10px] text-zinc-500">
-              Weekly average rates from Freddie Mac&apos;s Primary Mortgage Market Survey, via FRED.
+              Weekly average rates from Freddie Mac&apos;s Primary Mortgage Market Survey.
               The <span className="text-amber-400">5/1 ARM</span> was discontinued by Freddie Mac in November 2022 — it correctly
               ends mid-chart. The <span className="text-red-400">Fed Funds</span> line shows the actual stepped path of rate changes
               by the Federal Reserve.
             </p>
             <p className="mb-4 text-[10px] text-zinc-600">
-              Source: Freddie Mac / Federal Reserve via FRED (St. Louis Fed)
+              Source: Freddie Mac / Federal Reserve
             </p>
             <ResponsiveContainer width="100%" height={320}>
               <LineChart data={mortHistory} style={CHART_STYLE}>
@@ -988,18 +1038,61 @@ export default function MarketRatesView() {
       {tab === "materials" && (
         <div className="space-y-4">
           {/* PPI headline cards */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <PpiCard label="Lumber & Wood Products (PPI)" data={ppi.lumber} />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <PpiCard label="Lumber & Wood (PPI)" data={ppi.lumber} />
             <PpiCard label="Iron & Steel (PPI)" data={ppi.steel} />
             <PpiCard label="Copper & Products (PPI)" data={ppi.copper} />
+            {ppi.concrete && <PpiCard label="Concrete & Cement (PPI)" data={ppi.concrete} />}
           </div>
+
+          {/* Housing Activity */}
+          {data?.housing && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">Housing Starts</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-zinc-50">
+                  {data.housing.starts.current !== null ? `${(data.housing.starts.current).toFixed(0)}K` : "—"}
+                  <span className="ml-1 text-sm font-normal text-zinc-400">annualized</span>
+                </p>
+                <div className="mt-2 flex gap-4 text-xs">
+                  <span>
+                    <span className="text-zinc-500">MoM </span>
+                    <span className={changeColor(data.housing.starts.momChange)}>{fmtPct(data.housing.starts.momChange)}</span>
+                  </span>
+                  <span>
+                    <span className="text-zinc-500">YoY </span>
+                    <span className={changeColor(data.housing.starts.yoyChange)}>{fmtPct(data.housing.starts.yoyChange)}</span>
+                  </span>
+                </div>
+                {data.housing.starts.asOf && <p className="mt-1 text-[10px] text-zinc-600">As of {fmtDate(data.housing.starts.asOf)}</p>}
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-3">
+                <p className="text-[10px] font-medium uppercase tracking-widest text-zinc-500">Building Permits</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-zinc-50">
+                  {data.housing.permits.current !== null ? `${(data.housing.permits.current).toFixed(0)}K` : "—"}
+                  <span className="ml-1 text-sm font-normal text-zinc-400">annualized</span>
+                </p>
+                <div className="mt-2 flex gap-4 text-xs">
+                  <span>
+                    <span className="text-zinc-500">MoM </span>
+                    <span className={changeColor(data.housing.permits.momChange)}>{fmtPct(data.housing.permits.momChange)}</span>
+                  </span>
+                  <span>
+                    <span className="text-zinc-500">YoY </span>
+                    <span className={changeColor(data.housing.permits.yoyChange)}>{fmtPct(data.housing.permits.yoyChange)}</span>
+                  </span>
+                </div>
+                {data.housing.permits.asOf && <p className="mt-1 text-[10px] text-zinc-600">As of {fmtDate(data.housing.permits.asOf)}</p>}
+              </div>
+            </div>
+          )}
 
           {/* PPI explanation */}
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 text-[11px] leading-relaxed text-amber-400/80">
             <span className="font-semibold">Producer Price Index (PPI)</span> measures average
             change in prices received by domestic producers. Base = 100 in the reference period
             (1982 for WPS series). Higher values mean producers are charging more, which flows
-            through to construction costs. Source: Bureau of Labor Statistics via FRED.
+            through to construction costs. Source: Bureau of Labor Statistics.
           </div>
 
           {/* Combined trend chart with timeframe toggle */}
@@ -1010,7 +1103,7 @@ export default function MarketRatesView() {
                   Building Material Price Trends
                 </p>
                 <p className="mt-0.5 text-[10px] text-zinc-600">
-                  Monthly PPI — Lumber (WPS0811), Iron &amp; Steel (WPS1013/PCU331110), Copper (WPS1322)
+                  Monthly Producer Price Index for key building materials
                 </p>
               </div>
               <TimeframeToggle
@@ -1038,16 +1131,17 @@ export default function MarketRatesView() {
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
                   labelFormatter={(v) => fmtDate(v as string)}
-                  formatter={(v: unknown, name: unknown) => [
-                    (v as number).toFixed(1),
-                    name === "lumber" ? "Lumber & Wood" : name === "steel" ? "Iron & Steel" : "Copper",
-                  ]}
+                  formatter={(v: unknown, name: unknown) => {
+                    const labels: Record<string, string> = { lumber: "Lumber & Wood", steel: "Iron & Steel", copper: "Copper", concrete: "Concrete & Cement" };
+                    return [(v as number).toFixed(1), labels[name as string] ?? String(name)];
+                  }}
                 />
                 <Legend
                   wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-                  formatter={(v) =>
-                    v === "lumber" ? "Lumber & Wood" : v === "steel" ? "Iron & Steel" : "Copper"
-                  }
+                  formatter={(v) => {
+                    const labels: Record<string, string> = { lumber: "Lumber & Wood", steel: "Iron & Steel", copper: "Copper", concrete: "Concrete & Cement" };
+                    return labels[v as string] ?? v;
+                  }}
                 />
                 <Line
                   type="monotone"
@@ -1076,20 +1170,31 @@ export default function MarketRatesView() {
                   connectNulls
                   name="copper"
                 />
+                <Line
+                  type="monotone"
+                  dataKey="concrete"
+                  stroke="#a78bfa"
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls
+                  name="concrete"
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
           {/* Individual sparkline charts with axes */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {(
               [
-                { key: "lumber" as const, label: "Lumber & Wood Products", color: "#f59e0b", unit: "WPS0811" },
-                { key: "steel" as const, label: "Iron & Steel", color: "#94a3b8", unit: "WPS1013" },
-                { key: "copper" as const, label: "Copper & Products", color: "#f97316", unit: "WPS1322" },
+                { key: "lumber" as const, label: "Lumber & Wood", color: "#f59e0b" },
+                { key: "steel" as const, label: "Iron & Steel", color: "#94a3b8" },
+                { key: "copper" as const, label: "Copper & Products", color: "#f97316" },
+                ...(ppi.concrete ? [{ key: "concrete" as const, label: "Concrete & Cement", color: "#a78bfa" }] : []),
               ] as const
-            ).map(({ key, label, color, unit }) => {
-              const series = ppi[key];
+            ).map(({ key, label, color }) => {
+              const series = ppi[key as keyof typeof ppi];
+              if (!series) return null;
               const recentHistory = series.history.slice(-24);
               return (
                 <div
@@ -1099,7 +1204,7 @@ export default function MarketRatesView() {
                   <div className="mb-3 flex items-start justify-between">
                     <div>
                       <p className="text-xs font-semibold text-zinc-300">{label}</p>
-                      <p className="text-[10px] text-zinc-600">{unit} · 24-month</p>
+                      <p className="text-[10px] text-zinc-600">PPI · 24-month</p>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-bold tabular-nums text-zinc-50">

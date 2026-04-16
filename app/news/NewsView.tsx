@@ -219,13 +219,13 @@ function CompactRow({ article, onOpen, onSectorClick }: {
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
 
-const NEWS_CACHE_KEY = "quantivtrade-news-last";
+const NEWS_CACHE_PREFIX = "quantivtrade-news-";
 const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
-function getCachedNews(): { articles: MarketNewsArticle[]; savedAt: string } | null {
+function getCachedNews(cat: string): { articles: MarketNewsArticle[]; savedAt: string } | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(NEWS_CACHE_KEY);
+    const raw = sessionStorage.getItem(NEWS_CACHE_PREFIX + cat);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { articles?: MarketNewsArticle[]; savedAt?: string };
     if (!Array.isArray(parsed?.articles) || parsed.articles.length === 0 || !parsed.savedAt) return null;
@@ -234,10 +234,10 @@ function getCachedNews(): { articles: MarketNewsArticle[]; savedAt: string } | n
   } catch { return null; }
 }
 
-function setCachedNews(articles: MarketNewsArticle[]) {
+function setCachedNews(cat: string, articles: MarketNewsArticle[]) {
   if (typeof window === "undefined") return;
   try {
-    sessionStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({ articles, savedAt: new Date().toISOString() }));
+    sessionStorage.setItem(NEWS_CACHE_PREFIX + cat, JSON.stringify({ articles, savedAt: new Date().toISOString() }));
   } catch { /* ignore */ }
 }
 
@@ -268,16 +268,16 @@ export default function NewsView() {
     if (url && url !== "#") window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  const applyData = (list: MarketNewsArticle[], live: boolean) => {
+  const applyData = (cat: string, list: MarketNewsArticle[], live: boolean) => {
     setArticles(list);
     setUsingLiveFeed(live);
     setLastUpdatedAt(new Date());
-    setCachedNews(list);
+    setCachedNews(cat, list);
     setShowingCached(false);
   };
 
-  const applyCache = () => {
-    const cached = getCachedNews();
+  const applyCache = (cat: string) => {
+    const cached = getCachedNews(cat);
     if (cached) {
       setArticles(cached.articles);
       setLastUpdatedAt(new Date(cached.savedAt));
@@ -294,10 +294,10 @@ export default function NewsView() {
       .then((r) => r.json())
       .then((data: { articles?: MarketNewsArticle[]; usingLiveFeed?: boolean }) => {
         const list = data?.articles ?? [];
-        if (list.length > 0) applyData(list, Boolean(data?.usingLiveFeed));
-        else applyCache();
+        if (list.length > 0) applyData(cat, list, Boolean(data?.usingLiveFeed));
+        else applyCache(cat);
       })
-      .catch(applyCache)
+      .catch(() => applyCache(cat))
       .finally(() => { if (showLoading) setLoading(false); });
   };
 
@@ -307,7 +307,7 @@ export default function NewsView() {
   // Load on category change: show cache instantly, then fetch
   useEffect(() => {
     setSectorFilter(null);
-    const cached = getCachedNews();
+    const cached = getCachedNews(category);
     if (cached) {
       setArticles(cached.articles);
       setLastUpdatedAt(new Date(cached.savedAt));
@@ -320,10 +320,10 @@ export default function NewsView() {
       .then((data: { articles?: MarketNewsArticle[]; usingLiveFeed?: boolean }) => {
         if (cancelled) return;
         const list = data?.articles ?? [];
-        if (list.length > 0) applyData(list, Boolean(data?.usingLiveFeed));
-        else applyCache();
+        if (list.length > 0) applyData(category, list, Boolean(data?.usingLiveFeed));
+        else applyCache(category);
       })
-      .catch(() => { if (!cancelled) applyCache(); })
+      .catch(() => { if (!cancelled) applyCache(category); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -381,9 +381,7 @@ export default function NewsView() {
             Market news that moves
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-            {usingLiveFeed
-              ? "Key headlines on equities, macro, rates, and commodities."
-              : "Key headlines on equities, macro, rates, and commodities. Add NEWSDATA_API_KEY in .env.local for live stories and images."}
+            Key headlines on equities, macro, rates, and commodities.
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -531,8 +529,8 @@ export default function NewsView() {
                         {featured.source}
                       </span>
                     </div>
-                    <h2 className="text-xl font-semibold leading-tight text-white sm:text-2xl">{featured.title}</h2>
-                    <p className="mt-1 text-xs text-white/70">{formatTimeAgo(featured.publishedAt)}</p>
+                    <h2 className="text-xl font-semibold leading-tight sm:text-2xl" style={{ color: "#ffffff" }}>{featured.title}</h2>
+                    <p className="mt-1 text-xs" style={{ color: "rgba(255,255,255,0.7)" }}>{formatTimeAgo(featured.publishedAt)}</p>
                   </div>
                 </div>
                 <div className="p-6 pb-3">

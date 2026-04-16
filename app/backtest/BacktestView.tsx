@@ -17,7 +17,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Mode = "landing" | "chat" | "manual-setup" | "manual-strategy" | "manual-params" | "running" | "results";
 
 type StrategyType =
   | "ma_crossover" | "rsi" | "breakout" | "macd" | "bollinger_bands"
@@ -43,104 +43,37 @@ type Setup = {
 type TPTarget = { pct: number; size: number };
 
 type Params = {
-  // MA Crossover
-  fastPeriod: number;
-  slowPeriod: number;
-  maType: "sma" | "ema" | "wma" | "dema" | "tema";
-  // RSI
-  rsiPeriod: number;
-  oversold: number;
-  overbought: number;
-  // Breakout
-  lookbackPeriod: number;
-  volumeConfirmation: boolean;
-  atrMultiplier: number;
-  // MACD
-  macdFast: number;
-  macdSlow: number;
-  macdSignal: number;
-  // Bollinger Bands
-  bbPeriod: number;
-  bbStdDev: number;
-  // Stochastic
-  stochK: number;
-  stochD: number;
-  stochOverbought: number;
-  stochOversold: number;
-  // CCI
-  cciPeriod: number;
-  cciOverbought: number;
-  cciOversold: number;
-  // Williams %R
-  williamsRPeriod: number;
-  williamsROverbought: number;
-  williamsROversold: number;
-  // ADX
-  adxPeriod: number;
-  adxThreshold: number;
-  // Parabolic SAR
-  sarStep: number;
-  sarMax: number;
-  // Ichimoku
-  ichimokuTenkan: number;
-  ichimokuKijun: number;
-  ichimokuSenkou: number;
-  // Volume / Order Flow
-  vwapPeriod: number;
-  obvMaPeriod: number;
-  orderFlowThreshold: number;
-  // Options
-  optionStrategy: string;
-  expiryDays: number;
-  deltaTarget: number;
-  // Risk management
-  useStopLoss: boolean;
-  stopLossType: "fixed" | "trailing" | "atr";
-  stopLossPct: number;
-  stopLossAtrMultiplier: number;
-  useTakeProfit: boolean;
-  takeProfitPct: number;
-  useMultipleTP: boolean;
-  takeProfitTargets: TPTarget[];
-  // Advanced
-  walkForward: boolean;
-  monteCarlo: boolean;
-  monteCarloRuns: number;
+  fastPeriod: number; slowPeriod: number; maType: "sma" | "ema" | "wma" | "dema" | "tema";
+  rsiPeriod: number; oversold: number; overbought: number;
+  lookbackPeriod: number; volumeConfirmation: boolean; atrMultiplier: number;
+  macdFast: number; macdSlow: number; macdSignal: number;
+  bbPeriod: number; bbStdDev: number;
+  stochK: number; stochD: number; stochOverbought: number; stochOversold: number;
+  cciPeriod: number; cciOverbought: number; cciOversold: number;
+  williamsRPeriod: number; williamsROverbought: number; williamsROversold: number;
+  adxPeriod: number; adxThreshold: number;
+  sarStep: number; sarMax: number;
+  ichimokuTenkan: number; ichimokuKijun: number; ichimokuSenkou: number;
+  vwapPeriod: number; obvMaPeriod: number; orderFlowThreshold: number;
+  optionStrategy: string; expiryDays: number; deltaTarget: number;
+  useStopLoss: boolean; stopLossType: "fixed" | "trailing" | "atr"; stopLossPct: number; stopLossAtrMultiplier: number;
+  useTakeProfit: boolean; takeProfitPct: number; useMultipleTP: boolean; takeProfitTargets: TPTarget[];
+  walkForward: boolean; monteCarlo: boolean; monteCarloRuns: number;
   positionSize: number;
 };
 
 type Trade = {
-  entry_date: string;
-  exit_date: string;
-  entry_price: number;
-  exit_price: number;
-  return_pct: number;
-  hold_days: number;
-  direction?: "long" | "short";
+  entry_date: string; exit_date: string; entry_price: number; exit_price: number;
+  return_pct: number; hold_days: number; direction?: "long" | "short";
 };
 
 type BacktestMetrics = {
-  total_return: number;
-  annualized_return: number;
-  sharpe_ratio: number;
-  sortino_ratio: number;
-  calmar_ratio: number;
-  max_drawdown: number;
-  max_drawdown_duration_days: number;
-  win_rate: number;
-  profit_factor: number;
-  avg_win: number;
-  avg_loss: number;
-  best_trade: number;
-  worst_trade: number;
-  total_trades: number;
-  avg_hold_time_days: number;
-  beta: number;
-  alpha: number;
-  expectancy?: number;
-  var_95?: number;
-  max_consecutive_wins?: number;
-  max_consecutive_losses?: number;
+  total_return: number; annualized_return: number; sharpe_ratio: number; sortino_ratio: number;
+  calmar_ratio: number; max_drawdown: number; max_drawdown_duration_days: number;
+  win_rate: number; profit_factor: number; avg_win: number; avg_loss: number;
+  best_trade: number; worst_trade: number; total_trades: number; avg_hold_time_days: number;
+  beta: number; alpha: number; expectancy?: number; var_95?: number;
+  max_consecutive_wins?: number; max_consecutive_losses?: number;
   monthly_returns: Record<string, number>;
   equity_curve: { date: string; value: number }[];
   drawdown_curve: { date: string; drawdown: number }[];
@@ -148,132 +81,76 @@ type BacktestMetrics = {
 };
 
 type BacktestResult = {
-  ticker: string;
-  strategy_type: string;
-  params: Record<string, unknown>;
+  ticker: string; strategy_type: string; params: Record<string, unknown>;
   metrics: BacktestMetrics;
   walk_forward: {
     splits: { split: number; in_sample_sharpe: number; oos_sharpe: number; efficiency_ratio: number | null; best_params: Record<string, unknown> }[];
-    avg_in_sample_sharpe: number;
-    avg_oos_sharpe: number;
-    avg_efficiency_ratio: number | null;
-    verdict: string;
+    avg_in_sample_sharpe: number; avg_oos_sharpe: number; avg_efficiency_ratio: number | null; verdict: string;
   } | null;
   monte_carlo: {
-    n_runs: number;
-    n_trades: number;
-    trade_labels: number[];
+    n_runs: number; n_trades: number; trade_labels: number[];
     percentile_curves: Record<string, number[]>;
     final_equity: { p5: number; p25: number; p50: number; p75: number; p95: number; mean: number; std: number };
     probability_metrics: { prob_profit: number; prob_loss_10pct: number; prob_loss_25pct: number; prob_double: number };
   } | null;
-  ai_analysis: string;
-  error?: string;
+  ai_analysis: string; error?: string;
 };
 
 type SavedStrategy = {
-  id: string;
-  name: string;
-  strategyType: StrategyType;
-  setup: Setup;
-  params: Params;
-  result: BacktestResult | null;
-  savedAt: string;
+  id: string; name: string; strategyType: StrategyType;
+  setup: Setup; params: Params; result: BacktestResult | null; savedAt: string;
 };
+
+type ChatMessage = { role: "user" | "assistant"; content: string };
 
 // ─── Defaults ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_SETUP: Setup = {
-  ticker: "AAPL",
-  tickers: "AAPL,MSFT,GOOGL,AMZN",
-  assetType: "stock",
-  startDate: "2020-01-01",
-  endDate: "2024-12-31",
-  initialCapital: 10000,
-  commission: 0.1,
-  slippage: 5,
-  timeframe: "1d",
-  direction: "long",
-  leverage: 1,
-  positionSizingType: "pct",
-  fixedDollarSize: 1000,
+  ticker: "AAPL", tickers: "AAPL,MSFT,GOOGL,AMZN", assetType: "stock",
+  startDate: "2020-01-01", endDate: "2024-12-31", initialCapital: 10000,
+  commission: 0.1, slippage: 5, timeframe: "1d", direction: "long",
+  leverage: 1, positionSizingType: "pct", fixedDollarSize: 1000,
 };
 
 const DEFAULT_PARAMS: Params = {
-  fastPeriod: 10,
-  slowPeriod: 30,
-  maType: "sma",
-  rsiPeriod: 14,
-  oversold: 30,
-  overbought: 70,
-  lookbackPeriod: 20,
-  volumeConfirmation: true,
-  atrMultiplier: 1.5,
-  macdFast: 12,
-  macdSlow: 26,
-  macdSignal: 9,
-  bbPeriod: 20,
-  bbStdDev: 2,
-  stochK: 14,
-  stochD: 3,
-  stochOverbought: 80,
-  stochOversold: 20,
-  cciPeriod: 20,
-  cciOverbought: 100,
-  cciOversold: -100,
-  williamsRPeriod: 14,
-  williamsROverbought: -20,
-  williamsROversold: -80,
-  adxPeriod: 14,
-  adxThreshold: 25,
-  sarStep: 0.02,
-  sarMax: 0.2,
-  ichimokuTenkan: 9,
-  ichimokuKijun: 26,
-  ichimokuSenkou: 52,
-  vwapPeriod: 20,
-  obvMaPeriod: 20,
-  orderFlowThreshold: 0.6,
-  optionStrategy: "covered_call",
-  expiryDays: 30,
-  deltaTarget: 0.30,
-  useStopLoss: false,
-  stopLossType: "fixed",
-  stopLossPct: 5,
-  stopLossAtrMultiplier: 2,
-  useTakeProfit: false,
-  takeProfitPct: 10,
-  useMultipleTP: false,
-  takeProfitTargets: [
-    { pct: 5, size: 50 },
-    { pct: 10, size: 30 },
-    { pct: 20, size: 20 },
-  ],
-  walkForward: false,
-  monteCarlo: false,
-  monteCarloRuns: 1000,
-  positionSize: 0.95,
+  fastPeriod: 10, slowPeriod: 30, maType: "sma",
+  rsiPeriod: 14, oversold: 30, overbought: 70,
+  lookbackPeriod: 20, volumeConfirmation: true, atrMultiplier: 1.5,
+  macdFast: 12, macdSlow: 26, macdSignal: 9,
+  bbPeriod: 20, bbStdDev: 2,
+  stochK: 14, stochD: 3, stochOverbought: 80, stochOversold: 20,
+  cciPeriod: 20, cciOverbought: 100, cciOversold: -100,
+  williamsRPeriod: 14, williamsROverbought: -20, williamsROversold: -80,
+  adxPeriod: 14, adxThreshold: 25,
+  sarStep: 0.02, sarMax: 0.2,
+  ichimokuTenkan: 9, ichimokuKijun: 26, ichimokuSenkou: 52,
+  vwapPeriod: 20, obvMaPeriod: 20, orderFlowThreshold: 0.6,
+  optionStrategy: "covered_call", expiryDays: 30, deltaTarget: 0.30,
+  useStopLoss: false, stopLossType: "fixed", stopLossPct: 5, stopLossAtrMultiplier: 2,
+  useTakeProfit: false, takeProfitPct: 10, useMultipleTP: false,
+  takeProfitTargets: [{ pct: 5, size: 50 }, { pct: 10, size: 30 }, { pct: 20, size: 20 }],
+  walkForward: false, monteCarlo: false, monteCarloRuns: 1000, positionSize: 0.95,
 };
 
 // ─── Strategy catalogue ───────────────────────────────────────────────────────
 
-const STRATEGIES: { type: StrategyType; name: string; desc: string; icon: string; category: string }[] = [
-  { type: "ma_crossover",     name: "MA Crossover",      desc: "SMA/EMA/WMA/DEMA/TEMA fast/slow crossover signals",       icon: "📈", category: "Trend" },
-  { type: "macd",             name: "MACD",              desc: "Signal line crossover and histogram momentum shifts",       icon: "〰️", category: "Trend" },
-  { type: "ichimoku",         name: "Ichimoku Cloud",    desc: "Tenkan/Kijun cross with cloud support & resistance",       icon: "☁️", category: "Trend" },
-  { type: "parabolic_sar",    name: "Parabolic SAR",     desc: "Trailing stop-and-reverse for trend following entries",    icon: "🔄", category: "Trend" },
-  { type: "adx",              name: "ADX / DI",          desc: "Enter trending markets using ADX strength + DI crossover", icon: "💹", category: "Trend" },
-  { type: "rsi",              name: "RSI",               desc: "Buy oversold, sell overbought with divergence detection",  icon: "📊", category: "Momentum" },
-  { type: "stochastic",       name: "Stochastic",        desc: "%K/%D crossover in oversold/overbought zones",            icon: "🔀", category: "Momentum" },
-  { type: "cci",              name: "CCI",               desc: "Commodity Channel Index mean-reversion strategy",          icon: "🌀", category: "Momentum" },
-  { type: "williams_r",       name: "Williams %R",       desc: "Fast momentum oscillator overbought/oversold reversals",  icon: "⚡", category: "Momentum" },
-  { type: "bollinger_bands",  name: "Bollinger Bands",   desc: "Mean-reversion entries on band touch with squeeze filter", icon: "🎯", category: "Volatility" },
-  { type: "breakout",         name: "Breakout + ATR",    desc: "Price breakout with volume confirmation and ATR sizing",   icon: "🚀", category: "Volatility" },
-  { type: "volume",           name: "Volume / VWAP",     desc: "OBV trend + VWAP deviation momentum entries",             icon: "📦", category: "Volume" },
-  { type: "orderflow",        name: "Order Flow",        desc: "CVD, volume delta & VWAP pressure proxies from OHLCV",    icon: "🌊", category: "Volume" },
-  { type: "options",          name: "Options",           desc: "Covered calls, spreads, straddles with Black-Scholes",    icon: "⚙️", category: "Derivatives" },
-  { type: "portfolio_optimizer", name: "Portfolio Optimizer", desc: "Modern portfolio theory optimal weight allocation", icon: "🎲", category: "Portfolio" },
-  { type: "custom",           name: "Custom",            desc: "Combine multiple indicators with AND/OR logic",           icon: "🔧", category: "Custom" },
+const STRATEGIES: { type: StrategyType; name: string; desc: string; category: string }[] = [
+  { type: "ma_crossover",       name: "MA Crossover",        desc: "SMA/EMA/WMA/DEMA/TEMA fast/slow crossover signals",       category: "Trend" },
+  { type: "macd",               name: "MACD",                desc: "Signal line crossover and histogram momentum shifts",       category: "Trend" },
+  { type: "ichimoku",           name: "Ichimoku Cloud",      desc: "Tenkan/Kijun cross with cloud support & resistance",       category: "Trend" },
+  { type: "parabolic_sar",      name: "Parabolic SAR",       desc: "Trailing stop-and-reverse for trend following entries",    category: "Trend" },
+  { type: "adx",                name: "ADX / DI",            desc: "Enter trending markets using ADX strength + DI crossover", category: "Trend" },
+  { type: "rsi",                name: "RSI",                 desc: "Buy oversold, sell overbought with divergence detection",  category: "Momentum" },
+  { type: "stochastic",         name: "Stochastic",          desc: "%K/%D crossover in oversold/overbought zones",            category: "Momentum" },
+  { type: "cci",                name: "CCI",                 desc: "Commodity Channel Index mean-reversion strategy",          category: "Momentum" },
+  { type: "williams_r",         name: "Williams %R",         desc: "Fast momentum oscillator overbought/oversold reversals",  category: "Momentum" },
+  { type: "bollinger_bands",    name: "Bollinger Bands",     desc: "Mean-reversion entries on band touch with squeeze filter", category: "Volatility" },
+  { type: "breakout",           name: "Breakout + ATR",      desc: "Price breakout with volume confirmation and ATR sizing",   category: "Volatility" },
+  { type: "volume",             name: "Volume / VWAP",       desc: "OBV trend + VWAP deviation momentum entries",             category: "Volume" },
+  { type: "orderflow",          name: "Order Flow",          desc: "CVD, volume delta & VWAP pressure proxies from OHLCV",    category: "Volume" },
+  { type: "options",            name: "Options",             desc: "Covered calls, spreads, straddles with Black-Scholes",    category: "Derivatives" },
+  { type: "portfolio_optimizer", name: "Portfolio Optimizer", desc: "Modern portfolio theory optimal weight allocation",       category: "Portfolio" },
+  { type: "custom",             name: "Custom",              desc: "Combine multiple indicators with AND/OR logic",           category: "Custom" },
 ];
 
 const TICKER_PRESETS: { label: string; tickers: string }[] = [
@@ -286,34 +163,31 @@ const TICKER_PRESETS: { label: string; tickers: string }[] = [
 ];
 
 const TIMEFRAMES = [
-  { value: "1m",  label: "1 Min" },
-  { value: "5m",  label: "5 Min" },
-  { value: "15m", label: "15 Min" },
-  { value: "1h",  label: "1 Hour" },
-  { value: "4h",  label: "4 Hour" },
-  { value: "1d",  label: "Daily" },
+  { value: "1m",  label: "1 Min" },  { value: "5m",  label: "5 Min" },
+  { value: "15m", label: "15 Min" }, { value: "1h",  label: "1 Hour" },
+  { value: "4h",  label: "4 Hour" }, { value: "1d",  label: "Daily" },
   { value: "1wk", label: "Weekly" },
 ];
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 const STATUS_MESSAGES = [
-  "Fetching historical data…",
-  "Calculating indicators…",
-  "Simulating trades…",
-  "Calculating metrics…",
-  "Running AI analysis…",
+  "Fetching historical data...",
+  "Calculating indicators...",
+  "Simulating trades...",
+  "Calculating metrics...",
+  "Running AI analysis...",
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmtPct(n: number | undefined | null, decimals = 1): string {
-  if (n == null) return "—";
+  if (n == null) return "\u2014";
   const v = n.toFixed(decimals);
   return n >= 0 ? `+${v}%` : `${v}%`;
 }
 function fmtNum(n: number | undefined | null, decimals = 2): string {
-  if (n == null) return "—";
+  if (n == null) return "\u2014";
   return n.toFixed(decimals);
 }
 function fmtDollars(n: number): string {
@@ -345,34 +219,6 @@ function gradeFromMetrics(m: BacktestMetrics): { grade: string; color: string } 
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StepBar({ step }: { step: Step }) {
-  const labels = ["Setup", "Strategy", "Parameters", "Running", "Results"];
-  return (
-    <div className="mb-8 flex items-center gap-2">
-      {labels.map((label, i) => {
-        const n = (i + 1) as Step;
-        const done = step > n;
-        const active = step === n;
-        return (
-          <div key={n} className="flex items-center gap-2">
-            <div className={`flex h-6 w-6 items-center justify-center rounded-full border text-[10px] font-bold transition-all ${
-              done ? "border-[var(--accent-color)] bg-[var(--accent-color)] text-[#020308]"
-              : active ? "border-[var(--accent-color)] text-[var(--accent-color)]"
-              : "border-white/10 text-zinc-600"
-            }`}>
-              {done ? "✓" : n}
-            </div>
-            <span className={`hidden text-xs sm:block ${active ? "text-zinc-200 font-medium" : done ? "text-zinc-500" : "text-zinc-600"}`}>
-              {label}
-            </span>
-            {i < 4 && <div className={`h-px w-6 ${done ? "bg-[var(--accent-color)]/50" : "bg-white/10"}`} />}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -443,7 +289,7 @@ function ChartTooltipContent({ active, payload, label }: { active?: boolean; pay
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function BacktestView() {
-  const [step, setStep] = useState<Step>(1);
+  const [mode, setMode] = useState<Mode>("landing");
   const [setup, setSetup] = useState<Setup>(DEFAULT_SETUP);
   const [strategy, setStrategy] = useState<StrategyType>("ma_crossover");
   const [params, setParams] = useState<Params>(DEFAULT_PARAMS);
@@ -462,13 +308,21 @@ export default function BacktestView() {
   const [showSaved, setShowSaved] = useState(false);
   const [stratCategory, setStratCategory] = useState<string>("All");
 
-  // Load saved strategies from localStorage
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Load saved strategies
   useEffect(() => {
     try {
       const raw = localStorage.getItem("bt_saved_strategies");
       if (raw) setSavedStrategies(JSON.parse(raw) as SavedStrategy[]);
     } catch { /* ignore */ }
   }, []);
+
 
   // ── Live price fetch ──
   const fetchPrice = useCallback(async (ticker: string) => {
@@ -485,12 +339,12 @@ export default function BacktestView() {
 
   // ── Loading animation ──
   useEffect(() => {
-    if (step !== 4) return;
+    if (mode !== "running") return;
     setProgress(0); setStatusIdx(0);
     const progInterval = setInterval(() => setProgress((p) => Math.min(p + 0.8, 95)), 400);
     const msgInterval = setInterval(() => setStatusIdx((i) => Math.min(i + 1, STATUS_MESSAGES.length - 1)), 6000);
     return () => { clearInterval(progInterval); clearInterval(msgInterval); };
-  }, [step]);
+  }, [mode]);
 
   // ── Build strategy params for API ──
   function buildStrategyParams(): Record<string, unknown> {
@@ -514,39 +368,28 @@ export default function BacktestView() {
     }
   }
 
-  // ── Run backtest ──
+  // ── Run backtest (manual mode) ──
   async function runBacktest() {
-    setStep(4); setError(null); setResult(null);
+    setMode("running"); setError(null); setResult(null);
     const isPortfolio = strategy === "portfolio_optimizer";
 
     const body = isPortfolio
       ? { tickers: setup.tickers.split(",").map((t) => t.trim().toUpperCase()), start_date: setup.startDate, end_date: setup.endDate }
       : {
           ticker: setup.ticker.toUpperCase(),
-          start_date: setup.startDate,
-          end_date: setup.endDate,
+          start_date: setup.startDate, end_date: setup.endDate,
           initial_capital: setup.initialCapital,
           strategy_type: strategy === "custom" ? "ma_crossover" : strategy,
-          commission: setup.commission / 100,
-          slippage: setup.slippage / 10000,
-          timeframe: setup.timeframe,
-          direction: setup.direction,
-          leverage: setup.leverage,
-          position_sizing_type: setup.positionSizingType,
-          fixed_dollar_size: setup.fixedDollarSize,
-          position_size: params.positionSize,
-          use_stop_loss: params.useStopLoss,
-          stop_loss_type: params.stopLossType,
-          stop_loss_pct: params.stopLossPct / 100,
-          stop_loss_atr_multiplier: params.stopLossAtrMultiplier,
-          use_take_profit: params.useTakeProfit,
-          take_profit_pct: params.takeProfitPct / 100,
-          use_multiple_tp: params.useMultipleTP,
-          take_profit_targets: params.takeProfitTargets,
-          walk_forward: params.walkForward,
-          monte_carlo: params.monteCarlo,
-          monte_carlo_runs: params.monteCarloRuns,
-          params: buildStrategyParams(),
+          commission: setup.commission / 100, slippage: setup.slippage / 10000,
+          timeframe: setup.timeframe, direction: setup.direction,
+          leverage: setup.leverage, position_sizing_type: setup.positionSizingType,
+          fixed_dollar_size: setup.fixedDollarSize, position_size: params.positionSize,
+          use_stop_loss: params.useStopLoss, stop_loss_type: params.stopLossType,
+          stop_loss_pct: params.stopLossPct / 100, stop_loss_atr_multiplier: params.stopLossAtrMultiplier,
+          use_take_profit: params.useTakeProfit, take_profit_pct: params.takeProfitPct / 100,
+          use_multiple_tp: params.useMultipleTP, take_profit_targets: params.takeProfitTargets,
+          walk_forward: params.walkForward, monte_carlo: params.monteCarlo,
+          monte_carlo_runs: params.monteCarloRuns, params: buildStrategyParams(),
         };
 
     const endpoint = isPortfolio ? "/api/backtest/optimize" : "/api/backtest/run";
@@ -554,13 +397,78 @@ export default function BacktestView() {
     try {
       const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
-      if (!res.ok || data.error) { setError(data.error ?? "Backtest failed"); setStep(3); return; }
+      if (!res.ok || data.error) { setError(data.error ?? "Backtest failed"); setMode("manual-params"); return; }
       setResult(data);
       setProgress(100);
-      setTimeout(() => setStep(5), 300);
+      setTimeout(() => setMode("results"), 300);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Network error");
-      setStep(3);
+      setMode("manual-params");
+    }
+  }
+
+  // ── Run backtest from AI chat config ──
+  async function runBacktestFromConfig(config: Record<string, unknown>) {
+    setMode("running"); setError(null); setResult(null);
+
+    const isPortfolio = config.strategy_type === "portfolio_optimizer";
+    const endpoint = isPortfolio ? "/api/backtest/optimize" : "/api/backtest/run";
+
+    // The config from Claude already has the right shape for the API
+    const body = isPortfolio
+      ? { tickers: (config.ticker as string).split(",").map((t: string) => t.trim().toUpperCase()), start_date: config.start_date, end_date: config.end_date }
+      : config;
+
+    try {
+      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await res.json();
+      if (!res.ok || data.error) { setError(data.error ?? "Backtest failed"); setMode("chat"); return; }
+      setResult(data);
+      setProgress(100);
+      setTimeout(() => setMode("results"), 300);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Network error");
+      setMode("chat");
+    }
+  }
+
+  // ── Chat send ──
+  async function sendChatMessage() {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+
+    const newMessages: ChatMessage[] = [...chatMessages, { role: "user", content: text }];
+    setChatMessages(newMessages);
+    setChatInput("");
+    setChatLoading(true);
+
+    try {
+      const res = await fetch("/api/backtest/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: newMessages }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setChatMessages([...newMessages, { role: "assistant", content: data.error ?? "Something went wrong. Please try again." }]);
+        setChatLoading(false);
+        return;
+      }
+
+      // Strip the JSON block from the displayed reply
+      const displayReply = data.reply.replace(/```json[\s\S]*?```/g, "").trim();
+      const finalReply = displayReply || "Got it! Setting up your backtest now...";
+      setChatMessages([...newMessages, { role: "assistant", content: finalReply }]);
+
+      if (data.config) {
+        // Claude returned a ready config, run the backtest
+        setTimeout(() => runBacktestFromConfig(data.config), 800);
+      }
+    } catch {
+      setChatMessages([...newMessages, { role: "assistant", content: "Network error. Please try again." }]);
+    } finally {
+      setChatLoading(false);
     }
   }
 
@@ -568,13 +476,8 @@ export default function BacktestView() {
   function saveStrategy() {
     if (!saveName.trim() || !result) return;
     const entry: SavedStrategy = {
-      id: Date.now().toString(),
-      name: saveName.trim(),
-      strategyType: strategy,
-      setup,
-      params,
-      result,
-      savedAt: new Date().toISOString(),
+      id: Date.now().toString(), name: saveName.trim(), strategyType: strategy,
+      setup, params, result, savedAt: new Date().toISOString(),
     };
     const updated = [entry, ...savedStrategies].slice(0, 20);
     setSavedStrategies(updated);
@@ -583,14 +486,10 @@ export default function BacktestView() {
     setSaveName("");
   }
 
-  // ── Load saved strategy ──
   function loadSaved(s: SavedStrategy) {
-    setStrategy(s.strategyType);
-    setSetup(s.setup);
-    setParams(s.params);
-    setResult(s.result);
+    setStrategy(s.strategyType); setSetup(s.setup); setParams(s.params); setResult(s.result);
     setShowSaved(false);
-    if (s.result) setStep(5); else setStep(1);
+    if (s.result) setMode("results"); else setMode("manual-setup");
   }
 
   function deleteSaved(id: string) {
@@ -599,7 +498,6 @@ export default function BacktestView() {
     try { localStorage.setItem("bt_saved_strategies", JSON.stringify(updated)); } catch { /* ignore */ }
   }
 
-  // ── Export CSV ──
   function exportCSV() {
     if (!result?.metrics.trades?.length) return;
     const headers = ["Entry Date","Exit Date","Entry Price","Exit Price","Return %","Hold Days","Direction"];
@@ -609,41 +507,240 @@ export default function BacktestView() {
     const csv = [headers.join(","), ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
+    const a = document.createElement("a"); a.href = url;
     a.download = `backtest_${result.ticker}_${result.strategy_type}_trades.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    a.click(); URL.revokeObjectURL(url);
   }
 
-  // ── Export JSON ──
   function exportJSON() {
     if (!result) return;
     const blob = new Blob([JSON.stringify(result, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
+    const a = document.createElement("a"); a.href = url;
     a.download = `backtest_${result.ticker}_${result.strategy_type}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    a.click(); URL.revokeObjectURL(url);
   }
 
-  // ─── Step 1: Setup ──────────────────────────────────────────────────────────
+  // ─── Landing ──────────────────────────────────────────────────────────────────
 
-  function renderStep1() {
+  function renderLanding() {
+    return (
+      <div className="space-y-8">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-zinc-100">Backtester</h1>
+          <p className="mt-2 text-sm text-zinc-500">Test your trading strategies against historical data.</p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* AI Chat option */}
+          <button
+            onClick={() => { setMode("chat"); setChatMessages([]); setChatInput(""); }}
+            className="group flex flex-col gap-4 rounded-2xl border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/5 p-6 text-left transition hover:border-[var(--accent-color)]/60 hover:bg-[var(--accent-color)]/10"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10">
+              <svg className="h-6 w-6 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-base font-semibold text-zinc-100 group-hover:text-[var(--accent-color)] transition">Describe Your Strategy</p>
+              <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                Tell Claude what you want to test in plain English. It will ask the right questions and set everything up for you.
+              </p>
+            </div>
+            <span className="mt-auto rounded-full border border-[var(--accent-color)]/30 px-3 py-1 text-[10px] font-semibold text-[var(--accent-color)] uppercase tracking-wider">
+              Recommended
+            </span>
+          </button>
+
+          {/* Manual option */}
+          <button
+            onClick={() => setMode("manual-setup")}
+            className="group flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/5 p-6 text-left transition hover:border-white/20 hover:bg-white/10"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/5">
+              <svg className="h-6 w-6 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-base font-semibold text-zinc-100 group-hover:text-zinc-50 transition">Select Strategy Manually</p>
+              <p className="mt-1 text-xs text-zinc-500 leading-relaxed">
+                Choose from 16 built-in strategies and configure every parameter yourself. Full control over all settings.
+              </p>
+            </div>
+            <span className="mt-auto rounded-full border border-white/10 px-3 py-1 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">
+              Advanced
+            </span>
+          </button>
+        </div>
+
+        {/* Saved strategies */}
+        {savedStrategies.length > 0 && (
+          <div>
+            <button
+              onClick={() => setShowSaved(!showSaved)}
+              className="mb-3 text-xs text-zinc-500 hover:text-zinc-300 transition"
+            >
+              Saved Strategies ({savedStrategies.length}) {showSaved ? "\u25B2" : "\u25BC"}
+            </button>
+            {showSaved && (
+              <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-2">
+                {savedStrategies.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 px-3 py-2">
+                    <div>
+                      <p className="text-sm text-zinc-200">{s.name}</p>
+                      <p className="text-[10px] text-zinc-500">{s.strategyType} / {s.setup.ticker} / saved {new Date(s.savedAt).toLocaleDateString()}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => loadSaved(s)} className="rounded border border-[var(--accent-color)]/30 px-2 py-1 text-[10px] text-[var(--accent-color)] hover:bg-[var(--accent-color)]/10 transition">Load</button>
+                      <button onClick={() => deleteSaved(s.id)} className="rounded border border-red-500/30 px-2 py-1 text-[10px] text-red-400 hover:bg-red-500/10 transition">Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─── AI Chat ──────────────────────────────────────────────────────────────────
+
+  function renderChat() {
+    return (
+      <div className="flex flex-col" style={{ height: "calc(100vh - 200px)", minHeight: "500px" }}>
+        {/* Header */}
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setMode("landing")} className="text-xs text-zinc-500 hover:text-zinc-300 transition">&larr; Back</button>
+            <div>
+              <h2 className="text-base font-semibold text-zinc-100">Describe Your Backtest</h2>
+              <p className="text-xs text-zinc-500">Tell Claude what you want to test. It will handle the rest.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => { setChatMessages([]); setChatInput(""); setError(null); }}
+            className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-500 hover:bg-white/5 transition"
+          >
+            New Chat
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">{error}</div>
+        )}
+
+        {/* Messages area */}
+        <div className="flex-1 overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.02] p-4 space-y-4">
+          {chatMessages.length === 0 && !chatLoading && (
+            <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[var(--accent-color)]/20 bg-[var(--accent-color)]/5">
+                <svg className="h-7 w-7 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-zinc-300">What would you like to backtest?</p>
+                <p className="mt-1 text-xs text-zinc-600 max-w-sm">
+                  Describe your strategy in plain English. For example:
+                </p>
+              </div>
+              <div className="grid gap-2 w-full max-w-md">
+                {[
+                  "Test an RSI strategy on AAPL from 2020 to 2024 with $10k",
+                  "Backtest a MACD crossover on BTC-USD with a 5% stop loss",
+                  "I want to test buying SPY when it crosses above the 50-day moving average",
+                ].map((example) => (
+                  <button
+                    key={example}
+                    onClick={() => { setChatInput(example); chatInputRef.current?.focus(); }}
+                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-left text-xs text-zinc-400 transition hover:border-[var(--accent-color)]/30 hover:text-zinc-300"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {chatMessages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                msg.role === "user"
+                  ? "bg-[var(--accent-color)]/10 border border-[var(--accent-color)]/20 text-zinc-200"
+                  : "bg-white/5 border border-white/10 text-zinc-300"
+              }`}>
+                {msg.role === "assistant" && (
+                  <div className="mb-1 flex items-center gap-1.5">
+                    <span className="text-[10px] font-semibold text-[var(--accent-color)] uppercase tracking-wider">Claude</span>
+                  </div>
+                )}
+                <div className="whitespace-pre-wrap">{msg.content}</div>
+              </div>
+            </div>
+          ))}
+
+          {chatLoading && (
+            <div className="flex justify-start">
+              <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                <div className="flex gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: "300ms" }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div ref={chatEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className="mt-3 flex gap-2">
+          <textarea
+            ref={chatInputRef}
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+            }}
+            placeholder="Describe your strategy..."
+            rows={1}
+            className="flex-1 resize-none rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-zinc-200 placeholder-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+          />
+          <button
+            onClick={sendChatMessage}
+            disabled={!chatInput.trim() || chatLoading}
+            className="rounded-xl bg-[var(--accent-color)] px-5 py-3 text-sm font-semibold text-[#020308] transition hover:opacity-90 disabled:opacity-40"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Manual Step 1: Setup ─────────────────────────────────────────────────────
+
+  function renderManualSetup() {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-zinc-100">Strategy Setup</h2>
-            <p className="mt-0.5 text-xs text-zinc-500">Configure instrument, dates, and execution model.</p>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setMode("landing")} className="text-xs text-zinc-500 hover:text-zinc-300 transition">&larr; Back</button>
+            <div>
+              <h2 className="text-base font-semibold text-zinc-100">Strategy Setup</h2>
+              <p className="mt-0.5 text-xs text-zinc-500">Configure instrument, dates, and execution model.</p>
+            </div>
           </div>
           {savedStrategies.length > 0 && (
-            <button
-              onClick={() => setShowSaved(!showSaved)}
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-400 hover:bg-white/10 transition"
-            >
-              📂 Saved ({savedStrategies.length})
+            <button onClick={() => setShowSaved(!showSaved)}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-zinc-400 hover:bg-white/10 transition">
+              Saved ({savedStrategies.length})
             </button>
           )}
         </div>
@@ -655,7 +752,7 @@ export default function BacktestView() {
               <div key={s.id} className="flex items-center justify-between rounded-lg border border-white/5 bg-white/5 px-3 py-2">
                 <div>
                   <p className="text-sm text-zinc-200">{s.name}</p>
-                  <p className="text-[10px] text-zinc-500">{s.strategyType} · {s.setup.ticker} · saved {new Date(s.savedAt).toLocaleDateString()}</p>
+                  <p className="text-[10px] text-zinc-500">{s.strategyType} / {s.setup.ticker} / saved {new Date(s.savedAt).toLocaleDateString()}</p>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => loadSaved(s)} className="rounded border border-[var(--accent-color)]/30 px-2 py-1 text-[10px] text-[var(--accent-color)] hover:bg-[var(--accent-color)]/10 transition">Load</button>
@@ -673,16 +770,12 @@ export default function BacktestView() {
             <div className="flex flex-col gap-1">
               <label className="text-xs text-zinc-400">Ticker Symbol</label>
               <div className="relative">
-                <input
-                  type="text"
-                  value={setup.ticker}
+                <input type="text" value={setup.ticker}
                   onChange={(e) => setSetup({ ...setup, ticker: e.target.value.toUpperCase() })}
-                  onBlur={() => fetchPrice(setup.ticker)}
-                  placeholder="AAPL"
-                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 pr-20 text-sm text-zinc-200 uppercase focus:border-[var(--accent-color)]/50 focus:outline-none"
-                />
+                  onBlur={() => fetchPrice(setup.ticker)} placeholder="AAPL"
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 pr-20 text-sm text-zinc-200 uppercase focus:border-[var(--accent-color)]/50 focus:outline-none" />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">
-                  {loadingPrice ? "…" : currentPrice ? `$${currentPrice.toFixed(2)}` : ""}
+                  {loadingPrice ? "..." : currentPrice ? `$${currentPrice.toFixed(2)}` : ""}
                 </span>
               </div>
             </div>
@@ -750,7 +843,7 @@ export default function BacktestView() {
               <div className="relative">
                 <input type="number" value={setup.leverage} onChange={(e) => setSetup({ ...setup, leverage: Math.max(1, Number(e.target.value)) })} min={1} max={20} step={0.5}
                   className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 pr-7 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none" />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">×</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-500">&times;</span>
               </div>
             </div>
           </div>
@@ -810,18 +903,18 @@ export default function BacktestView() {
         </div>
 
         <div className="flex justify-end">
-          <button onClick={() => setStep(2)} disabled={!setup.ticker.trim()}
+          <button onClick={() => setMode("manual-strategy")} disabled={!setup.ticker.trim()}
             className="rounded-lg bg-[var(--accent-color)] px-5 py-2 text-sm font-semibold text-[#020308] transition hover:opacity-90 disabled:opacity-40">
-            Continue →
+            Continue &rarr;
           </button>
         </div>
       </div>
     );
   }
 
-  // ─── Step 2: Strategy ───────────────────────────────────────────────────────
+  // ─── Manual Step 2: Strategy ──────────────────────────────────────────────────
 
-  function renderStep2() {
+  function renderManualStrategy() {
     const categories = ["All", ...Array.from(new Set(STRATEGIES.map((s) => s.category)))];
     const filtered = stratCategory === "All" ? STRATEGIES : STRATEGIES.filter((s) => s.category === stratCategory);
     return (
@@ -850,7 +943,6 @@ export default function BacktestView() {
                 strategy === s.type ? "border-[var(--accent-color)]/60 bg-[var(--accent-color)]/5" : "border-white/10 bg-white/5"
               }`}>
               <div className="flex w-full items-center justify-between">
-                <span className="text-xl">{s.icon}</span>
                 <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[9px] text-zinc-500">{s.category}</span>
               </div>
               <div>
@@ -879,7 +971,7 @@ export default function BacktestView() {
             <input type="text" value={setup.tickers} onChange={(e) => setSetup({ ...setup, tickers: e.target.value.toUpperCase() })}
               placeholder="AAPL, MSFT, GOOGL, AMZN"
               className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none" />
-            <p className="text-xs text-zinc-600">Enter 2–10 tickers. Modern portfolio theory finds optimal allocation weights.</p>
+            <p className="text-xs text-zinc-600">Enter 2-10 tickers. Modern portfolio theory finds optimal allocation weights.</p>
           </div>
         )}
 
@@ -891,16 +983,16 @@ export default function BacktestView() {
         )}
 
         <div className="flex items-center justify-between">
-          <button onClick={() => setStep(1)} className="text-xs text-zinc-500 hover:text-zinc-300 transition">← Back</button>
-          <button onClick={() => setStep(3)} className="rounded-lg bg-[var(--accent-color)] px-5 py-2 text-sm font-semibold text-[#020308] transition hover:opacity-90">Continue →</button>
+          <button onClick={() => setMode("manual-setup")} className="text-xs text-zinc-500 hover:text-zinc-300 transition">&larr; Back</button>
+          <button onClick={() => setMode("manual-params")} className="rounded-lg bg-[var(--accent-color)] px-5 py-2 text-sm font-semibold text-[#020308] transition hover:opacity-90">Continue &rarr;</button>
         </div>
       </div>
     );
   }
 
-  // ─── Step 3: Parameters ─────────────────────────────────────────────────────
+  // ─── Manual Step 3: Parameters ────────────────────────────────────────────────
 
-  function renderStep3() {
+  function renderManualParams() {
     const p = params;
     const set = (updates: Partial<Params>) => setParams({ ...p, ...updates });
 
@@ -929,11 +1021,8 @@ export default function BacktestView() {
                 <label className="text-xs text-zinc-400">MA Type</label>
                 <select value={p.maType} onChange={(e) => set({ maType: e.target.value as Params["maType"] })}
                   className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none">
-                  <option value="sma">SMA</option>
-                  <option value="ema">EMA</option>
-                  <option value="wma">WMA</option>
-                  <option value="dema">DEMA</option>
-                  <option value="tema">TEMA</option>
+                  <option value="sma">SMA</option><option value="ema">EMA</option><option value="wma">WMA</option>
+                  <option value="dema">DEMA</option><option value="tema">TEMA</option>
                 </select>
               </div>
             </div>
@@ -1043,14 +1132,10 @@ export default function BacktestView() {
                 <label className="text-xs text-zinc-400">Options Strategy</label>
                 <select value={p.optionStrategy} onChange={(e) => set({ optionStrategy: e.target.value })}
                   className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none">
-                  <option value="covered_call">Covered Call</option>
-                  <option value="cash_secured_put">Cash Secured Put</option>
-                  <option value="bull_call_spread">Bull Call Spread</option>
-                  <option value="bear_put_spread">Bear Put Spread</option>
-                  <option value="iron_condor">Iron Condor</option>
-                  <option value="straddle">Straddle</option>
-                  <option value="strangle">Strangle</option>
-                  <option value="butterfly">Butterfly Spread</option>
+                  <option value="covered_call">Covered Call</option><option value="cash_secured_put">Cash Secured Put</option>
+                  <option value="bull_call_spread">Bull Call Spread</option><option value="bear_put_spread">Bear Put Spread</option>
+                  <option value="iron_condor">Iron Condor</option><option value="straddle">Straddle</option>
+                  <option value="strangle">Strangle</option><option value="butterfly">Butterfly Spread</option>
                 </select>
               </div>
               <NumInput label="Expiry Days" value={p.expiryDays} onChange={(v) => set({ expiryDays: v })} min={7} max={180} />
@@ -1078,7 +1163,6 @@ export default function BacktestView() {
             </button>
             {riskOpen && (
               <div className="border-t border-white/10 p-4 space-y-5">
-                {/* Stop Loss */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-xs text-zinc-300 font-medium">Stop Loss</label>
@@ -1090,9 +1174,7 @@ export default function BacktestView() {
                         <label className="text-xs text-zinc-400">Stop Loss Type</label>
                         <select value={p.stopLossType} onChange={(e) => set({ stopLossType: e.target.value as Params["stopLossType"] })}
                           className="rounded-lg border border-white/10 bg-[var(--app-card-alt)] px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none">
-                          <option value="fixed">Fixed %</option>
-                          <option value="trailing">Trailing %</option>
-                          <option value="atr">ATR-Based</option>
+                          <option value="fixed">Fixed %</option><option value="trailing">Trailing %</option><option value="atr">ATR-Based</option>
                         </select>
                       </div>
                       {(p.stopLossType === "fixed" || p.stopLossType === "trailing") && (
@@ -1107,7 +1189,6 @@ export default function BacktestView() {
                   )}
                 </div>
 
-                {/* Take Profit */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <label className="text-xs text-zinc-300 font-medium">Take Profit</label>
@@ -1128,20 +1209,16 @@ export default function BacktestView() {
                           {p.takeProfitTargets.map((t, i) => (
                             <div key={i} className="flex items-center gap-2">
                               <input type="number" value={t.pct} onChange={(e) => {
-                                const tgts = [...p.takeProfitTargets];
-                                tgts[i] = { ...t, pct: Number(e.target.value) };
-                                set({ takeProfitTargets: tgts });
+                                const tgts = [...p.takeProfitTargets]; tgts[i] = { ...t, pct: Number(e.target.value) }; set({ takeProfitTargets: tgts });
                               }} min={1} placeholder="%" className="w-20 rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-200" />
                               <span className="text-xs text-zinc-600">%</span>
                               <input type="number" value={t.size} onChange={(e) => {
-                                const tgts = [...p.takeProfitTargets];
-                                tgts[i] = { ...t, size: Number(e.target.value) };
-                                set({ takeProfitTargets: tgts });
+                                const tgts = [...p.takeProfitTargets]; tgts[i] = { ...t, size: Number(e.target.value) }; set({ takeProfitTargets: tgts });
                               }} min={1} max={100} placeholder="size%" className="w-20 rounded border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-200" />
                               <span className="text-xs text-zinc-600">% exit</span>
                               {p.takeProfitTargets.length > 1 && (
                                 <button onClick={() => set({ takeProfitTargets: p.takeProfitTargets.filter((_, j) => j !== i) })}
-                                  className="text-xs text-red-400 hover:text-red-300">✕</button>
+                                  className="text-xs text-red-400 hover:text-red-300">&times;</button>
                               )}
                             </div>
                           ))}
@@ -1198,23 +1275,27 @@ export default function BacktestView() {
         </div>
 
         <div className="flex items-center justify-between">
-          <button onClick={() => setStep(2)} className="text-xs text-zinc-500 hover:text-zinc-300 transition">← Back</button>
+          <button onClick={() => setMode("manual-strategy")} className="text-xs text-zinc-500 hover:text-zinc-300 transition">&larr; Back</button>
           <button onClick={runBacktest} className="rounded-lg bg-[var(--accent-color)] px-6 py-2 text-sm font-semibold text-[#020308] transition hover:opacity-90">
-            Run Backtest →
+            Run Backtest &rarr;
           </button>
         </div>
       </div>
     );
   }
 
-  // ─── Step 4: Loading ────────────────────────────────────────────────────────
+  // ─── Running ──────────────────────────────────────────────────────────────────
 
-  function renderStep4() {
+  function renderRunning() {
     return (
       <div className="flex flex-col items-center justify-center gap-8 py-20">
         <div className="relative">
           <div className="h-20 w-20 rounded-full border-2 border-[var(--accent-color)]/20 border-t-[var(--accent-color)] animate-spin" />
-          <div className="absolute inset-0 flex items-center justify-center"><span className="text-2xl">📊</span></div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <svg className="h-8 w-8 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+            </svg>
+          </div>
         </div>
         <div className="w-full max-w-sm space-y-3 text-center">
           <p className="text-sm font-medium text-zinc-200">{STATUS_MESSAGES[statusIdx]}</p>
@@ -1223,21 +1304,17 @@ export default function BacktestView() {
           </div>
           <p className="text-xs text-zinc-600">{Math.round(progress)}% complete</p>
         </div>
-        <p className="text-xs text-zinc-600 max-w-xs text-center">
-          Fetching {setup.ticker} historical data from {setup.startDate} to {setup.endDate} and running the simulation…
-        </p>
       </div>
     );
   }
 
-  // ─── Step 5: Results ────────────────────────────────────────────────────────
+  // ─── Results ──────────────────────────────────────────────────────────────────
 
-  function renderStep5() {
+  function renderResults() {
     if (!result) return null;
     const m = result.metrics;
     const { grade, color: gradeColor } = gradeFromMetrics(m);
 
-    // Drawdown reference areas
     const ddAreas: { x1: string; x2: string }[] = [];
     let ddStart: string | null = null;
     m.drawdown_curve?.forEach((d) => {
@@ -1245,7 +1322,6 @@ export default function BacktestView() {
       if (d.drawdown >= -2 && ddStart) { ddAreas.push({ x1: ddStart, x2: d.date }); ddStart = null; }
     });
 
-    // Monthly heatmap
     const monthlyYears: Record<string, Record<number, number>> = {};
     Object.entries(m.monthly_returns ?? {}).forEach(([key, val]) => {
       const [year, mon] = key.split("-");
@@ -1256,8 +1332,6 @@ export default function BacktestView() {
 
     const chartData = (m.equity_curve ?? []).map((pt) => ({ date: pt.date, Portfolio: pt.value }));
     const compareChartData = compareResult?.metrics.equity_curve?.map((pt) => ({ date: pt.date, Compare: pt.value })) ?? [];
-
-    // Merge compare overlay
     const mergedChart = chartData.map((pt) => {
       const cmp = compareChartData.find((c) => c.date === pt.date);
       return { ...pt, ...(cmp ?? {}) };
@@ -1269,7 +1343,6 @@ export default function BacktestView() {
       return obj;
     }) ?? [];
 
-    // Compute expectancy if not from backend
     const expectancy = m.expectancy ?? (
       m.win_rate != null && m.avg_win != null && m.avg_loss != null
         ? (m.win_rate / 100) * m.avg_win - (1 - m.win_rate / 100) * Math.abs(m.avg_loss)
@@ -1284,15 +1357,10 @@ export default function BacktestView() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-6 shadow-2xl">
               <p className="mb-4 text-sm font-semibold text-zinc-100">Save Strategy</p>
-              <input
-                type="text"
-                value={saveName}
-                onChange={(e) => setSaveName(e.target.value)}
+              <input type="text" value={saveName} onChange={(e) => setSaveName(e.target.value)}
                 placeholder="e.g. AAPL MACD Bull Run"
                 className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-zinc-200 focus:border-[var(--accent-color)]/50 focus:outline-none"
-                onKeyDown={(e) => { if (e.key === "Enter") saveStrategy(); }}
-                autoFocus
-              />
+                onKeyDown={(e) => { if (e.key === "Enter") saveStrategy(); }} autoFocus />
               <div className="mt-4 flex gap-3">
                 <button onClick={() => setSaveModalOpen(false)} className="flex-1 rounded-lg border border-white/10 py-2 text-sm text-zinc-400 hover:bg-white/5 transition">Cancel</button>
                 <button onClick={saveStrategy} disabled={!saveName.trim()} className="flex-1 rounded-lg bg-[var(--accent-color)] py-2 text-sm font-semibold text-[#020308] hover:opacity-90 transition disabled:opacity-40">Save</button>
@@ -1305,17 +1373,17 @@ export default function BacktestView() {
         <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-5">
           <div>
             <p className="text-xs text-zinc-500 uppercase tracking-widest">
-              {result.ticker} · {result.strategy_type.replace(/_/g, " ")} · {setup.timeframe} · {setup.direction}
+              {result.ticker} / {result.strategy_type.replace(/_/g, " ")} / {setup.timeframe} / {setup.direction}
             </p>
             <p className={`mt-1 text-4xl font-bold ${retColor(m.total_return)}`}>{fmtPct(m.total_return, 1)}</p>
-            <p className="mt-1 text-xs text-zinc-500">{setup.startDate} → {setup.endDate}</p>
+            <p className="mt-1 text-xs text-zinc-500">{setup.startDate} &rarr; {setup.endDate}</p>
           </div>
           <div className="ml-4 flex flex-col gap-1">
             <span className="text-xs text-zinc-500">Alpha vs SPY</span>
             <span className={`text-lg font-semibold ${retColor(m.alpha)}`}>
-              {m.alpha != null ? `${m.alpha >= 0 ? "+" : ""}${m.alpha.toFixed(1)}%` : "—"}
+              {m.alpha != null ? `${m.alpha >= 0 ? "+" : ""}${m.alpha.toFixed(1)}%` : "\u2014"}
             </span>
-            {m.beta != null && <span className="text-xs text-zinc-600">β {m.beta.toFixed(2)}</span>}
+            {m.beta != null && <span className="text-xs text-zinc-600">&beta; {m.beta.toFixed(2)}</span>}
           </div>
           <div className={`ml-auto flex h-16 w-16 items-center justify-center rounded-full border-2 text-2xl font-black ${gradeColor}`}>
             {grade}
@@ -1330,9 +1398,9 @@ export default function BacktestView() {
             { label: "Sortino Ratio",     value: fmtNum(m.sortino_ratio),     color: m.sortino_ratio > 1 ? "text-emerald-400" : m.sortino_ratio > 0 ? "text-amber-400" : "text-red-400" },
             { label: "Calmar Ratio",      value: fmtNum(m.calmar_ratio),      color: m.calmar_ratio > 1 ? "text-emerald-400" : m.calmar_ratio > 0 ? "text-amber-400" : "text-red-400" },
             { label: "Max Drawdown",      value: fmtPct(m.max_drawdown),      color: "text-red-400" },
-            { label: "Win Rate",          value: m.win_rate != null ? `${m.win_rate.toFixed(1)}%` : "—", color: m.win_rate > 50 ? "text-emerald-400" : "text-red-400" },
+            { label: "Win Rate",          value: m.win_rate != null ? `${m.win_rate.toFixed(1)}%` : "\u2014", color: m.win_rate > 50 ? "text-emerald-400" : "text-red-400" },
             { label: "Profit Factor",     value: fmtNum(m.profit_factor),     color: m.profit_factor > 1 ? "text-emerald-400" : "text-red-400" },
-            { label: "Expectancy",        value: expectancy != null ? fmtPct(expectancy) : "—", color: retColor(expectancy) },
+            { label: "Expectancy",        value: expectancy != null ? fmtPct(expectancy) : "\u2014", color: retColor(expectancy) },
           ].map((item) => (
             <div key={item.label} className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3">
               <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{item.label}</p>
@@ -1344,14 +1412,14 @@ export default function BacktestView() {
         {/* Secondary metrics */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
-            { label: "Total Trades",    value: m.total_trades?.toString() ?? "—",    color: "text-zinc-200" },
-            { label: "Avg Hold Time",   value: m.avg_hold_time_days != null ? `${m.avg_hold_time_days.toFixed(1)}d` : "—", color: "text-zinc-200" },
+            { label: "Total Trades",    value: m.total_trades?.toString() ?? "\u2014",    color: "text-zinc-200" },
+            { label: "Avg Hold Time",   value: m.avg_hold_time_days != null ? `${m.avg_hold_time_days.toFixed(1)}d` : "\u2014", color: "text-zinc-200" },
             { label: "Avg Win",         value: fmtPct(m.avg_win),                    color: "text-emerald-400" },
             { label: "Avg Loss",        value: fmtPct(m.avg_loss),                   color: "text-red-400" },
             { label: "Best Trade",      value: fmtPct(m.best_trade),                 color: "text-emerald-400" },
             { label: "Worst Trade",     value: fmtPct(m.worst_trade),                color: "text-red-400" },
-            { label: "Max Consec. Wins",  value: m.max_consecutive_wins?.toString() ?? "—",   color: "text-emerald-400" },
-            { label: "Max Consec. Losses", value: m.max_consecutive_losses?.toString() ?? "—", color: "text-red-400" },
+            { label: "Max Consec. Wins",  value: m.max_consecutive_wins?.toString() ?? "\u2014",   color: "text-emerald-400" },
+            { label: "Max Consec. Losses", value: m.max_consecutive_losses?.toString() ?? "\u2014", color: "text-red-400" },
           ].map((item) => (
             <div key={item.label} className="rounded-xl border border-white/10 bg-[var(--app-card-alt)] p-3">
               <p className="text-[10px] text-zinc-500 uppercase tracking-wider">{item.label}</p>
@@ -1389,7 +1457,7 @@ export default function BacktestView() {
                   <span className="text-xs text-zinc-500">{result.ticker}</span>
                   <span className="h-2 w-4 rounded bg-amber-400" />
                   <span className="text-xs text-zinc-500">{compareResult.ticker}</span>
-                  <button onClick={() => setCompareResult(null)} className="text-xs text-red-400 hover:text-red-300">✕ Clear</button>
+                  <button onClick={() => setCompareResult(null)} className="text-xs text-red-400 hover:text-red-300">&times; Clear</button>
                 </div>
               )}
             </div>
@@ -1434,7 +1502,7 @@ export default function BacktestView() {
                 <thead>
                   <tr>
                     <th className="py-1 pr-3 text-left text-zinc-500">Year</th>
-                    {MONTHS.map((m) => <th key={m} className="py-1 text-zinc-500 font-normal">{m}</th>)}
+                    {MONTHS.map((mo) => <th key={mo} className="py-1 text-zinc-500 font-normal">{mo}</th>)}
                     <th className="py-1 text-zinc-500 font-normal">Total</th>
                   </tr>
                 </thead>
@@ -1452,7 +1520,7 @@ export default function BacktestView() {
                             <td key={i} className="py-0.5 px-0.5">
                               <div className={`rounded px-1 py-1 ${bg}`}>
                                 <span className={val == null ? "text-zinc-700" : val >= 0 ? "text-emerald-300" : "text-red-300"}>
-                                  {val == null ? "—" : val.toFixed(1)}
+                                  {val == null ? "\u2014" : val.toFixed(1)}
                                 </span>
                               </div>
                             </td>
@@ -1522,18 +1590,12 @@ export default function BacktestView() {
               </LineChart>
             </ResponsiveContainer>
             <div className="mt-3 grid grid-cols-3 gap-3 text-center">
-              <div>
-                <p className="text-[10px] text-zinc-500">Avg In-Sample Sharpe</p>
-                <p className="text-sm font-semibold text-zinc-200">{result.walk_forward.avg_in_sample_sharpe}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-zinc-500">Avg OOS Sharpe</p>
-                <p className="text-sm font-semibold text-zinc-200">{result.walk_forward.avg_oos_sharpe}</p>
-              </div>
+              <div><p className="text-[10px] text-zinc-500">Avg In-Sample Sharpe</p><p className="text-sm font-semibold text-zinc-200">{result.walk_forward.avg_in_sample_sharpe}</p></div>
+              <div><p className="text-[10px] text-zinc-500">Avg OOS Sharpe</p><p className="text-sm font-semibold text-zinc-200">{result.walk_forward.avg_oos_sharpe}</p></div>
               <div>
                 <p className="text-[10px] text-zinc-500">Efficiency Ratio</p>
                 <p className={`text-sm font-semibold ${result.walk_forward.avg_efficiency_ratio != null && result.walk_forward.avg_efficiency_ratio > 0.5 ? "text-emerald-400" : "text-amber-400"}`}>
-                  {result.walk_forward.avg_efficiency_ratio?.toFixed(2) ?? "—"}
+                  {result.walk_forward.avg_efficiency_ratio?.toFixed(2) ?? "\u2014"}
                 </p>
               </div>
             </div>
@@ -1544,7 +1606,7 @@ export default function BacktestView() {
         {result.monte_carlo && mcData.length > 0 && (
           <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] p-4">
             <p className="mb-1 text-sm font-semibold text-zinc-200">Monte Carlo Simulation</p>
-            <p className="mb-4 text-xs text-zinc-500">{result.monte_carlo.n_runs.toLocaleString()} simulations · {result.monte_carlo.n_trades} trades</p>
+            <p className="mb-4 text-xs text-zinc-500">{result.monte_carlo.n_runs.toLocaleString()} simulations / {result.monte_carlo.n_trades} trades</p>
             <ResponsiveContainer width="100%" height={220}>
               <AreaChart data={mcData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
@@ -1563,7 +1625,7 @@ export default function BacktestView() {
                 { label: "Prob. Profit",  value: `${result.monte_carlo.probability_metrics.prob_profit}%`,      color: "text-emerald-400" },
                 { label: "Prob. -10%",    value: `${result.monte_carlo.probability_metrics.prob_loss_10pct}%`,  color: "text-amber-400" },
                 { label: "Prob. -25%",    value: `${result.monte_carlo.probability_metrics.prob_loss_25pct}%`,  color: "text-red-400" },
-                { label: "Prob. 2×",      value: `${result.monte_carlo.probability_metrics.prob_double}%`,      color: "text-emerald-400" },
+                { label: "Prob. 2x",      value: `${result.monte_carlo.probability_metrics.prob_double}%`,      color: "text-emerald-400" },
               ].map((item) => (
                 <div key={item.label} className="rounded-xl border border-white/10 p-2">
                   <p className="text-[10px] text-zinc-500">{item.label}</p>
@@ -1578,7 +1640,9 @@ export default function BacktestView() {
         {result.ai_analysis && (
           <div className="rounded-2xl border border-[var(--accent-color)]/20 bg-[var(--accent-color)]/5 p-5">
             <div className="mb-3 flex items-center gap-2">
-              <span className="text-lg">🤖</span>
+              <svg className="h-5 w-5 text-[var(--accent-color)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
+              </svg>
               <p className="text-sm font-semibold text-zinc-200">AI Strategy Analysis</p>
               <span className="rounded-full border border-[var(--accent-color)]/30 px-2 py-0.5 text-[10px] font-medium text-[var(--accent-color)]">Claude AI</span>
             </div>
@@ -1590,21 +1654,21 @@ export default function BacktestView() {
 
         {/* Action bar */}
         <div className="flex flex-wrap gap-3">
-          <button onClick={() => { setStep(1); setResult(null); setError(null); }}
+          <button onClick={() => { setMode("landing"); setResult(null); setError(null); setChatMessages([]); }}
             className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10">
-            ↩ Run Again
+            &larr; New Backtest
           </button>
           <button onClick={() => setSaveModalOpen(true)}
             className="rounded-lg border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-4 py-2 text-sm font-medium text-[var(--accent-color)] transition hover:bg-[var(--accent-color)]/20">
-            💾 Save Strategy
+            Save Strategy
           </button>
           <button onClick={exportCSV}
             className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10">
-            ↓ Export CSV
+            Export CSV
           </button>
           <button onClick={exportJSON}
             className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-white/10">
-            ↓ Export JSON
+            Export JSON
           </button>
         </div>
       </div>
@@ -1615,12 +1679,13 @@ export default function BacktestView() {
 
   return (
     <div className="mx-auto max-w-4xl">
-      {step !== 4 && step !== 5 && <StepBar step={step} />}
-      {step === 1 && renderStep1()}
-      {step === 2 && renderStep2()}
-      {step === 3 && renderStep3()}
-      {step === 4 && renderStep4()}
-      {step === 5 && renderStep5()}
+      {mode === "landing" && renderLanding()}
+      {mode === "chat" && renderChat()}
+      {mode === "manual-setup" && renderManualSetup()}
+      {mode === "manual-strategy" && renderManualStrategy()}
+      {mode === "manual-params" && renderManualParams()}
+      {mode === "running" && renderRunning()}
+      {mode === "results" && renderResults()}
     </div>
   );
 }
