@@ -208,6 +208,7 @@ const CARD_REGISTRY: { id: string; name: string; h: number }[] = [
   { id: "sentiment-radar",    name: "Sentiment Radar",     h: 290 },
   { id: "prediction-markets", name: "Prediction Markets",  h: 260 },
   { id: "market-relations",   name: "Market Relations",    h: 230 },
+  { id: "greeks",             name: "Greeks & Options",    h: 260 },
 ];
 
 // Height-balanced default: greedy bin-packing assigns each card to shortest column,
@@ -247,6 +248,7 @@ const DEFAULT_LAYOUT: FeedCard[] = [
   { id: "sentiment-radar",    col: "right",  order: 7,  size: "normal" },
   { id: "prediction-markets", col: "right",  order: 8,  size: "normal" },
   { id: "market-relations",   col: "right",  order: 9,  size: "normal" },
+  { id: "greeks",             col: "right",  order: 10, size: "normal" },
 ];
 
 function useFeedLayout() {
@@ -2028,6 +2030,77 @@ function MarketRelationsCard({delay}:{delay:number}) {
   );
 }
 
+// ── Greeks & Options Card ─────────────────────────────────────────────────────
+
+type GreeksMacro = {
+  vix:{value:number|null;change:number|null};
+  vvix:{value:number|null;change:number|null};
+  skew:{value:number|null;change:number|null};
+  vixStructure:string;
+  ovx:{value:number|null;change:number|null};
+  gvz:{value:number|null;change:number|null};
+  tyvix:{value:number|null;change:number|null};
+  crossAssetVol:Array<{label:string;ticker:string;hv30:number;iv:number|null}>;
+};
+
+function GreeksCard({delay}:{delay:number}) {
+  const [d, setD] = useState<GreeksMacro|null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(()=>{
+    fetch("/api/greeks/macro").then(r=>r.json()).then((m:GreeksMacro)=>setD(m)).catch(()=>{}).finally(()=>setLoading(false));
+  },[]);
+
+  useEffect(()=>{ load(); const id=setInterval(load,2*60*1000); return ()=>clearInterval(id); },[load]);
+
+  const chg = (v:number|null) => v!=null ? `${v>=0?"+":""}${v.toFixed(1)}%` : "";
+
+  return (
+    <BentoCard href="/greeks" title="Greeks & Options" icon={I.activity} delay={delay} loading={loading} className="min-h-[260px]">
+      {/* VIX headline */}
+      {d?.vix.value != null && (
+        <div className="mb-2 flex items-center justify-between rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2">
+          <div>
+            <p className="text-[9px] text-zinc-600">CBOE VIX</p>
+            <p className="text-lg font-black tabular-nums" style={{color: d.vix.value >= 25 ? "#f87171" : d.vix.value >= 18 ? "#fbbf24" : "#4ade80"}}>
+              {d.vix.value.toFixed(1)}
+            </p>
+          </div>
+          <div className="text-right">
+            {d.vix.change != null && <p className={`text-[10px] font-semibold tabular-nums ${d.vix.change>=0?"text-red-400":"text-emerald-400"}`}>{chg(d.vix.change)}</p>}
+            <p className={`text-[9px] font-medium ${d.vixStructure==="Backwardation"?"text-red-400/70":"text-emerald-400/70"}`}>{d.vixStructure}</p>
+          </div>
+        </div>
+      )}
+      {/* Vol indices row */}
+      <div className="mb-2 grid grid-cols-3 gap-1.5">
+        {([
+          {label:"VVIX",val:d?.vvix.value,ch:d?.vvix.change,clr:"#f97316"},
+          {label:"SKEW",val:d?.skew.value,ch:d?.skew.change,clr:"#a78bfa"},
+          {label:"OVX",val:d?.ovx.value,ch:d?.ovx.change,clr:"#f59e0b"},
+        ] as const).map(({label,val,ch,clr})=>(
+          <div key={label} className="rounded-lg border border-white/5 bg-white/[0.02] px-2 py-1.5 text-center">
+            <p className="text-[8px] text-zinc-600">{label}</p>
+            <p className="text-[11px] font-bold tabular-nums" style={{color:clr}}>{val!=null?val.toFixed(1):"—"}</p>
+            {ch!=null && <p className={`text-[8px] tabular-nums ${ch>=0?"text-red-400/70":"text-emerald-400/70"}`}>{chg(ch)}</p>}
+          </div>
+        ))}
+      </div>
+      {/* Cross-asset HV30 bars */}
+      {d?.crossAssetVol && d.crossAssetVol.slice(0,4).map(({label,hv30})=>(
+        <div key={label} className="mb-1 flex items-center gap-2">
+          <span className="w-16 shrink-0 text-[8px] text-zinc-500">{label}</span>
+          <div className="flex-1 h-2 rounded bg-white/5">
+            <div className="h-full rounded bg-blue-500/50" style={{width:`${Math.min(100,hv30*250)}%`}}/>
+          </div>
+          <span className="w-10 shrink-0 text-right text-[8px] font-medium tabular-nums text-blue-400">{(hv30*100).toFixed(1)}%</span>
+        </div>
+      ))}
+      <p className="mt-2 text-[10px] text-zinc-600">Market volatility & derivatives →</p>
+    </BentoCard>
+  );
+}
+
 // ── Portfolios Card ───────────────────────────────────────────────────────────
 
 function PortfoliosCard({delay}:{delay:number}) {
@@ -2361,6 +2434,7 @@ export default function BentoDashboardView() {
           case "sentiment-radar":    return <SentimentRadarCard delay={cardDelay} />;
           case "prediction-markets": return <PredictionMarketsCard delay={cardDelay} />;
           case "market-relations":   return <MarketRelationsCard delay={cardDelay} />;
+          case "greeks":             return <GreeksCard delay={cardDelay} />;
           default: return null;
         }
       })();

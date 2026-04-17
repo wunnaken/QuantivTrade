@@ -8,22 +8,34 @@ export type SidebarPrefs = {
   collapsed: boolean;
   collapsedSections: string[];
   sectionOrder: string[];
+  standaloneOrder: string[];
+  hiddenStandalone: string[];
 };
 
+const DEFAULT_STANDALONE = ["/feed", "/social-feed", "/marketplace", "/brokers", "/archive"];
+
 function getDefaultPrefs(allHrefs: string[]): SidebarPrefs {
-  return { order: [...allHrefs], hidden: [], collapsed: false, collapsedSections: ["community", "markets", "analytics", "personal"], sectionOrder: [] };
+  return { order: [...allHrefs], hidden: [], collapsed: false, collapsedSections: ["community", "markets", "analytics", "personal"], sectionOrder: [], standaloneOrder: [...DEFAULT_STANDALONE], hiddenStandalone: [] };
 }
 
 function normalizePrefs(raw: unknown, allHrefs: string[]): SidebarPrefs {
   const defaultOrder = [...allHrefs];
   const set = new Set(allHrefs);
+  const standaloneSet = new Set(DEFAULT_STANDALONE);
   try {
-    const parsed = raw as { order?: unknown; hidden?: unknown; collapsed?: boolean; collapsedSections?: unknown; sectionOrder?: unknown };
+    const parsed = raw as { order?: unknown; hidden?: unknown; collapsed?: boolean; collapsedSections?: unknown; sectionOrder?: unknown; standaloneOrder?: unknown; hiddenStandalone?: unknown };
     const order = Array.isArray(parsed?.order) ? (parsed.order as string[]) : defaultOrder;
     const hidden = Array.isArray(parsed?.hidden) ? (parsed.hidden as string[]) : [];
     const collapsed = typeof parsed?.collapsed === "boolean" ? parsed.collapsed : false;
     const collapsedSections = Array.isArray(parsed?.collapsedSections) ? (parsed.collapsedSections as string[]) : ["community", "markets", "analytics", "personal"];
     const sectionOrder = Array.isArray(parsed?.sectionOrder) ? (parsed.sectionOrder as string[]) : [];
+    const standaloneOrder = Array.isArray(parsed?.standaloneOrder)
+      ? (parsed.standaloneOrder as string[]).filter((h) => standaloneSet.has(h))
+      : [...DEFAULT_STANDALONE];
+    const missingStandalone = DEFAULT_STANDALONE.filter((h) => !standaloneOrder.includes(h));
+    const hiddenStandalone = Array.isArray(parsed?.hiddenStandalone)
+      ? (parsed.hiddenStandalone as string[]).filter((h) => standaloneSet.has(h))
+      : [];
     const orderFiltered = order.filter((h) => set.has(h));
     const missing = allHrefs.filter((h) => !orderFiltered.includes(h));
     const hiddenFiltered = hidden.filter((h) => set.has(h) && !missing.includes(h));
@@ -38,7 +50,7 @@ function normalizePrefs(raw: unknown, allHrefs: string[]): SidebarPrefs {
         nextOrder.push(href);
       }
     });
-    return { order: nextOrder, hidden: hiddenFiltered, collapsed, collapsedSections, sectionOrder };
+    return { order: nextOrder, hidden: hiddenFiltered, collapsed, collapsedSections, sectionOrder, standaloneOrder: [...standaloneOrder, ...missingStandalone], hiddenStandalone };
   } catch {
     return getDefaultPrefs(allHrefs);
   }

@@ -622,6 +622,7 @@ function BentoSection() {
 const SCREENSHOTS = [
   { src: "/ss-dashboard.png",    label: "Dashboard",    desc: "Everything at a glance" },
   { src: "/ss-marketplace.png",  label: "Marketplace",  desc: "Strategies from verified traders" },
+  { src: "/ss-greeks.png",       label: "Greeks & Options", desc: "Coming soon — derivatives intelligence" },
   { src: "/ss-social-feed.png",  label: "Social Feed",  desc: "Real-time takes from the community" },
   { src: "/ss-profile.png",      label: "Profile",      desc: "Your identity on the platform" },
 ];
@@ -639,9 +640,9 @@ function ScreenshotShowcase() {
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 10 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.5 }}
         style={{ textAlign: "center", marginBottom: "36px" }}>
-        <p className="overline-label" style={{ marginBottom: "12px" }}>The Platform</p>
+        <p className="overline-label" style={{ marginBottom: "12px" }}>Preview</p>
         <p style={{ fontFamily: "var(--font-lora), Georgia, serif", fontSize: "clamp(20px, 2.4vw, 28px)", fontWeight: 600, color: "#fff" }}>
-          The platform you&apos;ll open every morning.
+          Our Platform
         </p>
       </motion.div>
 
@@ -659,7 +660,12 @@ function ScreenshotShowcase() {
           />
           {/* Bottom gradient + label overlay */}
           <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: "32px 28px 22px", background: "linear-gradient(to top, rgba(8,13,20,0.92) 0%, rgba(8,13,20,0.4) 60%, transparent 100%)" }}>
-            <p style={{ fontFamily: "var(--font-lora), Georgia, serif", fontSize: "18px", fontWeight: 600, color: "#fff", marginBottom: "4px" }}>{SCREENSHOTS[active].label}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
+              <p style={{ fontFamily: "var(--font-lora), Georgia, serif", fontSize: "18px", fontWeight: 600, color: "#fff" }}>{SCREENSHOTS[active].label}</p>
+              {SCREENSHOTS[active].desc.toLowerCase().includes("coming soon") && (
+                <span style={{ fontSize: "9px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "rgba(251,191,36,0.9)", background: "rgba(251,191,36,0.12)", border: "1px solid rgba(251,191,36,0.25)", padding: "2px 8px", borderRadius: "6px" }}>Coming Soon</span>
+              )}
+            </div>
             <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.45)" }}>{SCREENSHOTS[active].desc}</p>
           </div>
           {/* Prev / next arrow buttons */}
@@ -966,6 +972,37 @@ function ToolbarShowcaseInner() {
           animate={{r:[6,8,6]}} transition={{duration:2,repeat:Infinity,ease:"easeInOut"}}/>
       </svg>
     </> },
+    { name: "Greeks & Options", desc: "Volatility, greeks & exposure", badge: { label: "Soon", color: "rgba(251,191,36,0.9)", bg: "rgba(251,191,36,0.1)" }, vis: <>
+      {/* VIX headline */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+          <span style={{fontSize:"7px",color:"rgba(255,255,255,0.3)"}}>VIX</span>
+          <motion.span animate={{opacity:[0.8,1,0.8]}} transition={{duration:2.5,repeat:Infinity}}
+            style={{fontSize:"13px",fontWeight:800,color:"rgba(74,222,128,0.9)"}} >18.4</motion.span>
+        </div>
+        <span style={{fontSize:"7px",fontWeight:600,color:"rgba(74,222,128,0.6)",background:"rgba(74,222,128,0.08)",padding:"1px 4px",borderRadius:3}}>Contango</span>
+      </div>
+      {/* Term structure mini */}
+      <div style={{display:"flex",alignItems:"flex-end",gap:2,height:22,marginBottom:5}}>
+        {[{l:"9D",h:72},{l:"30",h:58},{l:"3M",h:50},{l:"6M",h:46},{l:"1Y",h:42}].map(({l,h},i)=>(
+          <div key={l} style={{flex:1,textAlign:"center"}}>
+            <motion.div initial={{height:0}} animate={{height:`${h}%`}} transition={{delay:i*0.08,duration:0.5,ease:"easeOut"}}
+              style={{width:"100%",borderRadius:"2px 2px 0 0",background:`rgba(239,68,68,${0.3+i*0.1})`,margin:"0 auto"}}/>
+          </div>
+        ))}
+      </div>
+      {/* Cross-asset vol bars */}
+      {[["S&P",32,"rgba(96,165,250,0.6)"],["Gold",18,"rgba(251,191,36,0.5)"],["Bonds",14,"rgba(147,197,253,0.5)"]].map(([n,w,c])=>(
+        <div key={n as string} style={{display:"flex",alignItems:"center",gap:4,marginBottom:3}}>
+          <span style={{fontSize:"7px",color:"rgba(255,255,255,0.25)",width:22,flexShrink:0}}>{n as string}</span>
+          <div style={{flex:1,height:3,borderRadius:2,background:"rgba(255,255,255,0.04)"}}>
+            <motion.div initial={{width:0}} animate={{width:`${w as number}%`}} transition={{duration:0.7,ease:"easeOut"}}
+              style={{height:"100%",borderRadius:2,background:c as string}}/>
+          </div>
+          <span style={{fontSize:"6px",color:"rgba(255,255,255,0.2)",width:18,textAlign:"right"}}>{w as number}%</span>
+        </div>
+      ))}
+    </> },
     { name: "Building Data", desc: "Commercial real estate metrics", vis: <>
       <div style={{display:"flex",alignItems:"flex-end",gap:3,height:44}}>
         {[60,45,70,55,80,65,50,75,60,40].map((h,i)=>(
@@ -1238,6 +1275,9 @@ function NewsletterSection() {
           transition={{ duration: 0.55 }}
         >
           <p className="overline-label mb-4">Stay in the loop</p>
+          <p className="mb-5" style={{ color: "rgba(255,255,255,0.45)", fontSize: "15px", lineHeight: 1.7 }}>
+            We ship new features every month with constant refinements — new tools, smarter analytics, and platform improvements based on what traders actually need.
+          </p>
           <h2 className="font-black tracking-tight text-white mb-3"
             style={{ fontSize: "clamp(24px, 3.5vw, 38px)", letterSpacing: "-0.02em" }}>
             Get notified on new releases

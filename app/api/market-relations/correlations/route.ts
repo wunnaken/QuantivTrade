@@ -133,7 +133,7 @@ function alignReturns(
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const days = Math.min(1825, Math.max(10, parseInt(searchParams.get("days") ?? "90", 10)));
+  const days = Math.min(1825, Math.max(5, parseInt(searchParams.get("days") ?? "90", 10)));
 
   const allTickers = Object.values(ASSETS).flat();
 

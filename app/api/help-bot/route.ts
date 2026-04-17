@@ -25,6 +25,7 @@ const SYSTEM = `You are the QuantivTrade Site Guide — a friendly assistant tha
 - /futures — Futures markets across asset classes
 - /crypto — Cryptocurrency prices and market data
 - /market-relations — Market relationship explorer (correlations, sector connections)
+- /greeks — Greeks & Options: full options chain with computed greeks, volatility surfaces, GEX/DEX, skew, term structure, max pain
 - /building-gas — Building materials, gas prices, and construction sector data
 - /sentiment — Sentiment Radar: aggregated market sentiment across assets
 - /insider-trades — Insider trading filings and activity tracker

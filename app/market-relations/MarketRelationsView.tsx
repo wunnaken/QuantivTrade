@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useReducer } from "react";
+import React, { useState, useEffect, useCallback, useRef, useReducer, Component, type ReactNode } from "react";
 import {
   LineChart,
   Line,
@@ -9,6 +9,35 @@ import {
   Tooltip as RechartTooltip,
   ResponsiveContainer,
 } from "recharts";
+
+// ─── Section Error Boundary ──────────────────────────────────────────────────
+
+class SectionErrorBoundary extends Component<
+  { name: string; children: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { name: string; children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() { return { hasError: true }; }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-5 text-center">
+          <p className="text-xs font-medium text-red-400">Failed to render {this.props.name}</p>
+          <button
+            onClick={() => this.setState({ hasError: false })}
+            className="mt-2 rounded-lg bg-white/10 px-3 py-1.5 text-[10px] text-zinc-300 hover:bg-white/15"
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -788,12 +817,18 @@ function CommodityFxCard({
   // corrAligned > 0 means the relationship is behaving as expected; < 0 means it has inverted.
   const corrAligned = corr !== null ? corr * pair.expectedSign : null;
   const divergenceNote = corrAligned !== null
-    ? corrAligned >= 0.55
+    ? corrAligned >= 0.7
+      ? "Relationship very strong — the structural link is firing on all cylinders. High conviction that moves in one are leading the other."
+      : corrAligned >= 0.5
       ? "Relationship holding — the structural link is active. Moves in one are likely leading the other."
-      : corrAligned >= 0.25
-      ? "Relationship weakening — the link is present but losing conviction. Monitor for a breakdown."
-      : corrAligned >= -0.2
+      : corrAligned >= 0.35
+      ? "Relationship moderate — the link is present but not dominant. Other macro forces may be diluting it."
+      : corrAligned >= 0.15
+      ? "Relationship weakening — the link is fading. Monitor for a potential breakdown or regime shift."
+      : corrAligned >= -0.15
       ? "Relationship neutral — neither confirming nor breaking the expected link. Likely driven by other forces."
+      : corrAligned >= -0.35
+      ? "Relationship weakly inverted — showing early signs of moving opposite to structural expectation."
       : "Relationship inverted — assets are moving opposite to the structural expectation. Potential mean-reversion signal."
     : null;
 
@@ -812,16 +847,23 @@ function CommodityFxCard({
       {corr !== null && corrAligned !== null && (() => {
         // Label reflects how well the expected relationship is holding, not raw Pearson magnitude.
         // corrAligned > 0 = behaving as expected; < 0 = inverted.
+        // Finer-grained thresholds so the label visibly shifts across timeframes.
         const expectedDir = pair.expectedSign > 0 ? "together" : "inverse";
         const relLabel =
-          corrAligned >= 0.5  ? `Strong ${expectedDir}`
-          : corrAligned >= 0.25 ? `Moderate ${expectedDir}`
+          corrAligned >= 0.7  ? `Very strong ${expectedDir}`
+          : corrAligned >= 0.5  ? `Strong ${expectedDir}`
+          : corrAligned >= 0.35 ? `Moderate ${expectedDir}`
+          : corrAligned >= 0.15 ? `Weak ${expectedDir}`
           : corrAligned >= -0.15 ? "Neutral"
+          : corrAligned >= -0.35 ? "Weakly inverted"
           : `Inverted`;
         const relBadge =
-          corrAligned >= 0.5  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
-          : corrAligned >= 0.25 ? "bg-yellow-500/15 text-yellow-300 border-yellow-500/30"
+          corrAligned >= 0.7  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+          : corrAligned >= 0.5  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+          : corrAligned >= 0.35 ? "bg-yellow-500/15 text-yellow-300 border-yellow-500/30"
+          : corrAligned >= 0.15 ? "bg-orange-500/15 text-orange-300 border-orange-500/30"
           : corrAligned >= -0.15 ? "bg-zinc-500/15 text-zinc-400 border-zinc-500/30"
+          : corrAligned >= -0.35 ? "bg-red-500/10 text-red-300 border-red-500/20"
           : "bg-red-500/15 text-red-300 border-red-500/30";
         return (
           <div className="mb-2 flex items-center gap-2">
@@ -1001,8 +1043,9 @@ export default function MarketRelationsView() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [, setTick] = useState(0);
 
-  const loadDays = useCallback(async (days: number) => {
-    if (cacheRef.current[days] !== undefined || fetchingRef.current.has(days)) return;
+  const fetchDays = useCallback(async (days: number, force = false) => {
+    if (fetchingRef.current.has(days)) return;
+    if (!force && cacheRef.current[days] !== undefined) return;
     fetchingRef.current.add(days);
     forceUpdate();
     try {
@@ -1020,10 +1063,13 @@ export default function MarketRelationsView() {
     }
   }, [forceUpdate]);
 
+  // Stable wrapper that doesn't force — used by child modals
+  const loadDays = useCallback(async (days: number) => { await fetchDays(days); }, [fetchDays]);
+
   // Load data whenever a section's timeframe changes
-  useEffect(() => { void loadDays(TIMEFRAMES[hmTf]!.days); }, [hmTf, loadDays]);
-  useEffect(() => { void loadDays(TIMEFRAMES_CHART[spTf]!.days); }, [spTf, loadDays]);
-  useEffect(() => { void loadDays(TIMEFRAMES_CHART[cfTf]!.days); }, [cfTf, loadDays]);
+  useEffect(() => { void fetchDays(TIMEFRAMES[hmTf]!.days); }, [hmTf, fetchDays]);
+  useEffect(() => { void fetchDays(TIMEFRAMES_CHART[spTf]!.days); }, [spTf, fetchDays]);
+  useEffect(() => { void fetchDays(TIMEFRAMES_CHART[cfTf]!.days); }, [cfTf, fetchDays]);
 
   // Clock tick for "last updated" text
   useEffect(() => {
@@ -1031,23 +1077,27 @@ export default function MarketRelationsView() {
     return () => clearInterval(id);
   }, []);
 
-  // Live refresh: clear cache and reload active timeframes every 5 minutes
+  // Live refresh: force-refetch active timeframes every 2 minutes
   useEffect(() => {
     const id = setInterval(() => {
-      const activeDays = [TIMEFRAMES[hmTf]!.days, TIMEFRAMES_CHART[spTf]!.days, TIMEFRAMES_CHART[cfTf]!.days];
-      for (const d of activeDays) delete cacheRef.current[d];
-      for (const d of activeDays) void loadDays(d);
-    }, 5 * 60 * 1000);
+      const activeDays = new Set([
+        TIMEFRAMES[hmTf]!.days,
+        TIMEFRAMES_CHART[spTf]!.days,
+        TIMEFRAMES_CHART[cfTf]!.days,
+      ]);
+      for (const d of activeDays) void fetchDays(d, true);
+    }, 2 * 60 * 1000);
     return () => clearInterval(id);
-  }, [hmTf, spTf, cfTf, loadDays]);
+  }, [hmTf, spTf, cfTf, fetchDays]);
 
   // Derive per-section data from cache
   const hmData = cacheRef.current[TIMEFRAMES[hmTf]!.days] ?? null;
   const spData = cacheRef.current[TIMEFRAMES_CHART[spTf]!.days] ?? null;
   const cfData = cacheRef.current[TIMEFRAMES_CHART[cfTf]!.days] ?? null;
-  const hmLoading = !hmData && fetchingRef.current.has(TIMEFRAMES[hmTf]!.days);
-  const spLoading = !spData && fetchingRef.current.has(TIMEFRAMES_CHART[spTf]!.days);
-  const cfLoading = !cfData && fetchingRef.current.has(TIMEFRAMES_CHART[cfTf]!.days);
+  // Treat "no data yet" as loading — prevents flash of empty section before useEffect fires
+  const hmLoading = !hmData;
+  const spLoading = !spData;
+  const cfLoading = !cfData;
 
   // Heatmap ticker order + class boundary markers
   const orderedTickers = hmData
@@ -1062,14 +1112,14 @@ export default function MarketRelationsView() {
     }
   }
 
-  if (hmLoading && !hmData) return <LoadingSkeleton />;
+  if (hmLoading) return <LoadingSkeleton />;
 
   if (error && !hmData) {
     return (
       <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-6 text-center">
         <p className="mb-1 text-sm font-medium text-red-400">Failed to load correlation data</p>
         <p className="mb-4 text-xs text-zinc-600">{error}</p>
-        <button onClick={() => loadDays(TIMEFRAMES[hmTf].days)} className="rounded-lg bg-white/10 px-4 py-2 text-xs text-zinc-300 hover:bg-white/20">
+        <button onClick={() => fetchDays(TIMEFRAMES[hmTf].days, true)} className="rounded-lg bg-white/10 px-4 py-2 text-xs text-zinc-300 hover:bg-white/20">
           Retry
         </button>
       </div>
@@ -1080,6 +1130,7 @@ export default function MarketRelationsView() {
     <div className="space-y-6">
 
       {/* ── Section 1: Correlation Heatmap ───────────────────────────────────── */}
+      <SectionErrorBoundary name="Correlation Heatmap">
       <section>
         <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -1169,6 +1220,7 @@ export default function MarketRelationsView() {
           </>
         )}
       </section>
+      </SectionErrorBoundary>
 
       {/* ── Section 2: Surprising Correlations ───────────────────────────────── */}
       {expandedPair && (
@@ -1181,6 +1233,7 @@ export default function MarketRelationsView() {
           loadDays={loadDays}
         />
       )}
+      <SectionErrorBoundary name="Surprising Correlations">
       <section>
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -1238,8 +1291,10 @@ export default function MarketRelationsView() {
           );
         })()}
       </section>
+      </SectionErrorBoundary>
 
       {/* ── Section 3: Safe Haven Monitor ────────────────────────────────────── */}
+      <SectionErrorBoundary name="Safe Haven Monitor">
       <section>
         <SectionHeader label="Risk Sentiment" title="Safe Haven Status"
           subtitle="When fear rises, capital flows to safety. Track where money is hiding right now." />
@@ -1263,8 +1318,10 @@ export default function MarketRelationsView() {
           </p>
         </div>
       </section>
+      </SectionErrorBoundary>
 
       {/* ── Section 4: Commodity-Currency Links ──────────────────────────────── */}
+      <SectionErrorBoundary name="Commodity-Currency Links">
       <section>
         <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -1283,13 +1340,16 @@ export default function MarketRelationsView() {
           </div>
         )}
       </section>
+      </SectionErrorBoundary>
 
       {/* ── Section 5: Market Regime Detection ───────────────────────────────── */}
+      <SectionErrorBoundary name="Market Regime Detection">
       <section>
         <SectionHeader label="Macro Analysis" title="Market Regime Detection"
           subtitle="Cross-asset correlation patterns reveal the current market environment." />
         {hmData && <RegimePanel performance={hmData.performance} />}
       </section>
+      </SectionErrorBoundary>
 
       {/* ── Modal ────────────────────────────────────────────────────────────── */}
       {selectedPair && (

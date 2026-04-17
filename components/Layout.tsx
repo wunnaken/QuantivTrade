@@ -34,6 +34,7 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
   { href: "/futures", label: "Futures" },
   { href: "/crypto", label: "Crypto" },
   { href: "/market-relations", label: "Market Relations" },
+  { href: "/greeks", label: "Greeks & Options" },
   { href: "/building-gas", label: "Building & Gas" },
   { href: "/sentiment", label: "Sentiment Radar" },
   { href: "/insider-trades", label: "Insider Trades" },
@@ -56,12 +57,20 @@ const MAIN_NAV: { href: string; label: string; icon?: "home" | "settings" | "fee
 
 const SECTIONS: { id: string; label: string; hrefs: string[] }[] = [
   { id: "community", label: "Community", hrefs: ["/communities", "/messages", "/trade-rooms"] },
-  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/dividends", "/forex", "/futures", "/crypto", "/market-relations", "/building-gas", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
+  { id: "markets", label: "Markets", hrefs: ["/news", "/map", "/bonds", "/dividends", "/forex", "/futures", "/crypto", "/market-relations", "/greeks", "/building-gas", "/sentiment", "/insider-trades", "/fiscalwatch", "/portfolios"] },
   { id: "analytics", label: "Analytics", hrefs: ["/ceos", "/calendar", "/screener", "/supply-chain", "/backtest"] },
   { id: "personal", label: "Personal", hrefs: ["/journal", "/predict", "/watchlist", "/workspace", "/taxes"] },
 ];
 
 const MAIN_NAV_HREFS = MAIN_NAV.map((i) => i.href);
+
+const STANDALONE_ITEMS: { href: string; label: string; icon: "home" | "social" | "marketplace" | "briefcase" | "archive" }[] = [
+  { href: "/feed", label: "Dashboard", icon: "home" },
+  { href: "/social-feed", label: "Social Feed", icon: "social" },
+  { href: "/marketplace", label: "Marketplace", icon: "marketplace" },
+  { href: "/brokers", label: "My Brokerages", icon: "briefcase" },
+  { href: "/archive", label: "Archive", icon: "archive" },
+];
 
 const BOTTOM_NAV: { href: string; label: string; icon: "settings" | "feedback" | "verify" }[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
@@ -173,13 +182,20 @@ function NavItem({
   const showControls = customizeMode && !collapsed && onHide !== undefined;
 
   return (
-    <div className="group flex items-center gap-1 rounded-lg transition-colors duration-200 hover:bg-white/5">
+    <div className={`group flex items-center rounded-lg transition-colors duration-200 ${
+      isActive ? "bg-[var(--accent-color)]/20" : "hover:bg-white/5"
+    }`}>
+      {showControls && (
+        <span className="shrink-0 cursor-grab pl-1.5 text-zinc-600 select-none" title="Drag to reorder">
+          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20"><path d="M7 2a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zM7 8a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4zM7 14a2 2 0 110 4 2 2 0 010-4zm6 0a2 2 0 110 4 2 2 0 010-4z"/></svg>
+        </span>
+      )}
       <Link
         href={href}
         onClick={onClick}
-        className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors duration-200 ${
-          isActive ? "bg-[var(--accent-color)]/20 text-[var(--accent-color)]" : "text-zinc-400 hover:text-[var(--accent-color)]"
-        } ${collapsed ? "justify-center px-2" : ""}`}
+        className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg py-2.5 text-sm font-medium transition-colors duration-200 ${
+          isActive ? "text-[var(--accent-color)]" : "text-zinc-400 hover:text-[var(--accent-color)]"
+        } ${collapsed ? "justify-center px-2" : showControls ? "pl-1.5 pr-3" : "px-3"}`}
         title={collapsed ? label : undefined}
         aria-current={isActive ? "page" : undefined}
       >
@@ -195,8 +211,8 @@ function NavItem({
       {showControls && (
         <button
           type="button"
-          onClick={(e) => { e.preventDefault(); onHide?.(); }}
-          className="shrink-0 rounded p-1 -ml-2 mr-1 text-zinc-500 hover:bg-white/10 hover:text-red-400"
+          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onHide?.(); }}
+          className="shrink-0 rounded p-1 mr-1 text-zinc-500 hover:bg-white/10 hover:text-red-400"
           aria-label={`Hide ${label}`}
           title="Hide from sidebar"
         >
@@ -263,6 +279,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     collapsed: false,
     collapsedSections: ["community", "markets", "analytics", "personal"],
     sectionOrder: [],
+    standaloneOrder: STANDALONE_ITEMS.map((i) => i.href),
+    hiddenStandalone: [],
   }));
   // drag-and-drop state — type: "item" drags a nav link, "section" drags a whole group
   const [dragKey, setDragKey] = useState<string | null>(null);
@@ -291,9 +309,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [userId]);
 
 
-  const hiddenItems = prefs.hidden
-    .map((href) => MAIN_NAV.find((i) => i.href === href))
-    .filter((i): i is (typeof MAIN_NAV)[number] => i != null);
+  const hiddenItems = [
+    ...prefs.hidden.map((href) => MAIN_NAV.find((i) => i.href === href)).filter((i): i is (typeof MAIN_NAV)[number] => i != null),
+    ...(prefs.hiddenStandalone ?? []).map((href) => STANDALONE_ITEMS.find((i) => i.href === href)).filter((i): i is (typeof STANDALONE_ITEMS)[number] => i != null),
+  ];
 
   const savePrefs = useCallback((next: SidebarPrefs) => {
     setPrefs(next); // optimistic update — no await needed
@@ -333,16 +352,26 @@ export function Layout({ children }: { children: React.ReactNode }) {
     [prefs, savePrefs]
   );
 
+  const standaloneHrefs = new Set(STANDALONE_ITEMS.map((i) => i.href));
+
   const hideTab = useCallback(
     (href: string) => {
-      savePrefs({ ...prefs, hidden: [...prefs.hidden, href] });
+      if (standaloneHrefs.has(href)) {
+        savePrefs({ ...prefs, hiddenStandalone: [...(prefs.hiddenStandalone ?? []), href] });
+      } else {
+        savePrefs({ ...prefs, hidden: [...prefs.hidden, href] });
+      }
     },
     [prefs, savePrefs]
   );
 
   const restoreTab = useCallback(
     (href: string) => {
-      savePrefs({ ...prefs, hidden: prefs.hidden.filter((h) => h !== href) });
+      if (standaloneHrefs.has(href)) {
+        savePrefs({ ...prefs, hiddenStandalone: (prefs.hiddenStandalone ?? []).filter((h) => h !== href) });
+      } else {
+        savePrefs({ ...prefs, hidden: prefs.hidden.filter((h) => h !== href) });
+      }
       setHiddenPanelOpen(false);
     },
     [prefs, savePrefs]
@@ -446,6 +475,28 @@ export function Layout({ children }: { children: React.ReactNode }) {
     setDragType(null);
   }, [dragKey, dragType, prefs, savePrefs]);
 
+  const dropStandalone = useCallback((targetHref: string) => {
+    if (!dragKey || dragType !== "item") return;
+    const current = prefs.standaloneOrder?.length ? [...prefs.standaloneOrder] : STANDALONE_ITEMS.map((i) => i.href);
+    const fromIdx = current.indexOf(dragKey);
+    const toIdx = current.indexOf(targetHref);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return;
+    current.splice(fromIdx, 1);
+    current.splice(toIdx, 0, dragKey);
+    savePrefs({ ...prefs, standaloneOrder: current });
+    setDragKey(null);
+    setDragType(null);
+  }, [dragKey, dragType, prefs, savePrefs]);
+
+  // Ordered standalone items (respecting user order + hidden)
+  const orderedStandalone = (() => {
+    const order = prefs.standaloneOrder?.length ? prefs.standaloneOrder : STANDALONE_ITEMS.map((i) => i.href);
+    const hiddenSet = new Set(prefs.hiddenStandalone ?? []);
+    return order
+      .map((href) => STANDALONE_ITEMS.find((i) => i.href === href))
+      .filter((i): i is (typeof STANDALONE_ITEMS)[number] => i != null && !hiddenSet.has(i.href));
+  })();
+
   return (
     <div className="min-h-screen app-page" style={{ paddingLeft: sidebarWidth }}>
       {/* Sidebar */}
@@ -488,48 +539,30 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3" aria-label="Main navigation">
-          {/* Standalone items — not in any category */}
+          {/* Standalone items — customizable order + hide */}
           <div className="mb-2 flex flex-col gap-0.5">
-            <NavItem
-              href="/feed"
-              label="Dashboard"
-              icon="home"
-              isActive={isActive("/feed")}
-              collapsed={collapsed}
-              onClick={() => setSidebarOpen(false)}
-            />
-            <NavItem
-              href="/social-feed"
-              label="Social Feed"
-              icon="social"
-              isActive={isActive("/social-feed")}
-              collapsed={collapsed}
-              onClick={() => setSidebarOpen(false)}
-            />
-            <NavItem
-              href="/marketplace"
-              label="Marketplace"
-              icon="marketplace"
-              isActive={isActive("/marketplace")}
-              collapsed={collapsed}
-              onClick={() => setSidebarOpen(false)}
-            />
-            <NavItem
-              href="/brokers"
-              label="My Brokerages"
-              icon="briefcase"
-              isActive={isActive("/brokers")}
-              collapsed={collapsed}
-              onClick={() => setSidebarOpen(false)}
-            />
-            <NavItem
-              href="/archive"
-              label="Archive"
-              icon="archive"
-              isActive={isActive("/archive")}
-              collapsed={collapsed}
-              onClick={() => setSidebarOpen(false)}
-            />
+            {orderedStandalone.map((item) => (
+              <div
+                key={item.href}
+                draggable={customizeMode && !collapsed}
+                onDragStart={customizeMode && !collapsed ? (e) => { e.stopPropagation(); setDragKey(item.href); setDragType("item"); e.dataTransfer.effectAllowed = "move"; } : undefined}
+                onDragOver={customizeMode && dragType === "item" && standaloneHrefs.has(dragKey ?? "") ? (e) => e.preventDefault() : undefined}
+                onDrop={customizeMode && dragType === "item" && standaloneHrefs.has(dragKey ?? "") ? (e) => { e.preventDefault(); dropStandalone(item.href); } : undefined}
+                onDragEnd={customizeMode ? () => { setDragKey(null); setDragType(null); } : undefined}
+                className={`${customizeMode && !collapsed ? "cursor-grab" : ""} ${dragKey === item.href && dragType === "item" ? "opacity-40" : ""}`}
+              >
+                <NavItem
+                  href={item.href}
+                  label={item.label}
+                  icon={item.icon}
+                  isActive={isActive(item.href)}
+                  collapsed={collapsed}
+                  onClick={() => setSidebarOpen(false)}
+                  customizeMode={customizeMode}
+                  onHide={() => hideTab(item.href)}
+                />
+              </div>
+            ))}
           </div>
           {orderedSections.map((section, sIdx) => {
             const sectionItems = getSectionItems(section);
@@ -638,19 +671,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </button>
               )}
             </div>
-            {prefs.hidden.length > 0 && !collapsed && (
+            {hiddenItems.length > 0 && !collapsed && (
               <div className="relative" ref={hiddenPanelRef}>
                 <button
                   type="button"
                   onClick={() => setHiddenPanelOpen((o) => !o)}
                   className="flex w-full items-center gap-2 rounded-lg pl-4 pr-3 py-2 text-left text-xs font-medium text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-400"
                   aria-expanded={hiddenPanelOpen}
-                  aria-label={`${prefs.hidden.length} hidden tabs`}
+                  aria-label={`${hiddenItems.length} hidden tabs`}
                 >
                   {!collapsed && (
                     <>
                       <span>Hidden tabs</span>
-                      <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{prefs.hidden.length}</span>
+                      <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px]">{hiddenItems.length}</span>
                     </>
                   )}
                 </button>
@@ -1043,6 +1076,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
                     <div className="my-2 h-px bg-white/10" />
 
+                    <Link
+                      href="/feed"
+                      onClick={() => setProfileOpen(false)}
+                      className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
+                      role="menuitem"
+                    >
+                      <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
+                        <NavItemIcon icon="home" isActive={false} />
+                      </span>
+                      <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">Dashboard</span>
+                    </Link>
                     <Link
                       href="/profile"
                       onClick={() => setProfileOpen(false)}
