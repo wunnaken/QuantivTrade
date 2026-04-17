@@ -217,10 +217,16 @@ export function MarketTickerBar() {
       const halfWidth = el.scrollWidth / 2;
       const containerWidth = el.parentElement?.clientWidth ?? 0;
       if (halfWidth > 0 && halfWidth > containerWidth) {
-        el.style.animation = "";
+        // Force-restart the CSS animation so it recalculates from the new
+        // half-width. Without this, removing tickers leaves the old animation
+        // distance → huge gap → snaps back without completing a full loop.
+        el.style.animation = "none";
         el.style.setProperty("--ticker-half-width", `-${halfWidth}px`);
+        // Reading offsetHeight forces a reflow so the browser registers the
+        // animation: "none" before we re-enable it in the next frame.
+        void el.offsetHeight;
+        el.style.animation = "";
       } else {
-        // All tickers visible at once — no scrolling needed
         el.style.animation = "none";
       }
     });
@@ -236,6 +242,12 @@ export function MarketTickerBar() {
     return <TickerSkeleton />;
   }
 
+  // Dedupe the list so no ticker appears twice in a row (could happen if
+  // the saved config had duplicates from an earlier bug). The useLayoutEffect
+  // above already handles the stationary case (sets animation: "none" when
+  // all tickers fit without scrolling) — no need to change the DOM structure.
+  const deduped = [...new Set(list)];
+
   return (
     <div
       className="relative min-w-0 flex-1 overflow-hidden px-4"
@@ -244,7 +256,7 @@ export function MarketTickerBar() {
       role="region"
     >
       <div ref={trackRef} className="ticker-marquee-track flex gap-8" style={{ width: "max-content" }}>
-        {[...list, ...list].map((symbol, i) => (
+        {[...deduped, ...deduped].map((symbol, i) => (
           <TickerItem
             key={`${symbol}-${i}`}
             symbol={symbol}

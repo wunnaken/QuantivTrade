@@ -294,10 +294,6 @@ export function PriceAlertModal({ open, onClose, editingAlert, prefilledTicker, 
                 <input type="checkbox" checked={notifyInApp} onChange={(e) => setNotifyInApp(e.target.checked)} className="rounded border-white/20" />
                 <span className="text-sm text-zinc-300">In-app notification bell</span>
               </label>
-              <label className="flex items-center gap-2 opacity-60">
-                <input type="checkbox" disabled className="rounded border-white/20" />
-                <span className="text-sm text-zinc-500">Email (coming soon)</span>
-              </label>
             </div>
           </div>
 

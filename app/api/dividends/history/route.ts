@@ -16,26 +16,46 @@ export async function GET(req: Request) {
   }
 
   try {
-    const [divRes, quoteRes] = await Promise.all([
-      fetch(
-        `https://financialmodelingprep.com/api/v3/historical-price-full/stock_dividend/${encodeURIComponent(symbol)}?apikey=${apiKey}`,
-        { next: { revalidate: 86400 } }
-      ),
-      fetch(
-        `https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(symbol)}?apikey=${apiKey}`,
-        { next: { revalidate: 3600 } }
-      ),
-    ]);
-
     type FmpHistEntry = { date: string; adjDividend?: number; dividend?: number };
-    type FmpResponse = { historical?: FmpHistEntry[] };
     type FmpQuote = { price?: number; priceAvg50?: number };
 
-    const divData: FmpResponse = divRes.ok ? await divRes.json() : {};
-    const quoteArr: FmpQuote[] = quoteRes.ok ? await quoteRes.json() : [];
-    const currentPrice: number | null = quoteArr[0]?.price ?? null;
+    // Fetch dividend history — try the "stable" tier first (works on free
+    // plans), then fall back to legacy v3. The v3 path returns 403 on many
+    // free-tier keys.
+    let divEntries: FmpHistEntry[] = [];
+    for (const base of [
+      `https://financialmodelingprep.com/stable/historical-dividends-full/${encodeURIComponent(symbol)}?apikey=${apiKey}`,
+      `https://financialmodelingprep.com/api/v3/historical-price-full/stock_dividend/${encodeURIComponent(symbol)}?apikey=${apiKey}`,
+    ]) {
+      try {
+        const res = await fetch(base, { next: { revalidate: 86400 } });
+        if (!res.ok) continue;
+        const raw = await res.json();
+        const arr: FmpHistEntry[] = Array.isArray(raw)
+          ? raw
+          : Array.isArray(raw?.historical)
+          ? raw.historical
+          : [];
+        if (arr.length > 0) { divEntries = arr; break; }
+      } catch { continue; }
+    }
 
-    const raw = (divData.historical ?? [])
+    // Live quote (for current price / yield calc). Stable endpoint works
+    // when v3 doesn't; try both.
+    let currentPrice: number | null = null;
+    for (const base of [
+      `https://financialmodelingprep.com/stable/profile/${encodeURIComponent(symbol)}?apikey=${apiKey}`,
+      `https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(symbol)}?apikey=${apiKey}`,
+    ]) {
+      try {
+        const res = await fetch(base, { next: { revalidate: 60 } });
+        if (!res.ok) continue;
+        const raw = await res.json();
+        const arr: FmpQuote[] = Array.isArray(raw) ? raw : raw?.price ? [raw] : [];
+        if (arr[0]?.price) { currentPrice = arr[0].price; break; }
+      } catch { continue; }
+    }
+    const raw = divEntries
       .filter((e) => e.date && (e.adjDividend || e.dividend))
       .map((e) => ({
         date: e.date.slice(0, 7), // YYYY-MM

@@ -3,8 +3,13 @@ import dynamic from "next/dynamic";
 const DividendsView = dynamic(() => import("./DividendsView"), {
   ssr: false,
   loading: () => (
-    <div className="relative flex min-h-[520px] items-center justify-center rounded-2xl border border-white/10 bg-[var(--app-card-alt)] text-sm text-zinc-500">
-      Loading dividends...
+    <div className="space-y-4">
+      <div className="skeleton h-10 w-64 rounded-lg" />
+      <div className="grid grid-cols-4 gap-3">
+        {[0,1,2,3].map((i) => <div key={i} className="skeleton h-20 rounded-xl" />)}
+      </div>
+      <div className="skeleton h-64 rounded-xl" />
+      <div className="skeleton h-48 rounded-xl" />
     </div>
   ),
 });

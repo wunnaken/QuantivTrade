@@ -36,7 +36,7 @@ import {
 
 const WatchlistChart = dynamic(() => import("./WatchlistChart"), { ssr: false });
 
-const MAX_HEADER_TICKERS = 12;
+const MAX_HEADER_TICKERS = 15;
 
 function normalizeHeaderSymbols(symbols: string[]) {
   return [...new Set(symbols.map((s) => s.trim().toUpperCase()).filter(Boolean))].slice(0, MAX_HEADER_TICKERS);
@@ -61,7 +61,6 @@ export default function WatchlistPage() {
   const [items, setItems] = useState<WatchlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [headerSymbols, setHeaderSymbols] = useState<string[]>([]);
-  const [headerUseWatchlist, setHeaderUseWatchlist] = useState(false);
   const watchlistTickers = items.map((i) => i.ticker);
   const liveQuotes = useLivePrices(watchlistTickers);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
@@ -73,10 +72,6 @@ export default function WatchlistPage() {
   const [notificationsGranted, setNotificationsGranted] = useState(false);
   const [syncIssue, setSyncIssue] = useState(false);
   const [alertsSyncIssue, setAlertsSyncIssue] = useState(false);
-  const [shareModal, setShareModal] = useState<{ ticker: string } | null>(null);
-  const [shareConvs, setShareConvs] = useState<{ id: string; label: string }[]>([]);
-  const [shareLoading, setShareLoading] = useState(false);
-  const [shareSending, setShareSending] = useState(false);
 
   useEffect(() => {
     toastRef.current = showToast;
@@ -129,7 +124,7 @@ export default function WatchlistPage() {
     const load = async () => {
       const cfg = await fetchTickerBarConfig();
       setHeaderSymbols(normalizeHeaderSymbols(cfg.config.tickers));
-      setHeaderUseWatchlist(cfg.config.useWatchlist);
+      void cfg.config.useWatchlist;
     };
     void load();
   }, []);
@@ -256,9 +251,10 @@ export default function WatchlistPage() {
 
   const removeTickerFromHeader = (sym: string) => {
     setHeaderSymbols((prev) => {
-      const next = prev.filter((s) => s !== sym);
-      void saveTickerBarConfig({ tickers: next, useWatchlist: false });
-      setHeaderUseWatchlist(false);
+      const next = [...new Set(prev.filter((s) => s !== sym))];
+      // Defer the save so the event dispatch doesn't trigger a setState in
+      // MarketTickerBar while WatchlistPage is still rendering.
+      queueMicrotask(() => void saveTickerBarConfig({ tickers: next, useWatchlist: false }));
       return next;
     });
   };
@@ -266,18 +262,19 @@ export default function WatchlistPage() {
   const toggleHeaderTicker = (ticker: string) => {
     const sym = ticker.toUpperCase();
     setHeaderSymbols((prev) => {
-      const next = prev.includes(sym) ? prev.filter((s) => s !== sym) : normalizeHeaderSymbols([...prev, sym]);
-      void saveTickerBarConfig({ tickers: next, useWatchlist: false });
-      setHeaderUseWatchlist(false);
+      const deduped = [...new Set(prev)];
+      const next = deduped.includes(sym)
+        ? deduped.filter((s) => s !== sym)
+        : [...new Set([...deduped, sym])].slice(0, MAX_HEADER_TICKERS);
+      queueMicrotask(() => void saveTickerBarConfig({ tickers: next, useWatchlist: false }));
       return next;
     });
   };
 
   const useDefault = () => {
-    const defaults = [...DEFAULT_TICKERS].slice(0, MAX_HEADER_TICKERS);
+    const defaults = [...new Set(DEFAULT_TICKERS)].slice(0, MAX_HEADER_TICKERS);
     setHeaderSymbols(defaults);
-    setHeaderUseWatchlist(false);
-    void saveTickerBarConfig({ tickers: defaults, useWatchlist: false });
+    queueMicrotask(() => void saveTickerBarConfig({ tickers: defaults, useWatchlist: false }));
   };
 
   const handleRemove = async (ticker: string, e: React.MouseEvent) => {
@@ -291,39 +288,6 @@ export default function WatchlistPage() {
     } catch {
       showToast("Could not update watchlist", "warning");
     }
-  };
-
-  const openShareModal = async (ticker: string, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setShareModal({ ticker });
-    setShareLoading(true);
-    try {
-      const res = await fetch("/api/conversations");
-      const data = await res.json() as { dms: { id: string; other_user?: { name: string; username: string } | null }[]; groups: { id: string; name: string | null }[]; community: { id: string; name: string | null }[] };
-      const convs: { id: string; label: string }[] = [
-        ...data.dms.map((c) => ({ id: c.id, label: c.other_user?.name ?? c.other_user?.username ?? "DM" })),
-        ...data.groups.map((c) => ({ id: c.id, label: c.name ?? "Group" })),
-        ...data.community.map((c) => ({ id: c.id, label: c.name ?? "Community" })),
-      ];
-      setShareConvs(convs);
-    } catch { setShareConvs([]); }
-    setShareLoading(false);
-  };
-
-  const handleShareToConv = async (convId: string) => {
-    if (!shareModal || shareSending) return;
-    setShareSending(true);
-    try {
-      await fetch(`/api/conversations/${convId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: `__ticker:${shareModal.ticker}` }),
-      });
-      setShareModal(null);
-      showToast(`${shareModal.ticker} shared to chat`, "success");
-    } catch { /* ignore */ }
-    setShareSending(false);
   };
 
   const openAlertModal = (prefillTicker?: string, alert?: PriceAlert | null) => {
@@ -444,9 +408,6 @@ export default function WatchlistPage() {
             <p className="mt-1 text-xs text-zinc-500">
               Tickers shown in the top rotating bar. Use the icon on each watchlist card to add. Remove any below with ×. Default = SPY, QQQ, BTC, etc.
             </p>
-            {headerUseWatchlist && (
-              <p className="mt-2 text-xs text-emerald-400">Ticker bar is currently following your watchlist.</p>
-            )}
             {headerSymbols.length === 0 ? (
               <p className="mt-3 text-sm text-zinc-400">Using default tickers (SPY, QQQ, BTC, ETH, GLD, OIL, DXY, EUR/USD).</p>
             ) : (
@@ -505,10 +466,8 @@ export default function WatchlistPage() {
                               changePercent={q.changePercent}
                               symbol={item.ticker}
                             />
-                          ) : q?.isLoading ? (
-                            <span className="text-zinc-500">—</span>
                           ) : (
-                            <span className="text-zinc-500">—</span>
+                            <span className="text-zinc-500">{q?.isLoading ? "…" : "—"}</span>
                           )}
                         </div>
                       </Link>
@@ -525,26 +484,14 @@ export default function WatchlistPage() {
                         <button
                           type="button"
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleHeaderTicker(item.ticker); }}
-                          className={`rounded p-2 transition-colors ${
-                            inHeader ? "text-[var(--accent-color)]" : "text-zinc-400 hover:bg-white/5 hover:text-zinc-300"
+                          className={`flex items-center gap-1 rounded px-2 py-1.5 text-xs font-medium transition-colors ${
+                            inHeader
+                              ? "text-[var(--accent-color)] hover:bg-[var(--accent-color)]/10"
+                              : "text-zinc-400 hover:bg-white/5 hover:text-zinc-300"
                           }`}
                           title={inHeader ? "Remove from header bar" : "Add to header bar"}
-                          aria-label={inHeader ? "Remove from header bar" : "Add to header bar"}
                         >
-                          {inHeader ? (
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" /></svg>
-                          ) : (
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => void openShareModal(item.ticker, e)}
-                          className="rounded px-2.5 py-1.5 text-xs font-medium text-zinc-400 transition-colors hover:bg-[var(--accent-color)]/10 hover:text-[var(--accent-color)]"
-                          aria-label={`Share ${item.ticker} to chat`}
-                          title="Share to chat"
-                        >
-                          Share
+                          {inHeader ? "−" : "+"} Header
                         </button>
                         <button
                           type="button"
@@ -741,38 +688,6 @@ export default function WatchlistPage() {
       />
 
       {/* Share to chat modal */}
-      {shareModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShareModal(null)}>
-          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0A0F1A] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-zinc-100">Share <span className="text-[var(--accent-color)]">{shareModal.ticker}</span> to chat</h3>
-              <button type="button" onClick={() => setShareModal(null)} className="text-zinc-600 hover:text-zinc-300">✕</button>
-            </div>
-            {shareLoading ? (
-              <div className="flex items-center justify-center py-6">
-                <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/20 border-t-[var(--accent-color)]" />
-              </div>
-            ) : shareConvs.length === 0 ? (
-              <p className="py-4 text-center text-sm text-zinc-500">No conversations yet.</p>
-            ) : (
-              <ul className="max-h-64 space-y-1 overflow-y-auto">
-                {shareConvs.map((c) => (
-                  <li key={c.id}>
-                    <button
-                      type="button"
-                      disabled={shareSending}
-                      onClick={() => void handleShareToConv(c.id)}
-                      className="w-full rounded-xl px-4 py-2.5 text-left text-sm text-zinc-300 transition-colors hover:bg-white/5 disabled:opacity-50"
-                    >
-                      {c.label}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

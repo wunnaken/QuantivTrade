@@ -468,7 +468,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
           />
         )}
 
-        <div className="flex h-14 flex-shrink-0 items-center justify-between border-b border-white/10 px-3 lg:justify-start">
+        <div
+          className="flex h-14 flex-shrink-0 items-center justify-between border-b px-3 lg:justify-start"
+          style={{ borderColor: "rgba(232,132,106,0.12)" }}
+        >
           <div className={narrow ? "flex w-full justify-center" : ""}>
             <SidebarLogo narrow={narrow} />
           </div>
@@ -562,7 +565,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       className="flex min-w-0 flex-1 items-center justify-between text-left transition-colors hover:bg-white/5 rounded px-2 py-1"
                       aria-expanded={!isSectionCollapsed}
                     >
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors">
+                      <span className="text-xs font-medium text-zinc-500 hover:text-zinc-400 transition-colors">
                         {section.label}
                       </span>
                       <svg
@@ -607,7 +610,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setCustomizeMode((m) => !m)}
-                  className="min-w-0 flex-1 rounded-lg px-3 py-2 text-left text-xs font-medium text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-400"
+                  className="min-w-0 flex-1 rounded-lg pl-4 pr-3 py-2 text-left text-xs font-medium text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-400"
                 >
                   {customizeMode ? "Done" : "Customize"}
                 </button>
@@ -616,15 +619,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={toggleSidebarCollapsed}
-                  className="shrink-0 rounded p-2 text-zinc-500 transition-colors hover:bg-white/5 hover:text-[var(--accent-color)]"
+                  // mr-2 aligns this arrow's right edge with the section header
+                  // arrows (Markets/Personal/etc.) — those have an extra 8px of
+                  // wrapper+button right padding that this row doesn't.
+                  className="shrink-0 rounded p-2 mr-2 text-zinc-500 transition-colors hover:bg-white/5 hover:text-[var(--accent-color)]"
                   title={prefs.collapsed ? "Expand sidebar" : "Collapse sidebar"}
                   aria-label={prefs.collapsed ? "Expand sidebar" : "Collapse sidebar"}
                 >
-                  {prefs.collapsed ? (
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-                  ) : (
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7M18 19l-7-7 7-7" /></svg>
-                  )}
+                  {/* Same chevron as section headers, rotated sideways: ◀ to collapse, ▶ to expand. */}
+                  <svg
+                    className={`h-3 w-3 transition-transform duration-200 ${prefs.collapsed ? "-rotate-90" : "rotate-90"}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
                 </button>
               )}
             </div>
@@ -633,13 +643,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setHiddenPanelOpen((o) => !o)}
-                  className="flex w-full items-center gap-3 rounded-lg pl-4 pr-3 py-2 text-left text-xs font-medium text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-400"
+                  className="flex w-full items-center gap-2 rounded-lg pl-4 pr-3 py-2 text-left text-xs font-medium text-zinc-500 transition-colors hover:bg-white/5 hover:text-zinc-400"
                   aria-expanded={hiddenPanelOpen}
                   aria-label={`${prefs.hidden.length} hidden tabs`}
                 >
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/10 text-[10px]">
-                    👁‍🗨
-                  </span>
                   {!collapsed && (
                     <>
                       <span>Hidden tabs</span>

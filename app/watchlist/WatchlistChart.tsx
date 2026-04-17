@@ -33,6 +33,40 @@ function pctColor(v: number | null | undefined): string {
   return "text-zinc-400";
 }
 
+/** Format raw API dates into readable labels.
+ *  "2026-04-16T09:59" → "Apr 16, 9:59 AM"
+ *  "2026-04-16"       → "Apr 16" */
+function fmtDate(raw: string | undefined): string {
+  if (!raw) return "";
+  try {
+    const hasTime = raw.includes("T");
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    if (hasTime) {
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+        ", " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    }
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  } catch {
+    return raw;
+  }
+}
+
+/** Short axis label — just month + day (no time, no year for intraday). */
+function fmtAxisDate(raw: string): string {
+  if (!raw) return "";
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return raw;
+    if (raw.includes("T")) {
+      return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    }
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  } catch {
+    return raw;
+  }
+}
+
 /** Plain label for tooltip: gain / loss vs period start. */
 function gainLossLabel(v: number | null | undefined): string | null {
   if (v == null || !Number.isFinite(v)) return null;
@@ -91,7 +125,10 @@ export default function WatchlistChart({ tickers }: { tickers: string[] }) {
     };
 
     void fetchData(true);
-    const interval = setInterval(() => void fetchData(false), 30_000);
+    // 1D/1W: refresh every 30s (intraday data changes frequently).
+    // 1M/1Y: refresh every 5 min (daily EOD data, reduces FMP 429 rate-limits).
+    const refreshMs = timeframe === "1M" || timeframe === "1Y" ? 300_000 : 30_000;
+    const interval = setInterval(() => void fetchData(false), refreshMs);
 
     return () => {
       ac.abort();
@@ -157,16 +194,22 @@ export default function WatchlistChart({ tickers }: { tickers: string[] }) {
       </div>
 
       {loading ? (
-        <div className="h-[280px] animate-pulse rounded-lg bg-white/5" aria-hidden />
+        <div className="skeleton h-[280px] rounded-lg" aria-hidden />
       ) : payload?.error || chartData.length === 0 ? (
-        <p className="py-12 text-center text-sm text-zinc-500">
-          {payload?.error ?? "No chart data for this watchlist."}
-        </p>
+        <div className="flex flex-col items-center gap-2 py-12 text-center">
+          <p className="text-sm text-zinc-500">
+            {payload?.error ?? "No chart data available for this timeframe."}
+          </p>
+          <p className="max-w-sm text-xs text-zinc-600">
+            Stock price history uses FMP API which may be temporarily rate-limited (250 calls/day on free tier).
+            Try again in a few minutes, or switch to 1D/1W which uses Finnhub quotes as fallback.
+          </p>
+        </div>
       ) : (
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={chartData} margin={{ top: 8, right: 24, left: 0, bottom: 8 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.05)" />
-            <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" minTickGap={24} />
+            <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 10 }} interval="preserveStartEnd" minTickGap={24} tickFormatter={fmtAxisDate} />
             <YAxis
               domain={["auto", "auto"]}
               tick={{ fill: "#94a3b8", fontSize: 10 }}
@@ -189,7 +232,7 @@ export default function WatchlistChart({ tickers }: { tickers: string[] }) {
                 const avgGl = gainLossLabel(avgVal);
                 return (
                   <div className="max-h-[min(320px,70vh)] overflow-y-auto rounded-lg border border-white/10 bg-[#0c1222] px-3 py-2 text-xs shadow-xl">
-                    <p className="mb-2 font-medium text-zinc-300">{label}</p>
+                    <p className="mb-2 font-medium text-zinc-300">{fmtDate(label as string)}</p>
                     <p className="mb-2 text-[10px] text-zinc-600">% change vs start of period</p>
                     {avgVal != null && Number.isFinite(avgVal) ? (
                       <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-white/10 pb-2">

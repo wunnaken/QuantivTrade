@@ -7,17 +7,7 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  Treemap,
-  Cell,
-} from "recharts";
+import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
 import { useToast } from "../../components/ToastContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -57,6 +47,14 @@ interface TechData {
   sma200: number | null;
   aboveSma50: boolean;
   aboveSma200: boolean;
+  vsSma50Pct: number | null;
+  vsSma200Pct: number | null;
+  weekChangePct: number | null;
+  monthChangePct: number | null;
+  ytdChangePct: number | null;
+  yearChangePct: number | null;
+  vs52wkHighPct: number | null;
+  vs52wkLowPct: number | null;
 }
 
 interface ScreenerFilters {
@@ -65,6 +63,11 @@ interface ScreenerFilters {
   country: string;
   marketCapMin: string;
   marketCapMax: string;
+  /** Selected market-cap preset labels (Mega/Large/Mid/Small/Micro). Multi-
+   *  select; the encompassing min/max range is derived from these for the
+   *  server query, and client-side filter keeps only stocks in selected
+   *  categories so non-contiguous selections don't leak through middle ranges. */
+  marketCapPresets?: string[];
   priceMin: string;
   priceMax: string;
   betaMin: string;
@@ -76,10 +79,31 @@ interface ScreenerFilters {
   pbMin: string;
   dayChangePctMin: string;
   dayChangePctMax: string;
+  weekChangePctMin: string;
+  weekChangePctMax: string;
+  monthChangePctMin: string;
+  monthChangePctMax: string;
+  ytdChangePctMin: string;
+  ytdChangePctMax: string;
+  yearChangePctMin: string;
+  yearChangePctMax: string;
+  vs52wkHighPctMin: string;
+  vs52wkLowPctMin: string;
   rsiMin: string;
   rsiMax: string;
   vsSma50: "above" | "below" | "any";
   vsSma200: "above" | "below" | "any";
+  vsSma50PctMin: string;
+  vsSma50PctMax: string;
+  vsSma200PctMin: string;
+  vsSma200PctMax: string;
+  /** When set, only stocks whose symbol is in this list pass the filter.
+   *  Used by index presets (S&P 500, Nasdaq 100, Dow 30) so loading an index
+   *  shows the actual members instead of a coarse market-cap proxy. */
+  tickerWhitelist?: string[];
+  /** Display label for the active whitelist (e.g. "S&P 500") so the UI can
+   *  show what universe the user is looking at. */
+  tickerWhitelistLabel?: string;
 }
 
 interface SavedScreen {
@@ -94,16 +118,8 @@ interface SavedScreen {
 
 type HeatColorBy = "dayChangePct" | "vsMA50" | "vsMA200" | "vs52wkHigh" | "vs52wkLow" | "revenueGrowth" | "pe" | "beta";
 
-const HEAT_COLOR_OPTIONS: { value: HeatColorBy; label: string }[] = [
-  { value: "dayChangePct", label: "Day Change %" },
-  { value: "vsMA50",       label: "vs 50-Day MA" },
-  { value: "vsMA200",      label: "vs 200-Day MA" },
-  { value: "vs52wkHigh",   label: "vs 52-Wk High" },
-  { value: "vs52wkLow",    label: "vs 52-Wk Low" },
-  { value: "revenueGrowth",label: "Revenue Growth" },
-  { value: "pe",           label: "P/E Ratio" },
-  { value: "beta",         label: "Beta" },
-];
+// HEAT_COLOR_OPTIONS removed — the dropdown that consumed it duplicated the
+// Performance filter section. Heatmap colors by `dayChangePct` by default.
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -121,12 +137,21 @@ const ALL_SECTORS = [
   "Communication Services",
 ];
 
+const MARKET_CAP_PRESETS: { label: string; min: string; max: string }[] = [
+  { label: "Mega", min: "200000000000", max: "" },
+  { label: "Large", min: "10000000000", max: "200000000000" },
+  { label: "Mid", min: "2000000000", max: "10000000000" },
+  { label: "Small", min: "300000000", max: "2000000000" },
+  { label: "Micro", min: "0", max: "300000000" },
+];
+
 const DEFAULT_FILTERS: ScreenerFilters = {
   exchange: ["NYSE", "NASDAQ", "AMEX"],
   sector: [...ALL_SECTORS],
   country: "US",
   marketCapMin: "",
   marketCapMax: "",
+  marketCapPresets: [],
   priceMin: "",
   priceMax: "",
   betaMin: "",
@@ -138,10 +163,26 @@ const DEFAULT_FILTERS: ScreenerFilters = {
   pbMin: "",
   dayChangePctMin: "",
   dayChangePctMax: "",
+  weekChangePctMin: "",
+  weekChangePctMax: "",
+  monthChangePctMin: "",
+  monthChangePctMax: "",
+  ytdChangePctMin: "",
+  ytdChangePctMax: "",
+  yearChangePctMin: "",
+  yearChangePctMax: "",
+  vs52wkHighPctMin: "",
+  vs52wkLowPctMin: "",
   rsiMin: "",
   rsiMax: "",
   vsSma50: "any",
   vsSma200: "any",
+  vsSma50PctMin: "",
+  vsSma50PctMax: "",
+  vsSma200PctMin: "",
+  vsSma200PctMax: "",
+  tickerWhitelist: undefined,
+  tickerWhitelistLabel: undefined,
 };
 
 const SECTORS = ALL_SECTORS;
@@ -181,51 +222,114 @@ const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
+// Each template uses market-cap ranges as its PRIMARY differentiator because
+// market cap is the one field guaranteed to be non-null and reliably filterable
+// for every stock. Secondary criteria (beta, dividend, SMA direction, vs52wk)
+// add further narrowing when the data is available but don't defeat the
+// template if enrichment hasn't populated those fields yet.
 const TEMPLATES = [
   {
     id: "buffett-value",
     label: "Buffett Value",
+    desc: "Mega-cap blue chips with low beta and dividends — classic value",
     filters: {
-      peMax: "15",
-      betaMax: "1.0",
-      dividendMin: "0.01",
-      marketCapMin: "1000000000",
+      marketCapMin: "50000000000",   // >$50B mega-cap
+      betaMax: "1.2",
+      dividendMin: "0.5",
     },
   },
   {
     id: "growth-momentum",
     label: "Growth Momentum",
-    filters: { vsSma50: "above" as const, volumeMin: "500000" },
+    desc: "Mid-to-large cap high-beta names with strong trading volume",
+    filters: {
+      marketCapMin: "10000000000",   // $10B–$200B
+      marketCapMax: "200000000000",
+      volumeMin: "1000000",
+    },
   },
   {
     id: "oversold-bounce",
     label: "Oversold Bounce",
+    desc: "Pulled back below 50-day MA but still above 200-day — dip-buy zone",
     filters: {
-      rsiMax: "35",
+      vsSma50: "below" as const,
       vsSma200: "above" as const,
-      marketCapMin: "500000000",
+      marketCapMin: "2000000000",
       volumeMin: "300000",
     },
   },
   {
     id: "dividend-income",
     label: "Dividend Income",
-    filters: { dividendMin: "3", peMax: "20", marketCapMin: "2000000000" },
+    desc: "Large caps yielding 2%+ — income-focused portfolio building blocks",
+    filters: {
+      marketCapMin: "20000000000",   // >$20B
+      dividendMin: "2",
+    },
   },
   {
     id: "small-cap-gems",
     label: "Small Cap Gems",
+    desc: "$300M–$2B market cap, actively traded — emerging growth stories",
     filters: {
       marketCapMin: "300000000",
       marketCapMax: "2000000000",
-      peMax: "25",
       volumeMin: "100000",
     },
   },
   {
     id: "breakout",
     label: "52-Wk Breakout",
-    filters: { vsSma50: "above" as const, volumeMin: "150000" },
+    desc: "Near 52-week highs with volume confirmation — breakout territory",
+    filters: {
+      vs52wkHighPctMin: "-5",
+      marketCapMin: "5000000000",     // >$5B
+      volumeMin: "500000",
+    },
+  },
+];
+
+/** Index-style presets surfaced as a top-of-page chip bar (separate from the
+ *  in-sidebar "Quick Templates"). Loose size + exchange proxies — won't match
+ *  actual index constituent lists exactly (the Dow is curated, not size-based)
+ *  but get the user to the right neighborhood without needing a separate
+ *  constituent-list API. */
+const INDEX_PRESETS: { id: string; label: string; filters: Partial<ScreenerFilters> }[] = [
+  {
+    id: "sp500",
+    label: "S&P 500",
+    filters: { marketCapMin: "5000000000", exchange: ["NYSE", "NASDAQ"], country: "US" },
+  },
+  {
+    id: "nasdaq100",
+    label: "Nasdaq 100",
+    filters: { marketCapMin: "15000000000", exchange: ["NASDAQ"], country: "US" },
+  },
+  {
+    id: "midcap400",
+    label: "MidCap 400",
+    filters: {
+      marketCapMin: "2000000000",
+      marketCapMax: "10000000000",
+      exchange: ["NYSE", "NASDAQ"],
+      country: "US",
+    },
+  },
+  {
+    id: "russell2000",
+    label: "Russell 2000",
+    filters: {
+      marketCapMin: "300000000",
+      marketCapMax: "2000000000",
+      exchange: ["NYSE", "NASDAQ", "AMEX"],
+      country: "US",
+    },
+  },
+  {
+    id: "dow30",
+    label: "Dow 30",
+    filters: { marketCapMin: "100000000000", exchange: ["NYSE", "NASDAQ"], country: "US" },
   },
 ];
 
@@ -262,14 +366,20 @@ function fmtNum(v: number | null, decimals = 2): string {
   return v.toFixed(decimals);
 }
 
+/** Refined "terminal-style" green-to-red gradient. Less saturated than the
+ *  raw Tailwind reds/greens — closer to Bloomberg / FT terminal palettes —
+ *  so the heatmap reads as a professional dashboard rather than a bright
+ *  chart. Each step still maps cleanly to magnitude. */
 function getHeatColor(pct: number): string {
-  if (pct <= -5) return "#7f1d1d";
-  if (pct <= -2) return "#dc2626";
-  if (pct <= -0.5) return "#f97316";
-  if (pct < 0) return "#52525b";
-  if (pct < 2) return "#86efac";
-  if (pct < 5) return "#22c55e";
-  return "#14532d";
+  if (pct <= -5) return "#5f1d1d";   // burgundy
+  if (pct <= -3) return "#8a2a2a";   // brick
+  if (pct <= -1) return "#b04a4a";   // muted red
+  if (pct < 0)   return "#c98080";   // dusty rose
+  if (pct === 0) return "#5a5e66";   // slate (true flat — very rare)
+  if (pct < 1)   return "#7fa991";   // pale jade
+  if (pct < 3)   return "#3f8060";   // jade
+  if (pct < 5)   return "#266049";   // forest
+  return "#1b4435";                  // deep forest
 }
 
 function buildApiParams(filters: ScreenerFilters): URLSearchParams {
@@ -295,35 +405,109 @@ function applyClientFilters(
   filters: ScreenerFilters,
   techData: Record<string, TechData>
 ): ScreenerStock[] {
+  // Pre-build a Set for the whitelist lookup so we don't recompute per-stock.
+  const whitelistSet = filters.tickerWhitelist && filters.tickerWhitelist.length > 0
+    ? new Set(filters.tickerWhitelist.map((t) => t.toUpperCase()))
+    : null;
+
   return stocks.filter((s) => {
+    // Index whitelist (e.g. "S&P 500 only") — applied first so we short-circuit
+    // out of the rest of the filter cascade for stocks that aren't members.
+    if (whitelistSet && !whitelistSet.has(s.symbol.toUpperCase())) return false;
+
     // Sector: when 2–10 sectors selected, server returns all (no server filter), so filter here.
     // 0 or 1 selected: server handles it (0 = all, 1 = passed to FMP).
     // ALL_SECTORS.length selected: no filter needed.
     if (filters.sector.length > 1 && filters.sector.length < ALL_SECTORS.length) {
       if (!filters.sector.includes(s.sector ?? "")) return false;
     }
-    if (filters.peMin && (s.pe === null || s.pe < parseFloat(filters.peMin))) return false;
-    if (filters.peMax && (s.pe === null || s.pe > parseFloat(filters.peMax))) return false;
-    if (filters.pbMin && (s.priceToBook === null || s.priceToBook < parseFloat(filters.pbMin))) return false;
-    if (filters.dayChangePctMin && (s.dayChangePct === null || s.dayChangePct < parseFloat(filters.dayChangePctMin))) return false;
-    if (filters.dayChangePctMax && (s.dayChangePct === null || s.dayChangePct > parseFloat(filters.dayChangePctMax))) return false;
+    // Market-cap presets: when multiple non-contiguous categories are picked
+    // (e.g. Mega + Small) the server query covers the encompassing range so
+    // we filter Mid stocks out here. If no presets are selected, the raw
+    // marketCapMin/marketCapMax inputs handle it server-side.
+    const presets = filters.marketCapPresets ?? [];
+    if (presets.length > 0 && s.marketCap != null) {
+      const inAny = presets.some((label) => {
+        const p = MARKET_CAP_PRESETS.find((mp) => mp.label === label);
+        if (!p) return false;
+        const min = parseFloat(p.min || "0");
+        const max = p.max === "" ? Infinity : parseFloat(p.max);
+        return s.marketCap! >= min && s.marketCap! < max;
+      });
+      if (!inAny) return false;
+    }
+    // ─── Numeric filters: null = no data = pass through ───
+    // If we don't have data for a field, let the stock through — the user
+    // sees "—" in the column. The real narrowing for templates happens
+    // server-side (FMP screener applies beta/dividend/mcap params) and via
+    // the whitelist NOT backfilling non-qualifying stocks.
+    const numFail = (val: number | null | undefined, minStr: string, maxStr: string): boolean => {
+      if (val == null) return false;
+      if (minStr && val < parseFloat(minStr)) return true;
+      if (maxStr && val > parseFloat(maxStr)) return true;
+      return false;
+    };
+
+    // Client-side duplicates of server-side filters — FMP free tier silently
+    // ignores some params (betaLowerThan, dividendMoreThan, etc.), so the
+    // broad universe comes back unfiltered. Applying them here ensures Quick
+    // Templates like "Buffett Value" actually narrow the results.
+    if (numFail(s.marketCap, filters.marketCapMin, filters.marketCapMax)) return false;
+    if (numFail(s.price, filters.priceMin, filters.priceMax)) return false;
+    if (numFail(s.beta, filters.betaMin, filters.betaMax)) return false;
+    if (numFail(s.volume, filters.volumeMin, "")) return false;
+    if (numFail(s.dividendYield, filters.dividendMin, "")) return false;
+
+    if (numFail(s.pe, filters.peMin, filters.peMax)) return false;
+    if (numFail(s.priceToBook, filters.pbMin, "")) return false;
+    if (numFail(s.dayChangePct, filters.dayChangePctMin, filters.dayChangePctMax)) return false;
 
     const td = techData[s.symbol];
-    if (filters.rsiMin || filters.rsiMax) {
-      const rsi = td?.rsi ?? null;
-      if (filters.rsiMin && (rsi === null || rsi < parseFloat(filters.rsiMin))) return false;
-      if (filters.rsiMax && (rsi === null || rsi > parseFloat(filters.rsiMax))) return false;
-    }
+
+    // RSI — only available from tech route; no ScreenerStock fallback.
+    if (numFail(td?.rsi ?? null, filters.rsiMin, filters.rsiMax)) return false;
+
+    // SMA direction — use the enrichment-level vsMA50/vsMA200 from FMP /quote
+    // as the PRIMARY source (available for top 500 immediately). Tech data is
+    // the fallback (loads async, might not be ready). Without this, the three
+    // SMA-based templates (Growth Momentum, Oversold Bounce, 52-Wk Breakout)
+    // all passed everything through and showed identical stocks.
     if (filters.vsSma50 !== "any") {
-      if (!td) return false;
-      if (filters.vsSma50 === "above" && !td.aboveSma50) return false;
-      if (filters.vsSma50 === "below" && td.aboveSma50) return false;
+      // Coalesce: ScreenerStock vsMA50 → techData aboveSma50 → null (pass)
+      const above = s.vsMA50 != null ? s.vsMA50 > 0
+        : td != null ? td.aboveSma50
+        : null;
+      if (above !== null) {
+        if (filters.vsSma50 === "above" && !above) return false;
+        if (filters.vsSma50 === "below" && above) return false;
+      }
     }
     if (filters.vsSma200 !== "any") {
-      if (!td) return false;
-      if (filters.vsSma200 === "above" && !td.aboveSma200) return false;
-      if (filters.vsSma200 === "below" && td.aboveSma200) return false;
+      const above = s.vsMA200 != null ? s.vsMA200 > 0
+        : td != null ? td.aboveSma200
+        : null;
+      if (above !== null) {
+        if (filters.vsSma200 === "above" && !above) return false;
+        if (filters.vsSma200 === "below" && above) return false;
+      }
     }
+
+    // ─── Performance / 52-wk / SMA distance filters ───
+    // Coalesce ScreenerStock enrichment values with techData. Enrichment is
+    // available immediately for the top 500; techData loads asynchronously.
+    if (numFail(td?.weekChangePct ?? null, filters.weekChangePctMin, filters.weekChangePctMax)) return false;
+    if (numFail(td?.monthChangePct ?? null, filters.monthChangePctMin, filters.monthChangePctMax)) return false;
+    if (numFail(td?.ytdChangePct ?? null, filters.ytdChangePctMin, filters.ytdChangePctMax)) return false;
+    if (numFail(td?.yearChangePct ?? null, filters.yearChangePctMin, filters.yearChangePctMax)) return false;
+
+    // 52-week: ScreenerStock has these from enrichment; tech route as fallback.
+    if (numFail(s.vs52wkHigh ?? td?.vs52wkHighPct ?? null, filters.vs52wkHighPctMin, "")) return false;
+    if (numFail(s.vs52wkLow ?? td?.vs52wkLowPct ?? null, filters.vs52wkLowPctMin, "")) return false;
+
+    // SMA % distance: ScreenerStock enrichment → techData fallback.
+    if (numFail(s.vsMA50 ?? td?.vsSma50Pct ?? null, filters.vsSma50PctMin, filters.vsSma50PctMax)) return false;
+    if (numFail(s.vsMA200 ?? td?.vsSma200Pct ?? null, filters.vsSma200PctMin, filters.vsSma200PctMax)) return false;
+
     return true;
   });
 }
@@ -603,12 +787,6 @@ interface TreemapEntry {
   [key: string]: unknown;
 }
 
-interface TreemapGroup {
-  name: string;
-  children: TreemapEntry[];
-  [key: string]: unknown;
-}
-
 function getMetricValue(s: ScreenerStock, colorBy: HeatColorBy): number {
   switch (colorBy) {
     case "dayChangePct":   return s.dayChangePct ?? 0;
@@ -653,24 +831,20 @@ function HeatmapView({
     return m;
   }, [stocks]);
 
-  const treeData: TreemapGroup[] = useMemo(() => {
-    const byS: Record<string, ScreenerStock[]> = {};
-    stocks.forEach((s) => {
-      const sec = s.sector ?? "Other";
-      if (!byS[sec]) byS[sec] = [];
-      byS[sec].push(s);
-    });
-    return Object.entries(byS).map(([sector, list]) => ({
-      name: sector,
-      children: list.map((s) => ({
-        name: s.symbol,
-        symbol: s.symbol,
-        size: Math.max(Math.log((s.marketCap ?? 1e9) + 1) * 10, 1),
-        pct: getMetricValue(s, colorBy),
-        metricLabel: fmtMetricValue(s, colorBy),
-        company: s.companyName,
-        price: s.price,
-      })),
+  // Flat treemap sorted by market cap descending. Cell area = raw market
+  // cap so visual area is proportional to actual market value (a $3T stock
+  // really takes ~10× the area of a $300B stock). Recharts' squarified
+  // algorithm keeps the shapes well-proportioned.
+  const treeData = useMemo(() => {
+    const sorted = [...stocks].sort((a, b) => (b.marketCap ?? 0) - (a.marketCap ?? 0));
+    return sorted.map((s) => ({
+      name: s.symbol,
+      symbol: s.symbol,
+      size: Math.max(s.marketCap ?? 1e9, 1),
+      pct: getMetricValue(s, colorBy),
+      metricLabel: fmtMetricValue(s, colorBy),
+      company: s.companyName,
+      price: s.price,
     }));
   }, [stocks, colorBy]);
 
@@ -680,17 +854,22 @@ function HeatmapView({
     const width = props.width as number;
     const height = props.height as number;
     const name = props.name as string;
+    const depth = props.depth as number | undefined;
+    const root = props.root as { children?: Array<{ name: string }> } | undefined;
     const pct = (props.pct as number) ?? 0;
     const metricLabel = (props.metricLabel as string | undefined) ?? fmtPct(pct);
     const price = props.price as number | null;
-    const company = (props.company as string | undefined) ?? "";
 
-    // Recharts passes parent group nodes too — skip them (no stock match)
+    // Flat treemap — no sector grouping, every node is a leaf stock cell.
+    // Skip anything that doesn't match a real ticker (Recharts also passes
+    // a synthetic root node through this render function).
+    void depth;
+    void root;
     if (!stockMap[name]) return null;
 
     const color = getHeatColor(pct);
     const showText = width > 40 && height > 30;
-    const showCompany = width > 80 && height > 50;
+    const roomy = width > 80 && height > 50;
 
     return (
       <g
@@ -713,9 +892,11 @@ function HeatmapView({
         />
         {showText && (
           <>
+            {/* Ticker — primary label. Company name was removed per user
+                request; ticker + metric (+ price on roomy cells) is enough. */}
             <text
               x={x + width / 2}
-              y={y + height / 2 - (showCompany ? 12 : 6)}
+              y={y + height / 2 - 6}
               textAnchor="middle"
               dominantBaseline="middle"
               fill="white"
@@ -724,21 +905,9 @@ function HeatmapView({
             >
               {name}
             </text>
-            {showCompany && (
-              <text
-                x={x + width / 2}
-                y={y + height / 2 + 4}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fill="rgba(255,255,255,0.7)"
-                fontSize={Math.min(10, width / 8)}
-              >
-                {company.length > 20 ? company.slice(0, 18) + "…" : company}
-              </text>
-            )}
             <text
               x={x + width / 2}
-              y={y + height / 2 + (showCompany ? 20 : 10)}
+              y={y + height / 2 + 10}
               textAnchor="middle"
               dominantBaseline="middle"
               fill="rgba(255,255,255,0.85)"
@@ -747,10 +916,10 @@ function HeatmapView({
             >
               {metricLabel}
             </text>
-            {price !== null && showCompany && (
+            {price !== null && roomy && (
               <text
                 x={x + width / 2}
-                y={y + height / 2 + 34}
+                y={y + height / 2 + 24}
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fill="rgba(255,255,255,0.6)"
@@ -798,21 +967,99 @@ function HeatmapView({
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      {/* Legend */}
+      {/* Legend — plain labels, no arrow glyphs (the gradient itself shows
+          direction; the up/down/sideways arrow chars were inconsistent). */}
       <div className="flex items-center gap-2 text-xs text-zinc-500">
-        <span>↓ &lt;-5%</span>
-        <div className="h-3 flex-1 rounded" style={{ background: "linear-gradient(to right, #7f1d1d, #dc2626, #f97316, #52525b, #86efac, #22c55e, #14532d)" }} />
-        <span>&gt;+5% ↑</span>
+        <span>−5%</span>
+        <div
+          className="h-3 flex-1 rounded"
+          style={{ background: "linear-gradient(to right, #5f1d1d, #8a2a2a, #b04a4a, #c98080, #7fa991, #3f8060, #266049, #1b4435)" }}
+        />
+        <span>+5%</span>
       </div>
       <ResponsiveContainer width="100%" height={600}>
         <Treemap
           data={treeData}
           dataKey="size"
           content={<TreeContent />}
+          // Animation removed entirely — was re-running on every filter change
+          // and felt jarring. Treemap now snaps directly to the new layout.
+          isAnimationActive={false}
+          animationDuration={0}
         >
           <Tooltip content={<HeatmapTooltip />} />
         </Treemap>
       </ResponsiveContainer>
+    </div>
+  );
+}
+
+
+// ── StockNews ─────────────────────────────────────────────────────────────────
+
+type NewsArticle = {
+  headline: string;
+  source: string;
+  url: string;
+  datetime: number;
+  summary: string;
+};
+
+function StockNews({ symbol }: { symbol: string }) {
+  const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    setArticles([]);
+    const today = new Date();
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    fetch(`/api/ticker-news?ticker=${encodeURIComponent(symbol)}`)
+      .then((r) => (r.ok ? r.json() : { news: [] }))
+      .then((data: { news?: NewsArticle[] }) => {
+        setArticles(Array.isArray(data.news) ? data.news.slice(0, 5) : []);
+      })
+      .catch(() => setArticles([]))
+      .finally(() => setLoading(false));
+  }, [symbol]);
+
+  return (
+    <div className="p-5">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+        {symbol} News
+      </p>
+      {loading ? (
+        <div className="space-y-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="skeleton h-10 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : articles.length === 0 ? (
+        <p className="text-xs text-zinc-600">No recent news found</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {articles.map((a, i) => (
+            <a
+              key={i}
+              href={a.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group rounded-lg border border-white/[0.07] p-2.5 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-[var(--accent-color)]/5"
+            >
+              <p className="text-xs font-medium text-zinc-200 line-clamp-2 group-hover:text-[var(--accent-color)]">
+                {a.headline}
+              </p>
+              <div className="mt-1 flex items-center gap-2 text-[10px] text-zinc-500">
+                <span>{a.source}</span>
+                <span>·</span>
+                <span>{new Date(a.datetime * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -898,7 +1145,9 @@ function DetailPanel({
         <DayChangeBadge pct={stock.dayChangePct} />
       </div>
 
-      {/* Metrics grid */}
+      {/* Metrics grid — shows whatever data is available from the screener +
+          enrichment. dividendYield is already in % (e.g. 2.5 = 2.5%), so
+          we do NOT multiply by 100 again (old code did → showed 250%). */}
       <div className="border-b border-white/10 p-5">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Fundamentals</p>
         <div className="grid grid-cols-2 gap-3">
@@ -907,14 +1156,12 @@ function DetailPanel({
             { label: "Sector", value: stock.sector ?? "—" },
             { label: "P/E Ratio", value: fmtNum(stock.pe) },
             { label: "Industry", value: stock.industry ?? "—" },
-            { label: "P/B Ratio", value: fmtNum(stock.priceToBook) },
-            { label: "Country", value: stock.country ?? "—" },
             { label: "EPS", value: fmtNum(stock.eps) },
-            { label: "Dividend Yield", value: stock.dividendYield !== null ? `${(stock.dividendYield * 100).toFixed(2)}%` : "—" },
+            { label: "Country", value: stock.country ?? "—" },
             { label: "Beta", value: fmtNum(stock.beta) },
-            { label: "Debt/Equity", value: fmtNum(stock.debtToEquity) },
+            { label: "Dividend Yield", value: stock.dividendYield != null ? `${stock.dividendYield.toFixed(2)}%` : "—" },
             { label: "Volume", value: fmtVol(stock.volume) },
-            { label: "Rev. Growth", value: stock.revenueGrowth !== null ? fmtPct(stock.revenueGrowth * 100) : "—" },
+            { label: "Day Change", value: stock.dayChangePct != null ? fmtPct(stock.dayChangePct) : "—" },
           ].map(({ label, value }) => (
             <div key={label} className="rounded-lg bg-white/5 p-2.5">
               <p className="text-[10px] text-zinc-600">{label}</p>
@@ -924,38 +1171,62 @@ function DetailPanel({
         </div>
       </div>
 
-      {/* Technical */}
-      {td && (
-        <div className="border-b border-white/10 p-5">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Technical</p>
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
-              <span className="text-xs text-zinc-400">RSI (14)</span>
-              <RsiBadge rsi={td.rsi} />
-            </div>
-            {td.sma50 !== null && (
-              <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
-                <span className="text-xs text-zinc-400">SMA 50</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-300">{fmtPrice(td.sma50)}</span>
-                  <SmaArrow above={td.aboveSma50} />
-                </div>
-              </div>
-            )}
-            {td.sma200 !== null && (
-              <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
-                <span className="text-xs text-zinc-400">SMA 200</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-300">{fmtPrice(td.sma200)}</span>
-                  <SmaArrow above={td.aboveSma200} />
-                </div>
-              </div>
-            )}
+      {/* Technical — show enrichment-level MA data when techData isn't loaded */}
+      <div className="border-b border-white/10 p-5">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Technical</p>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+            <span className="text-xs text-zinc-400">RSI (14)</span>
+            {td?.rsi != null ? <RsiBadge rsi={td.rsi} /> : <span className="text-xs text-zinc-600">—</span>}
           </div>
+          {(stock.vsMA50 != null || td?.sma50 != null) && (
+            <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+              <span className="text-xs text-zinc-400">vs SMA 50</span>
+              <div className="flex items-center gap-2">
+                {stock.vsMA50 != null ? (
+                  <span className={`text-xs font-medium ${stock.vsMA50 >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {stock.vsMA50 >= 0 ? "+" : ""}{stock.vsMA50.toFixed(1)}%
+                  </span>
+                ) : td?.sma50 != null ? (
+                  <>
+                    <span className="text-xs text-zinc-300">{fmtPrice(td.sma50)}</span>
+                    <SmaArrow above={td.aboveSma50} />
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
+          {(stock.vsMA200 != null || td?.sma200 != null) && (
+            <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+              <span className="text-xs text-zinc-400">vs SMA 200</span>
+              <div className="flex items-center gap-2">
+                {stock.vsMA200 != null ? (
+                  <span className={`text-xs font-medium ${stock.vsMA200 >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {stock.vsMA200 >= 0 ? "+" : ""}{stock.vsMA200.toFixed(1)}%
+                  </span>
+                ) : td?.sma200 != null ? (
+                  <>
+                    <span className="text-xs text-zinc-300">{fmtPrice(td.sma200)}</span>
+                    <SmaArrow above={td.aboveSma200} />
+                  </>
+                ) : null}
+              </div>
+            </div>
+          )}
+          {(stock.vs52wkHigh != null || stock.vs52wkLow != null) && (
+            <div className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+              <span className="text-xs text-zinc-400">52-Wk Range</span>
+              <span className="text-xs text-zinc-300">
+                {stock.vs52wkHigh != null ? `${stock.vs52wkHigh.toFixed(1)}% from high` : ""}
+                {stock.vs52wkHigh != null && stock.vs52wkLow != null ? " · " : ""}
+                {stock.vs52wkLow != null ? `${stock.vs52wkLow.toFixed(1)}% from low` : ""}
+              </span>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Actions */}
+      {/* Actions — Run Backtest removed per user request */}
       <div className="border-b border-white/10 p-5">
         <div className="flex flex-col gap-2">
           <button
@@ -965,35 +1236,17 @@ function DetailPanel({
           >
             + Add to Watchlist
           </button>
-          <div className="grid grid-cols-2 gap-2">
-            <a
-              href={`/backtest?ticker=${stock.symbol}`}
-              className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-center text-sm font-medium text-zinc-300 hover:bg-white/10 transition-colors"
-            >
-              Run Backtest
-            </a>
-            <a
-              href={`/search/${stock.symbol}`}
-              className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-center text-sm font-medium text-zinc-300 hover:bg-white/10 transition-colors"
-            >
-              Full Page →
-            </a>
-          </div>
+          <a
+            href={`/search/${stock.symbol}`}
+            className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-center text-sm font-medium text-zinc-300 hover:bg-white/10 transition-colors"
+          >
+            Full Page →
+          </a>
         </div>
       </div>
 
-      {/* News placeholder */}
-      <div className="p-5">
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">News</p>
-        <a
-          href={`https://finnhub.io/stock/${stock.symbol.toLowerCase()}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 text-sm text-[var(--accent-color)] hover:underline"
-        >
-          View {stock.symbol} latest news →
-        </a>
-      </div>
+      {/* Company News — fetched live from Finnhub /company-news (free tier) */}
+      <StockNews symbol={stock.symbol} />
     </div>
   );
 }
@@ -1172,15 +1425,20 @@ export default function ScreenerView() {
   const [techData, setTechData] = useState<Record<string, TechData>>({});
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<"heatmap" | "table">("heatmap");
-  const [heatColorBy, setHeatColorBy] = useState<HeatColorBy>("dayChangePct");
+  // Heatmap coloring is fixed to Day Change % — the dropdown that exposed
+  // other options was removed (it duplicated the Performance filter section).
+  const heatColorBy: HeatColorBy = "dayChangePct";
   const [selected, setSelected] = useState<ScreenerStock | null>(null);
   const [sortCol, setSortCol] = useState("marketCap");
   const [sortAsc, setSortAsc] = useState(false);
   const [saveModal, setSaveModal] = useState(false);
   const [savedScreens, setSavedScreens] = useState<SavedScreen[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [templatesOpen, setTemplatesOpen] = useState(true);
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const [techLoading, setTechLoading] = useState(false);
   const [loadDropdownOpen, setLoadDropdownOpen] = useState(false);
+  const [indexDropdownOpen, setIndexDropdownOpen] = useState(false);
   const { showToast } = useToast();
 
   const debouncedFilters = useDebounce(filters, 500);
@@ -1197,13 +1455,31 @@ export default function ScreenerView() {
     setLoading(true);
     try {
       const params = buildApiParams(f);
+      // Send the ticker whitelist so the server can backfill any index
+      // members the FMP screener missed — BUT skip when any non-default
+      // filters are active (template or manual). With active filters, FMP
+      // screener already returns only qualifying stocks; backfilling would
+      // re-add non-qualifying members with null data that pass our null-
+      // tolerant client filters, making the template do nothing visible.
+      //
+      // We detect "has active filters" by comparing filter values to defaults
+      // rather than checking activeTemplateId — the state might not have
+      // committed yet when fetchStocks is called from inside setFilters.
+      const hasNonDefaultFilters = (Object.keys(DEFAULT_FILTERS) as Array<keyof ScreenerFilters>).some((key) => {
+        if (key === "tickerWhitelist" || key === "tickerWhitelistLabel" || key === "exchange" || key === "sector" || key === "country" || key === "marketCapPresets") return false;
+        return f[key] !== DEFAULT_FILTERS[key] && f[key] !== "" && f[key] !== undefined;
+      });
+      if (f.tickerWhitelist && f.tickerWhitelist.length > 0 && !hasNonDefaultFilters) {
+        params.set("whitelist", f.tickerWhitelist.join(","));
+      }
       const res = await fetch(`/api/screener?${params}`);
       if (!res.ok) throw new Error("Fetch failed");
       const data: ScreenerStock[] = await res.json();
       setStocks(data);
     } catch {
       showToast("Failed to load stocks", "error");
-      setStocks([]);
+      // Keep previous stocks on error — don't wipe to blank. The stale
+      // data is better than an empty screen while the user retries.
     } finally {
       setLoading(false);
     }
@@ -1240,10 +1516,25 @@ export default function ScreenerView() {
     fetchStocks(debouncedFilters);
   }, [debouncedFilters, fetchStocks]);
 
+  // On first mount, default to the S&P 500 universe so the page lands on a
+  // recognizable, focused set of large-cap US stocks instead of the broad
+  // ~5000-ticker default. Only runs once.
+  const didDefaultRef = useRef(false);
+  useEffect(() => {
+    if (didDefaultRef.current) return;
+    didDefaultRef.current = true;
+    const sp500 = INDEX_PRESETS.find((p) => p.id === "sp500");
+    if (sp500) loadIndexPreset(sp500);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Fetch tech data when stocks change
   const stockSymbolsKey = stocks.map((s) => s.symbol).join(",");
   useEffect(() => {
-    const symbols = stocks.map((s) => s.symbol).slice(0, 100);
+    // Cap at 30 symbols for tech data — Finnhub free tier allows 60 req/min
+    // and each symbol needs 1 candle call. 30 symbols in batches of 10 = 3
+    // sequential batches, well within the limit.
+    const symbols = stocks.map((s) => s.symbol).slice(0, 30);
     if (symbols.length > 0) {
       fetchTechData(symbols);
     }
@@ -1314,7 +1605,8 @@ export default function ScreenerView() {
     [showToast]
   );
 
-  // Save screen handler
+  // Save screen handler — server enforces a 10-screen cap per user; surface
+  // the 409 with a clear message so the user knows to delete an old one.
   const handleSaveScreen = useCallback(
     async (
       name: string,
@@ -1333,6 +1625,10 @@ export default function ScreenerView() {
           alerts_enabled: alertsEnabled,
         }),
       });
+      if (res.status === 409) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? "Saved-screen limit reached.");
+      }
       if (!res.ok) throw new Error("Save failed");
       const saved: SavedScreen = await res.json();
       setSavedScreens((prev) => [saved, ...prev]);
@@ -1341,11 +1637,61 @@ export default function ScreenerView() {
     [filters, showToast]
   );
 
-  // Load screen handler
+  const savedCapReached = savedScreens.length >= 10;
+
+  // Load screen / template handler. Preserves the active index whitelist so
+  // clicking a Quick Template while on "S&P 500" applies the template's
+  // filters (PE, beta, SMA, etc.) within that index — rather than wiping the
+  // index and reverting to the full broad universe.
   const handleLoadScreen = useCallback(
     (screen: { filters: Partial<ScreenerFilters> }) => {
-      setFilters({ ...DEFAULT_FILTERS, ...screen.filters });
+      setFilters((prev) => ({
+        ...DEFAULT_FILTERS,
+        ...screen.filters,
+        // Carry over the current index whitelist so the template narrows
+        // within the active index rather than unloading it.
+        tickerWhitelist: prev.tickerWhitelist,
+        tickerWhitelistLabel: prev.tickerWhitelistLabel,
+      }));
       setLoadDropdownOpen(false);
+    },
+    []
+  );
+
+  /** Load an index preset by fetching its real constituent list (FMP +
+   *  hardcoded fallbacks on the server) and setting it as the active ticker
+   *  whitelist. Never applies the old size+exchange proxy filters — those
+   *  added unwanted chips ("Cap ≥ $100B", "Exchange: NYSE,NASDAQ") that the
+   *  user didn't want. The server route guarantees a non-empty ticker list
+   *  for sp500 / nasdaq100 / dow30 via hardcoded fallbacks; for indexes
+   *  without constituent data (russell2000, midcap400) the size proxy is
+   *  the only option, so for those we still apply preset.filters. */
+  const loadIndexPreset = useCallback(
+    async (preset: { id: string; label: string; filters: Partial<ScreenerFilters> }) => {
+      setIndexDropdownOpen(false);
+      setActiveTemplateId(null); // switching index clears any active template
+      const HAS_CONSTITUENT_LIST = new Set(["sp500", "nasdaq100", "dow30"]);
+      if (HAS_CONSTITUENT_LIST.has(preset.id)) {
+        try {
+          const res = await fetch(`/api/screener/index-constituents?index=${preset.id}`);
+          if (res.ok) {
+            const data = (await res.json()) as { tickers?: string[] };
+            if (Array.isArray(data.tickers) && data.tickers.length > 0) {
+              setFilters({
+                ...DEFAULT_FILTERS,
+                tickerWhitelist: data.tickers,
+                tickerWhitelistLabel: preset.label,
+              });
+              return;
+            }
+          }
+        } catch {
+          /* swallow — falls through to proxy */
+        }
+      }
+      // No constituent list available for this index → use size proxy.
+      // (Adds exchange/mcap chips, but otherwise the click would do nothing.)
+      setFilters({ ...DEFAULT_FILTERS, ...preset.filters, tickerWhitelistLabel: preset.label });
     },
     []
   );
@@ -1353,6 +1699,20 @@ export default function ScreenerView() {
   // Active filter chips
   const activeChips = useMemo(() => {
     const chips: { key: string; label: string; reset: () => void }[] = [];
+
+    // Surface the active index whitelist as the first chip so the user always
+    // knows what universe they're looking at (e.g. "S&P 500: 500 stocks").
+    if (filters.tickerWhitelist && filters.tickerWhitelist.length > 0) {
+      const label = filters.tickerWhitelistLabel ?? "Custom list";
+      chips.push({
+        key: "whitelist",
+        label: `${label}: ${filters.tickerWhitelist.length} tickers`,
+        reset: () => {
+          setFilter("tickerWhitelist", undefined);
+          setFilter("tickerWhitelistLabel", undefined);
+        },
+      });
+    }
 
     if (filters.exchange.length > 0 && JSON.stringify(filters.exchange) !== JSON.stringify(DEFAULT_FILTERS.exchange)) {
       chips.push({ key: "exchange", label: `Exchange: ${filters.exchange.join(", ")}`, reset: () => setFilter("exchange", DEFAULT_FILTERS.exchange) });
@@ -1385,12 +1745,17 @@ export default function ScreenerView() {
   }, [filters, setFilter]);
 
   const loadDropdownRef = useRef<HTMLDivElement>(null);
+  const indexDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
+  // Close dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (loadDropdownRef.current && !loadDropdownRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (loadDropdownRef.current && !loadDropdownRef.current.contains(target)) {
         setLoadDropdownOpen(false);
+      }
+      if (indexDropdownRef.current && !indexDropdownRef.current.contains(target)) {
+        setIndexDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -1399,32 +1764,110 @@ export default function ScreenerView() {
 
   return (
     <div className="flex w-full min-h-0 flex-1 overflow-hidden rounded-xl border border-white/10" style={{ background: "var(--app-bg)" }}>
-      {/* Sidebar */}
+      {/* Sidebar — overflow-x-hidden so wide content (long tickers in saved
+          screens, etc.) never produces a horizontal scrollbar. */}
       <aside
-        className={`shrink-0 border-r border-white/10 bg-[var(--app-card-alt)] transition-all duration-200 overflow-y-auto ${
+        className={`shrink-0 border-r border-white/10 bg-[var(--app-card-alt)] transition-all duration-200 overflow-y-auto overflow-x-hidden ${
           sidebarOpen ? "w-[280px]" : "w-0 overflow-hidden"
         }`}
       >
         {sidebarOpen && (
           <div className="flex flex-col">
-            {/* Templates */}
-            <div className="border-b border-white/10 p-4">
-              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                Quick Templates
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {TEMPLATES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => handleLoadScreen(t)}
-                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-zinc-300 hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)] transition-colors"
+            {/* Templates — collapsible section. Header row also hosts the
+                "collapse the whole sidebar" chevron on the right. */}
+            <div className="border-b border-white/10">
+              <div className="flex items-center gap-1 px-4 py-3">
+                <button
+                  type="button"
+                  onClick={() => setTemplatesOpen((o) => !o)}
+                  className="flex flex-1 items-center justify-between text-left text-xs font-semibold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 transition-colors"
+                  aria-expanded={templatesOpen}
+                >
+                  <span>Quick Templates</span>
+                  {/* Same chevron behavior as FilterSection: points down when
+                      collapsed, flips to point up (rotate-180) when expanded. */}
+                  <svg
+                    className={`h-4 w-4 transition-transform duration-200 ${templatesOpen ? "rotate-180" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    {TEMPLATE_ICONS[t.id]}
-                    <span>{t.label}</span>
-                  </button>
-                ))}
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(false)}
+                  className="rounded p-1 text-zinc-500 transition-colors hover:bg-white/5 hover:text-[var(--accent-color)]"
+                  aria-label="Collapse filters"
+                  title="Collapse filters"
+                >
+                  {/* Sidebar-collapse chevron — sized to match the FilterSection
+                      arrows (h-4 w-4); rotated 90° to point left ◀. */}
+                  <svg className="h-4 w-4 rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
               </div>
+              {templatesOpen && (
+                <div className="flex flex-col gap-1.5 px-4 pb-4">
+                  <p className="rounded-md bg-[var(--accent-color)]/10 px-2.5 py-1.5 text-[10px] font-medium text-[var(--accent-color)]">More detailed templates coming soon</p>
+                  {TEMPLATES.map((t) => {
+                    const isActive = activeTemplateId === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => {
+                          if (isActive) {
+                            // Toggle off — reset template filters but keep index.
+                            // Immediate fetch so user sees the full set right away
+                            // instead of stale template-filtered stocks.
+                            setActiveTemplateId(null);
+                            setFilters((prev) => {
+                              const newF: ScreenerFilters = {
+                                ...DEFAULT_FILTERS,
+                                tickerWhitelist: prev.tickerWhitelist,
+                                tickerWhitelistLabel: prev.tickerWhitelistLabel,
+                              };
+                              fetchStocks(newF);
+                              return newF;
+                            });
+                          } else {
+                            // Activate template — compute filters and immediately
+                            // fetch so the user doesn't see stale stocks from the
+                            // previous template while waiting for the 500ms debounce.
+                            setActiveTemplateId(t.id);
+                            setFilters((prev) => {
+                              const newF: ScreenerFilters = {
+                                ...DEFAULT_FILTERS,
+                                ...t.filters,
+                                tickerWhitelist: prev.tickerWhitelist,
+                                tickerWhitelistLabel: prev.tickerWhitelistLabel,
+                              };
+                              fetchStocks(newF);
+                              return newF;
+                            });
+                          }
+                        }}
+                        className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${
+                          isActive
+                            ? "border-[var(--accent-color)]/60 bg-[var(--accent-color)]/15 text-[var(--accent-color)]"
+                            : "border-white/10 bg-white/5 text-zinc-300 hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)]"
+                        }`}
+                      >
+                        <span className="mt-0.5 shrink-0">{TEMPLATE_ICONS[t.id]}</span>
+                        <span className="min-w-0">
+                          <span className="font-medium">{t.label}</span>
+                          <span className="mt-0.5 block text-[10px] leading-tight text-zinc-500">
+                            {t.desc}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Market Filters */}
@@ -1475,44 +1918,80 @@ export default function ScreenerView() {
                 </div>
               </div>
 
-              {/* Market Cap presets */}
+              {/* Market Cap presets — multi-select. Each click toggles the
+                  preset; selected presets compose: server gets the encompassing
+                  min/max range, and client-side filtering keeps only stocks
+                  that fall inside one of the SELECTED categories (so picking
+                  Mega+Small doesn't accidentally let Mid through). */}
               <div className="mb-3">
-                <p className="mb-2 text-xs text-zinc-500">Market Cap</p>
-                <div className="mb-2 flex flex-wrap gap-1">
-                  {[
-                    { label: "Mega", min: "200000000000", max: "" },
-                    { label: "Large", min: "10000000000", max: "200000000000" },
-                    { label: "Mid", min: "2000000000", max: "10000000000" },
-                    { label: "Small", min: "300000000", max: "2000000000" },
-                    { label: "Micro", min: "0", max: "300000000" },
-                  ].map((p) => (
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs text-zinc-500">Market Cap</p>
+                  {(filters.marketCapMin || filters.marketCapMax || (filters.marketCapPresets?.length ?? 0) > 0) && (
                     <button
-                      key={p.label}
                       type="button"
                       onClick={() => {
-                        setFilter("marketCapMin", p.min);
-                        setFilter("marketCapMax", p.max);
+                        setFilter("marketCapMin", "");
+                        setFilter("marketCapMax", "");
+                        setFilter("marketCapPresets", []);
                       }}
-                      className="rounded border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-zinc-400 hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)] transition-colors"
+                      className="text-[10px] text-zinc-500 hover:text-[var(--accent-color)] transition-colors"
                     >
-                      {p.label}
+                      Clear
                     </button>
-                  ))}
+                  )}
                 </div>
-                <div className="flex gap-2">
+                <div className="mb-2 flex flex-wrap gap-1">
+                  {MARKET_CAP_PRESETS.map((p) => {
+                    const selected = (filters.marketCapPresets ?? []).includes(p.label);
+                    return (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => {
+                          const cur = filters.marketCapPresets ?? [];
+                          const next = cur.includes(p.label)
+                            ? cur.filter((x) => x !== p.label)
+                            : [...cur, p.label];
+                          setFilter("marketCapPresets", next);
+                          // Recompute the encompassing server range from the
+                          // selected presets so FMP receives the union.
+                          const selectedRanges = MARKET_CAP_PRESETS.filter((mp) => next.includes(mp.label));
+                          if (selectedRanges.length === 0) {
+                            setFilter("marketCapMin", "");
+                            setFilter("marketCapMax", "");
+                          } else {
+                            const mins = selectedRanges.map((r) => parseFloat(r.min || "0"));
+                            const maxes = selectedRanges.map((r) => (r.max === "" ? Infinity : parseFloat(r.max)));
+                            setFilter("marketCapMin", String(Math.min(...mins)));
+                            const maxVal = Math.max(...maxes);
+                            setFilter("marketCapMax", maxVal === Infinity ? "" : String(maxVal));
+                          }
+                        }}
+                        className={`rounded border px-2 py-0.5 text-xs transition-colors ${
+                          selected
+                            ? "border-[var(--accent-color)]/60 bg-[var(--accent-color)]/15 text-[var(--accent-color)]"
+                            : "border-white/10 bg-white/5 text-zinc-400 hover:border-[var(--accent-color)]/40 hover:text-[var(--accent-color)]"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="flex flex-col gap-2">
                   <input
                     type="number"
                     placeholder="Min"
                     value={filters.marketCapMin}
                     onChange={(e) => setFilter("marketCapMin", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                   <input
                     type="number"
                     placeholder="Max"
                     value={filters.marketCapMax}
                     onChange={(e) => setFilter("marketCapMax", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                 </div>
               </div>
@@ -1520,20 +1999,20 @@ export default function ScreenerView() {
               {/* Price */}
               <div className="mb-3">
                 <p className="mb-2 text-xs text-zinc-500">Price ($)</p>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
                   <input
                     type="number"
                     placeholder="Min"
                     value={filters.priceMin}
                     onChange={(e) => setFilter("priceMin", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                   <input
                     type="number"
                     placeholder="Max"
                     value={filters.priceMax}
                     onChange={(e) => setFilter("priceMax", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                 </div>
               </div>
@@ -1556,20 +2035,20 @@ export default function ScreenerView() {
               {/* P/E */}
               <div className="mb-3">
                 <p className="mb-2 text-xs text-zinc-500">P/E Ratio</p>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
                   <input
                     type="number"
                     placeholder="Min"
                     value={filters.peMin}
                     onChange={(e) => setFilter("peMin", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                   <input
                     type="number"
                     placeholder="Max"
                     value={filters.peMax}
                     onChange={(e) => setFilter("peMax", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                 </div>
               </div>
@@ -1620,20 +2099,20 @@ export default function ScreenerView() {
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
                   <input
                     type="number"
                     placeholder="Min"
                     value={filters.betaMin}
                     onChange={(e) => setFilter("betaMin", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                   <input
                     type="number"
                     placeholder="Max"
                     value={filters.betaMax}
                     onChange={(e) => setFilter("betaMax", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                 </div>
               </div>
@@ -1675,25 +2154,25 @@ export default function ScreenerView() {
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
                   <input
                     type="number"
                     placeholder="Min"
                     value={filters.rsiMin}
                     onChange={(e) => setFilter("rsiMin", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                   <input
                     type="number"
                     placeholder="Max"
                     value={filters.rsiMax}
                     onChange={(e) => setFilter("rsiMax", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                 </div>
               </div>
 
-              {/* vs SMA 50 */}
+              {/* vs SMA 50 (direction) */}
               <div className="mb-3">
                 <p className="mb-2 text-xs text-zinc-500">Price vs SMA 50</p>
                 <div className="flex gap-1">
@@ -1714,8 +2193,29 @@ export default function ScreenerView() {
                 </div>
               </div>
 
-              {/* vs SMA 200 */}
-              <div>
+              {/* vs SMA 50 distance % (signed) */}
+              <div className="mb-3">
+                <p className="mb-2 text-xs text-zinc-500">SMA 50 distance (%)</p>
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="number"
+                    placeholder="Min %"
+                    value={filters.vsSma50PctMin}
+                    onChange={(e) => setFilter("vsSma50PctMin", e.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Max %"
+                    value={filters.vsSma50PctMax}
+                    onChange={(e) => setFilter("vsSma50PctMax", e.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* vs SMA 200 (direction) */}
+              <div className="mb-3">
                 <p className="mb-2 text-xs text-zinc-500">Price vs SMA 200</p>
                 <div className="flex gap-1">
                   {(["any", "above", "below"] as const).map((opt) => (
@@ -1734,28 +2234,80 @@ export default function ScreenerView() {
                   ))}
                 </div>
               </div>
-            </FilterSection>
 
-            {/* Performance Filters */}
-            <FilterSection title="Performance" defaultOpen={false}>
+              {/* vs SMA 200 distance % (signed) */}
               <div>
-                <p className="mb-2 text-xs text-zinc-500">Day Change %</p>
-                <div className="flex gap-2">
+                <p className="mb-2 text-xs text-zinc-500">SMA 200 distance (%)</p>
+                <div className="flex flex-col gap-2">
                   <input
                     type="number"
                     placeholder="Min %"
-                    value={filters.dayChangePctMin}
-                    onChange={(e) => setFilter("dayChangePctMin", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    value={filters.vsSma200PctMin}
+                    onChange={(e) => setFilter("vsSma200PctMin", e.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                   <input
                     type="number"
                     placeholder="Max %"
-                    value={filters.dayChangePctMax}
-                    onChange={(e) => setFilter("dayChangePctMax", e.target.value)}
-                    className="flex-1 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    value={filters.vsSma200PctMax}
+                    onChange={(e) => setFilter("vsSma200PctMax", e.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
                   />
                 </div>
+              </div>
+            </FilterSection>
+
+            {/* Performance Filters */}
+            <FilterSection title="Performance" defaultOpen={false}>
+              {([
+                { label: "Day Change %",   minKey: "dayChangePctMin",   maxKey: "dayChangePctMax" },
+                { label: "1-Week %",       minKey: "weekChangePctMin",  maxKey: "weekChangePctMax" },
+                { label: "1-Month %",      minKey: "monthChangePctMin", maxKey: "monthChangePctMax" },
+                { label: "YTD %",          minKey: "ytdChangePctMin",   maxKey: "ytdChangePctMax" },
+                { label: "1-Year %",       minKey: "yearChangePctMin",  maxKey: "yearChangePctMax" },
+              ] as const).map((row) => (
+                <div key={row.label} className="mb-3">
+                  <p className="mb-2 text-xs text-zinc-500">{row.label}</p>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="number"
+                      placeholder="Min %"
+                      value={filters[row.minKey] as string}
+                      onChange={(e) => setFilter(row.minKey, e.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Max %"
+                      value={filters[row.maxKey] as string}
+                      onChange={(e) => setFilter(row.maxKey, e.target.value)}
+                      className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              ))}
+
+              <div className="mb-3">
+                <p className="mb-2 text-xs text-zinc-500">vs 52-Wk High (≥ %)</p>
+                <input
+                  type="number"
+                  placeholder="e.g. -5"
+                  value={filters.vs52wkHighPctMin}
+                  onChange={(e) => setFilter("vs52wkHighPctMin", e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                />
+                <p className="mt-1 text-[10px] text-zinc-600">−5 = within 5% of the high</p>
+              </div>
+              <div>
+                <p className="mb-2 text-xs text-zinc-500">vs 52-Wk Low (≥ %)</p>
+                <input
+                  type="number"
+                  placeholder="e.g. 30"
+                  value={filters.vs52wkLowPctMin}
+                  onChange={(e) => setFilter("vs52wkLowPctMin", e.target.value)}
+                  className="w-full rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-50 placeholder:text-zinc-600 focus:border-[var(--accent-color)]/50 focus:outline-none"
+                />
+                <p className="mt-1 text-[10px] text-zinc-600">30 = at least 30% above the low</p>
               </div>
             </FilterSection>
 
@@ -1763,7 +2315,7 @@ export default function ScreenerView() {
             <div className="p-4">
               <button
                 type="button"
-                onClick={() => setFilters(DEFAULT_FILTERS)}
+                onClick={() => { setFilters(DEFAULT_FILTERS); setActiveTemplateId(null); }}
                 className="w-full rounded-xl border border-red-500/20 bg-red-500/10 py-2 text-xs font-medium text-red-400 hover:bg-red-500/20 transition-colors"
               >
                 Clear All Filters
@@ -1775,35 +2327,21 @@ export default function ScreenerView() {
 
       {/* Main Content */}
       <div className="flex min-w-0 min-h-0 flex-1 flex-col overflow-hidden">
-        {/* Header bar */}
-        <div className="flex items-center gap-3 border-b border-white/10 bg-[var(--app-card-alt)] px-4 py-3">
-          {/* Sidebar toggle */}
-          <button
-            type="button"
-            onClick={() => setSidebarOpen((v) => !v)}
-            className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 transition-colors"
-            aria-label="Toggle sidebar"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
-
-          {/* Results count */}
+        {/* Header bar — flex-wrap so View toggle / Save / Load / Indexes / etc.
+            wrap to a second row on narrow widths instead of being cut off. */}
+        <div className="flex flex-wrap items-center gap-3 border-b border-white/10 bg-[var(--app-card-alt)] px-4 py-3">
+          {/* Results count — always shows the current filtered count so
+              template changes feel instant. A tiny dot pulses while a
+              background fetch is in flight; no "Loading…" text replacement. */}
           <span className="text-sm text-zinc-500">
-            {loading ? (
-              <span className="text-zinc-600">Loading…</span>
-            ) : (
-              <>
-                <span className="font-semibold text-zinc-300">{filteredStocks.length}</span>
-                {" "}stocks
-                {techLoading && <span className="ml-2 text-xs text-zinc-600">· loading tech…</span>}
-              </>
-            )}
+            <span className="font-semibold text-zinc-300">{filteredStocks.length}</span>
+            {" "}stocks
+            {loading && <span className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent-color)]" />}
           </span>
 
-          {/* View toggle */}
-          <div className="flex rounded-xl border border-white/10 bg-white/5 p-1">
+          {/* View toggle — shrink-0 + flex-wrap on the parent guarantees the
+              two pills always render in full and wrap as a unit if needed. */}
+          <div className="flex shrink-0 rounded-xl border border-white/10 bg-white/5 p-1">
             {(["heatmap", "table"] as const).map((v) => (
               <button
                 key={v}
@@ -1834,27 +2372,27 @@ export default function ScreenerView() {
             ))}
           </div>
 
-          {/* Color-by selector (heatmap only) */}
-          {view === "heatmap" && (
-            <select
-              value={heatColorBy}
-              onChange={(e) => setHeatColorBy(e.target.value as HeatColorBy)}
-              className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-[var(--accent-color)]/50"
-            >
-              {HEAT_COLOR_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          )}
+          {/* (Heatmap "Day Change %" color-by selector removed — duplicates
+              the Performance filter section in the sidebar. Heatmap colors by
+              day change by default; if we want to expose other coloring later
+              it should live next to the Performance filters, not here.) */}
 
-          {/* Save + Load */}
-          <div className="flex items-center gap-2">
+          {/* Save + Load — shrink-0 so they never get clipped on narrow widths. */}
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
-              onClick={() => setSaveModal(true)}
-              className="rounded-xl border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-3 py-1.5 text-xs font-medium text-[var(--accent-color)] hover:bg-[var(--accent-color)]/20 transition-colors"
+              onClick={() => {
+                if (savedCapReached) {
+                  showToast("Saved-screen limit reached (10). Delete one first.", "error");
+                  return;
+                }
+                setSaveModal(true);
+              }}
+              disabled={savedCapReached}
+              title={savedCapReached ? "10/10 saved screens — delete one to add another" : "Save current filters as a screen"}
+              className="rounded-xl border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-3 py-1.5 text-xs font-medium text-[var(--accent-color)] hover:bg-[var(--accent-color)]/20 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Save Screen
+              Save Screen {savedCapReached ? "(10/10)" : ""}
             </button>
 
             <div className="relative" ref={loadDropdownRef}>
@@ -1891,7 +2429,67 @@ export default function ScreenerView() {
                 </div>
               )}
             </div>
+
+            {/* Index presets — same dropdown idiom as Load, sits right next
+                to it. One-click switch between S&P 500 / Nasdaq 100 / etc.
+                The trigger button shows the active index label so users can
+                see which preset is loaded at a glance. */}
+            <div className="relative" ref={indexDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIndexDropdownOpen((v) => !v)}
+                className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-1 ${
+                  filters.tickerWhitelistLabel
+                    ? "border-[var(--accent-color)]/40 bg-[var(--accent-color)]/10 text-[var(--accent-color)] hover:bg-[var(--accent-color)]/15"
+                    : "border-white/10 bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                }`}
+              >
+                {filters.tickerWhitelistLabel ?? "Indexes"}
+                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {indexDropdownOpen && (
+                <div className="absolute right-0 top-full z-30 mt-1 w-48 overflow-hidden rounded-xl border border-white/10 bg-[var(--app-card-alt)] shadow-2xl">
+                  {INDEX_PRESETS.map((p) => {
+                    const active = filters.tickerWhitelistLabel === p.label;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => loadIndexPreset(p)}
+                        className={`w-full px-4 py-2.5 text-left text-xs font-medium transition-colors ${
+                          active
+                            ? "bg-[var(--accent-color)]/15 text-[var(--accent-color)]"
+                            : "text-zinc-300 hover:bg-white/5 hover:text-[var(--accent-color)]"
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Expand-filters button — only visible when the sidebar is closed.
+              When open, the collapse arrow lives inside the sidebar next to
+              "Quick Templates". */}
+          {!sidebarOpen && (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="rounded-lg border border-white/10 bg-white/5 p-1.5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200 transition-colors"
+              aria-label="Expand filters"
+              title="Expand filters"
+            >
+              <svg className="h-3 w-3 -rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Active filter chips */}
@@ -1903,9 +2501,13 @@ export default function ScreenerView() {
           </div>
         )}
 
-        {/* View content */}
+        {/* View content — skeleton only on first load when there's nothing yet.
+            After that, filter changes re-filter the existing stocks instantly
+            (filteredStocks useMemo depends on `filters` directly, not the
+            debounced version). The background API refetch updates stocks
+            silently when it completes — no overlay needed. */}
         <div className="min-h-0 flex-1 overflow-auto">
-          {loading ? (
+          {filteredStocks.length === 0 && loading ? (
             <LoadingSkeleton />
           ) : view === "heatmap" ? (
             <HeatmapView stocks={filteredStocks} colorBy={heatColorBy} onSelect={setSelected} />
@@ -1926,7 +2528,7 @@ export default function ScreenerView() {
       {/* Detail panel backdrop */}
       {selected && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-40 bg-black/30"
           onClick={() => setSelected(null)}
         />
       )}

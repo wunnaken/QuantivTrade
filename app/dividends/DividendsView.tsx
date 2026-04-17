@@ -81,25 +81,9 @@ const SECTOR_YIELDS = [
   { sector: "Technology", yield: 0.8 },
 ];
 
-const DEFAULT_CALENDAR: CalendarEntry[] = [
-  { symbol: "AAPL",  company: "Apple Inc.",             exDiv: "Apr 11, 2026", payDate: "May 15, 2026", amount: "$0.25",   yield: "0.5%", freq: "Quarterly", daysAway: 4  },
-  { symbol: "JNJ",   company: "Johnson & Johnson",      exDiv: "Apr 14, 2026", payDate: "May 6, 2026",  amount: "$1.24",   yield: "3.2%", freq: "Quarterly", daysAway: 7  },
-  { symbol: "KO",    company: "Coca-Cola",              exDiv: "Apr 15, 2026", payDate: "Jul 1, 2026",  amount: "$0.485",  yield: "3.1%", freq: "Quarterly", daysAway: 8  },
-  { symbol: "PG",    company: "Procter & Gamble",       exDiv: "Apr 18, 2026", payDate: "May 15, 2026", amount: "$1.0065", yield: "2.4%", freq: "Quarterly", daysAway: 11 },
-  { symbol: "MSFT",  company: "Microsoft",              exDiv: "Apr 17, 2026", payDate: "Jun 12, 2026", amount: "$0.83",   yield: "0.8%", freq: "Quarterly", daysAway: 10 },
-  { symbol: "O",     company: "Realty Income",          exDiv: "Apr 30, 2026", payDate: "May 15, 2026", amount: "$0.2685", yield: "5.7%", freq: "Monthly",   daysAway: 23 },
-  { symbol: "VZ",    company: "Verizon Communications", exDiv: "May 2, 2026",  payDate: "May 28, 2026", amount: "$0.6775", yield: "6.4%", freq: "Quarterly", daysAway: 25 },
-  { symbol: "T",     company: "AT&T Inc.",              exDiv: "May 8, 2026",  payDate: "Jun 1, 2026",  amount: "$0.2775", yield: "5.2%", freq: "Quarterly", daysAway: 31 },
-  { symbol: "XOM",   company: "ExxonMobil",             exDiv: "May 13, 2026", payDate: "Jun 10, 2026", amount: "$0.99",   yield: "3.4%", freq: "Quarterly", daysAway: 36 },
-  { symbol: "JPM",   company: "JPMorgan Chase",         exDiv: "May 15, 2026", payDate: "Jun 30, 2026", amount: "$1.40",   yield: "2.3%", freq: "Quarterly", daysAway: 38 },
-  { symbol: "MAIN",  company: "Main Street Capital",    exDiv: "May 17, 2026", payDate: "May 31, 2026", amount: "$0.245",  yield: "6.1%", freq: "Monthly",   daysAway: 40 },
-  { symbol: "MCD",   company: "McDonald's Corp",        exDiv: "May 22, 2026", payDate: "Jun 19, 2026", amount: "$1.77",   yield: "2.3%", freq: "Quarterly", daysAway: 45 },
-  { symbol: "ABBV",  company: "AbbVie Inc.",            exDiv: "May 29, 2026", payDate: "Jun 15, 2026", amount: "$1.64",   yield: "3.7%", freq: "Quarterly", daysAway: 52 },
-  { symbol: "CVX",   company: "Chevron Corp",           exDiv: "Jun 4, 2026",  payDate: "Jun 30, 2026", amount: "$1.71",   yield: "4.0%", freq: "Quarterly", daysAway: 58 },
-  { symbol: "STAG",  company: "STAG Industrial",        exDiv: "Jun 27, 2026", payDate: "Jul 15, 2026", amount: "$0.1233", yield: "3.9%", freq: "Monthly",   daysAway: 81 },
-];
-
-const MONTHLY_PAYERS = ["O", "MAIN", "STAG"];
+// No more hardcoded calendar — everything comes from live FMP data via
+// /api/dividends/calendar. The component starts with [] and shows a loading
+// state until the API responds.
 
 const KINGS: AristocratEntry[] = [
   { symbol: "PG",   company: "Procter & Gamble",         sector: "Consumer Staples", years: 69, yield: "2.4%", dgr5: "5.8%",  lastIncrease: "+$0.03" },
@@ -267,6 +251,16 @@ function generateStaticHistory(symbol: string): HistoryPayload {
 // Shared helpers
 // ---------------------------------------------------------------------------
 
+/** Format "2020-07" → "Jul 2020", pass through anything else unchanged. */
+function fmtChartDate(label: string | undefined): string {
+  if (!label) return "";
+  const m = /^(\d{4})-(\d{2})$/.exec(label);
+  if (!m) return label;
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const mi = parseInt(m[2], 10) - 1;
+  return `${months[mi] ?? m[2]} ${m[1]}`;
+}
+
 function ChartTooltip({ active, payload, label, prefix = "", suffix = "%" }: {
   active?: boolean;
   payload?: { value: number; color?: string; name?: string }[];
@@ -277,10 +271,10 @@ function ChartTooltip({ active, payload, label, prefix = "", suffix = "%" }: {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border border-white/10 bg-[var(--app-card)] px-3 py-2 text-xs shadow-xl">
-      <p className="mb-1 font-semibold text-zinc-200">{label}</p>
+      <p className="mb-1 font-semibold text-zinc-200">{fmtChartDate(label)}</p>
       {payload.map((p, i) => (
         <p key={i} style={{ color: p.color ?? "var(--accent-color)" }}>
-          {p.name ? `${p.name}: ` : ""}{prefix}{typeof p.value === "number" ? p.value.toFixed(2) : p.value}{suffix}
+          {p.name ? `${p.name}: ` : ""}{prefix}{typeof p.value === "number" ? (prefix === "$" ? p.value.toFixed(4) : p.value.toFixed(2)) : p.value}{suffix}
         </p>
       ))}
     </div>
@@ -334,13 +328,15 @@ function HistoryModal({ symbol, onClose }: { symbol: string; onClose: () => void
     fetch(`/api/dividends/history?symbol=${encodeURIComponent(symbol)}`)
       .then((r) => r.json())
       .then((d: HistoryPayload) => {
-        // If API returns data, use it; otherwise fall back to static
         const hasLive = d.history?.length > 0 || d.annual?.length > 0;
-        setData(hasLive ? d : generateStaticHistory(symbol));
+        // Show real data only — no fake generated history. If the API can't
+        // return data (FMP endpoint not on this plan), the "no data" UI
+        // shows honestly instead of misleading generated charts.
+        setData(hasLive ? d : null);
         setLoading(false);
       })
       .catch(() => {
-        setData(generateStaticHistory(symbol));
+        setData(null);
         setLoading(false);
       });
   }, [symbol]);
@@ -448,9 +444,12 @@ function HistoryModal({ symbol, onClose }: { symbol: string; onClose: () => void
             Loading history…
           </div>
         ) : !hasData ? (
-          <div className="flex h-48 flex-col items-center justify-center gap-1">
-            <p className="text-sm text-zinc-400">No dividend history found for {symbol}</p>
-            <p className="text-[11px] text-zinc-600">May not pay dividends or data unavailable</p>
+          <div className="flex h-48 flex-col items-center justify-center gap-2">
+            <p className="text-sm text-zinc-400">Dividend history unavailable for {symbol}</p>
+            <p className="max-w-xs text-center text-[11px] text-zinc-600">
+              Detailed dividend history requires an FMP plan with historical-dividend access.
+              The calendar tab shows scheduled payment dates based on known company patterns.
+            </p>
           </div>
         ) : view === "payments" ? (
           <ResponsiveContainer width="100%" height={200}>
@@ -462,7 +461,7 @@ function HistoryModal({ symbol, onClose }: { symbol: string; onClose: () => void
                 </linearGradient>
               </defs>
               <CartesianGrid {...CHART_GRID} />
-              <XAxis dataKey="date" tick={{ fill: "#71717a", fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+              <XAxis dataKey="date" tick={{ fill: "#71717a", fontSize: 10 }} axisLine={false} tickLine={false} interval="preserveStartEnd" tickFormatter={fmtChartDate} />
               <YAxis tick={{ fill: "#71717a", fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
               <Tooltip content={<ChartTooltip prefix="$" suffix="" />} wrapperStyle={TOOLTIP_WRAPPER} />
               <Area type="monotone" dataKey="amount" name="Per share" stroke="var(--accent-color)" strokeWidth={2} fill="url(#histGrad)" dot={{ r: 2, fill: "var(--accent-color)", strokeWidth: 0 }} />
@@ -515,41 +514,47 @@ function HistoryModal({ symbol, onClose }: { symbol: string; onClose: () => void
 
 function CalendarTab({ entries, onTicker }: { entries: CalendarEntry[]; onTicker: (s: string) => void }) {
   const upcoming = [...entries].sort((a, b) => a.daysAway - b.daysAway);
-  const topFive = upcoming.slice(0, 5);
+  const topFive = upcoming.slice(0, 8);
 
+  // Build the monthly calendar from LIVE data only. The API returns ex-div
+  // dates for the next ~180 days. We bucket by the ex-div month (the date
+  // that matters for qualifying for the dividend). Months outside the
+  // look-ahead window will be empty — that's honest and accurate.
   const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const monthlyPayments: Record<number, string[]> = {};
-  for (let m = 0; m < 12; m++) {
-    monthlyPayments[m] = [];
-    entries.forEach((e) => {
-      if (MONTHLY_PAYERS.includes(e.symbol)) {
-        monthlyPayments[m].push(e.symbol);
-      } else {
-        try {
-          if (new Date(e.payDate).getMonth() === m) monthlyPayments[m].push(e.symbol);
-        } catch { /* ignore */ }
-      }
-    });
-    monthlyPayments[m] = [...new Set(monthlyPayments[m])];
+  const monthlyPayments: Record<number, { symbol: string; amount: string }[]> = {};
+  for (let m = 0; m < 12; m++) monthlyPayments[m] = [];
+  const seenByMonth = new Map<string, Set<string>>();
+  for (const e of entries) {
+    try {
+      const m = new Date(e.exDiv).getMonth();
+      if (!seenByMonth.has(String(m))) seenByMonth.set(String(m), new Set());
+      if (seenByMonth.get(String(m))!.has(e.symbol)) continue;
+      seenByMonth.get(String(m))!.add(e.symbol);
+      monthlyPayments[m].push({ symbol: e.symbol, amount: e.amount });
+    } catch { /* skip invalid dates */ }
   }
 
   return (
     <div className="space-y-4">
       <SectionCard title="Next Ex-Dividend Dates">
-        <div className="flex flex-wrap gap-2">
-          {topFive.map((e) => (
-            <button
-              key={e.symbol}
-              onClick={() => onTicker(e.symbol)}
-              className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-[var(--app-card)] px-3 py-2 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-[var(--accent-color)]/5"
-            >
-              <span className="text-sm font-bold text-zinc-100">{e.symbol}</span>
-              <span className="rounded-full bg-[var(--accent-color)]/15 px-2 py-0.5 text-[10px] font-semibold text-[var(--accent-color)]">{e.daysAway}d</span>
-              <span className="text-xs text-zinc-400">{e.exDiv}</span>
-              <span className="text-xs font-medium text-[var(--accent-color)]">{e.amount}</span>
-            </button>
-          ))}
-        </div>
+        {topFive.length === 0 ? (
+          <div className="skeleton h-12 w-full rounded-lg" />
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {topFive.map((e) => (
+              <button
+                key={e.symbol + e.exDiv}
+                onClick={() => onTicker(e.symbol)}
+                className="flex items-center gap-2 rounded-lg border border-white/[0.07] bg-[var(--app-card)] px-3 py-2 transition-colors hover:border-[var(--accent-color)]/30 hover:bg-[var(--accent-color)]/5"
+              >
+                <span className="text-sm font-bold text-zinc-100">{e.symbol}</span>
+                <span className="rounded-full bg-[var(--accent-color)]/15 px-2 py-0.5 text-[10px] font-semibold text-[var(--accent-color)]">{e.daysAway}d</span>
+                <span className="text-xs text-zinc-400">{e.exDiv}</span>
+                <span className="text-xs font-medium text-[var(--accent-color)]">{e.amount}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </SectionCard>
 
       <SectionCard title="Upcoming Ex-Dividend Dates">
@@ -587,36 +592,40 @@ function CalendarTab({ entries, onTicker }: { entries: CalendarEntry[]; onTicker
         </div>
       </SectionCard>
 
-      <SectionCard title="Monthly Payment Calendar">
+      <SectionCard title="Upcoming Dividends by Month">
+        <p className="mb-3 text-xs text-zinc-500">
+          Ex-dividend dates for the next 6 months from live market data.
+          Click any ticker to view its full dividend history and payout chart.
+        </p>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
           {monthNames.map((month, idx) => {
             const payers = monthlyPayments[idx] ?? [];
             return (
               <div key={month} className="rounded-xl border border-white/[0.07] p-2.5 text-center">
                 <p className="mb-1 text-xs font-semibold text-zinc-300">{month}</p>
-                <div className="flex flex-wrap justify-center gap-1">
-                  {payers.some((s) => MONTHLY_PAYERS.includes(s)) && (
-                    <span className="rounded-full bg-[var(--accent-color)]/20 px-1.5 py-0.5 text-[9px] font-semibold text-[var(--accent-color)]">Monthly</span>
-                  )}
-                  {payers.some((s) => !MONTHLY_PAYERS.includes(s)) && (
-                    <span className="rounded-full bg-blue-500/20 px-1.5 py-0.5 text-[9px] font-semibold text-blue-400">Quarterly</span>
-                  )}
-                </div>
-                {payers.length > 0 && (
-                  <div className="mt-1 flex flex-wrap justify-center gap-0.5">
-                    {payers.slice(0, 3).map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => onTicker(s)}
-                        className="text-[9px] font-semibold text-[var(--accent-color)] hover:underline"
-                      >
-                        {s}
-                      </button>
-                    ))}
-                    {payers.length > 3 && (
-                      <span className="text-[9px] text-zinc-600">+{payers.length - 3}</span>
-                    )}
-                  </div>
+                {payers.length > 0 ? (
+                  <>
+                    <span className="rounded-full bg-[var(--accent-color)]/20 px-1.5 py-0.5 text-[9px] font-semibold text-[var(--accent-color)]">
+                      {payers.length} {payers.length === 1 ? "stock" : "stocks"}
+                    </span>
+                    <div className="mt-1.5 flex flex-wrap justify-center gap-0.5">
+                      {payers.slice(0, 4).map((p) => (
+                        <button
+                          key={p.symbol}
+                          onClick={() => onTicker(p.symbol)}
+                          className="text-[9px] font-semibold text-[var(--accent-color)] hover:underline"
+                          title={`${p.symbol} ${p.amount}`}
+                        >
+                          {p.symbol}
+                        </button>
+                      ))}
+                      {payers.length > 4 && (
+                        <span className="text-[9px] text-zinc-600">+{payers.length - 4}</span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-1 text-[9px] text-zinc-600">—</p>
                 )}
               </div>
             );
@@ -727,15 +736,20 @@ function DripCalculator() {
   let currentPrice = sharePrice;
 
   for (let y = 1; y <= years; y++) {
+    // Dividend received this year (before growth is applied for next year)
     const annualDiv = shares * annualDivPerShare;
+    // Reinvest dividends at the current share price → more shares
     shares += annualDiv / currentPrice;
+    // Grow the dividend-per-share for next year
     annualDivPerShare *= 1 + dgr / 100;
+    // Assume ~6% annual share price appreciation
     currentPrice *= 1.06;
     if (y === 1 || y % 2 === 0 || y === years) {
       rows.push({
         year: y,
         shares: shares.toFixed(2),
-        annualDiv: `$${(shares * annualDivPerShare / (1 + dgr / 100)).toFixed(0)}`,
+        // Show this year's actual dividend total (not the post-growth amount)
+        annualDiv: `$${annualDiv.toFixed(0)}`,
         portfolioValue: `$${(shares * currentPrice).toFixed(0)}`,
       });
     }
@@ -745,15 +759,16 @@ function DripCalculator() {
     <SectionCard title="DRIP Calculator">
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {[
-          { label: "Initial Investment ($)", value: initial, setter: setInitial, step: 1000, min: 100 },
-          { label: "Dividend Yield (%)", value: divYield, setter: setDivYield, step: 0.1, min: 0.1 },
-          { label: "Annual Div Growth (%)", value: dgr, setter: setDgr, step: 0.5, min: 0 },
-          { label: "Years", value: years, setter: setYears, step: 1, min: 1 },
-          { label: "Share Price ($)", value: sharePrice, setter: setSharePrice, step: 1, min: 1 },
-        ].map(({ label, value, setter, step, min }) => (
+          { label: "Initial Investment ($)", value: initial, setter: setInitial, step: 1000, min: 100, max: 10_000_000 },
+          { label: "Dividend Yield (%)", value: divYield, setter: setDivYield, step: 0.1, min: 0.1, max: 50 },
+          { label: "Annual Div Growth (%)", value: dgr, setter: setDgr, step: 0.5, min: 0, max: 30 },
+          { label: "Years", value: years, setter: setYears, step: 1, min: 1, max: 50 },
+          { label: "Share Price ($)", value: sharePrice, setter: setSharePrice, step: 1, min: 1, max: 10_000 },
+        ].map(({ label, value, setter, step, min, max }) => (
           <div key={label} className="flex flex-col gap-1">
             <label className="text-[10px] font-semibold uppercase tracking-widest text-[var(--accent-color)]/80">{label}</label>
-            <input type="number" value={value} step={step} min={min} onChange={(e) => setter(Number(e.target.value))} className={INPUT_CLS} />
+            <input type="number" value={value || ""} step={step} min={min} max={max}
+              onChange={(e) => setter(clampedNum(e.target.value, max))} className={INPUT_CLS} />
           </div>
         ))}
       </div>
@@ -782,26 +797,43 @@ function DripCalculator() {
   );
 }
 
+/** Strip leading zeros and clamp to [0, max]. */
+function clampedNum(raw: string, max: number): number {
+  const n = Number(raw.replace(/^0+(?=\d)/, ""));
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(n, max);
+}
+
 function IncomeEstimator() {
   const [shares, setShares] = useState(100);
+  const [pricePerShare, setPricePerShare] = useState(100);
   const [yieldPct, setYieldPct] = useState(3.7);
 
-  const annual = (shares * (yieldPct / 100) * 100).toFixed(2);
+  // Cap: max 1M shares × $10K price × 100% yield = $1B max — anything more
+  // is unrealistic and shows as trillions.
+  const annual = Math.min(shares * pricePerShare * (yieldPct / 100), 1_000_000_000);
+  const fmtIncome = (v: number) => v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(2)}M` : `$${v.toFixed(2)}`;
   return (
     <SectionCard title="Income Estimator">
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="flex flex-col gap-1">
           <label className="text-[10px] font-semibold uppercase tracking-widest text-[var(--accent-color)]/80">Shares Owned</label>
-          <input type="number" value={shares} min={1} onChange={(e) => setShares(Number(e.target.value))} className={INPUT_CLS} />
+          <input type="number" value={shares || ""} min={1} max={1000000}
+            onChange={(e) => setShares(clampedNum(e.target.value, 1_000_000))} className={INPUT_CLS} />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-[10px] font-semibold uppercase tracking-widest text-[var(--accent-color)]/80">Estimated Yield (%)</label>
-          <input type="number" value={yieldPct} step={0.1} min={0.1} onChange={(e) => setYieldPct(Number(e.target.value))} className={INPUT_CLS} />
+          <label className="text-[10px] font-semibold uppercase tracking-widest text-[var(--accent-color)]/80">Price / Share ($)</label>
+          <input type="number" value={pricePerShare || ""} min={0.01} max={10000} step={0.01}
+            onChange={(e) => setPricePerShare(clampedNum(e.target.value, 10_000))} className={INPUT_CLS} />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[10px] font-semibold uppercase tracking-widest text-[var(--accent-color)]/80">Dividend Yield (%)</label>
+          <input type="number" value={yieldPct || ""} step={0.1} min={0.1} max={100}
+            onChange={(e) => setYieldPct(clampedNum(e.target.value, 100))} className={INPUT_CLS} />
         </div>
       </div>
-      <p className="mb-2 text-xs text-zinc-500">Estimated income based on $100/share average price</p>
       <div className="grid grid-cols-3 gap-3">
-        {[["Annual Income", `$${annual}`], ["Quarterly Income", `$${(Number(annual)/4).toFixed(2)}`], ["Monthly Equivalent", `$${(Number(annual)/12).toFixed(2)}`]].map(([l, v]) => (
+        {[["Annual Income", fmtIncome(annual)], ["Quarterly Income", fmtIncome(annual / 4)], ["Monthly Equivalent", fmtIncome(annual / 12)]].map(([l, v]) => (
           <div key={l} className="rounded-xl border border-white/[0.07] p-3 text-center">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--accent-color)]/80">{l}</p>
             <p className="mt-1 text-xl font-bold text-zinc-100">{v}</p>
@@ -828,13 +860,14 @@ function YieldOnCostTracker() {
       </p>
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
         {[
-          { label: "Purchase Price ($)", value: purchasePrice, setter: setPurchasePrice },
-          { label: "Annual Div / Share ($)", value: currentDiv, setter: setCurrentDiv },
-          { label: "Current Share Price ($)", value: currentPrice, setter: setCurrentPrice },
-        ].map(({ label, value, setter }) => (
+          { label: "Purchase Price ($)", value: purchasePrice, setter: setPurchasePrice, max: 10_000 },
+          { label: "Annual Div / Share ($)", value: currentDiv, setter: setCurrentDiv, max: 500 },
+          { label: "Current Share Price ($)", value: currentPrice, setter: setCurrentPrice, max: 10_000 },
+        ].map(({ label, value, setter, max }) => (
           <div key={label} className="flex flex-col gap-1">
             <label className="text-[10px] font-semibold uppercase tracking-widest text-[var(--accent-color)]/80">{label}</label>
-            <input type="number" value={value} step={0.01} min={0.01} onChange={(e) => setter(Number(e.target.value))} className={INPUT_CLS} />
+            <input type="number" value={value || ""} step={0.01} min={0.01} max={max}
+              onChange={(e) => setter(clampedNum(e.target.value, max))} className={INPUT_CLS} />
           </div>
         ))}
       </div>
@@ -986,6 +1019,11 @@ function EtfComparisonTab({ onTicker, liveEtf }: { onTicker: (s: string) => void
 
       <div className="grid gap-4 sm:grid-cols-2">
         <SectionCard title="ETF Yield Comparison">
+          <p className="mb-3 text-xs text-zinc-500">
+            Current annual dividend yield for popular income ETFs. Higher yield means more income per dollar invested,
+            but may come with higher risk or lower growth. Bars color-coded: accent = high yield (7%+),
+            blue = moderate (3.5–7%), grey = lower.
+          </p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={yieldData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid {...CHART_GRID} vertical={false} />
@@ -1001,6 +1039,11 @@ function EtfComparisonTab({ onTicker, liveEtf }: { onTicker: (s: string) => void
           </ResponsiveContainer>
         </SectionCard>
         <SectionCard title="ETF 1-Year Returns">
+          <p className="mb-3 text-xs text-zinc-500">
+            Total return (price appreciation + dividends reinvested) over the trailing 12 months.
+            Shows how each ETF performed as a whole investment, not just income. Green = strong (13%+),
+            blue = solid (10–13%), grey = modest. Returns are historical estimates and may differ from live values.
+          </p>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={ret1yrData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
               <CartesianGrid {...CHART_GRID} vertical={false} />
@@ -1050,6 +1093,9 @@ function SpecialAndCutsTab({ onTicker, liveCuts }: { onTicker: (s: string) => vo
         <p className="mb-3 text-[11px] text-zinc-500">
           Special dividends are one-time cash payments separate from a company&apos;s regular schedule. They signal excess cash, asset sales, or strong earnings — but should not be expected to repeat.
         </p>
+        <p className="mb-3 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-[10px] text-amber-400">
+          This list is periodically updated. Some recent specials may not appear yet.
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
@@ -1085,6 +1131,7 @@ function SpecialAndCutsTab({ onTicker, liveCuts }: { onTicker: (s: string) => vo
         <div className="mb-3 flex items-start justify-between gap-4">
           <p className="text-[11px] text-zinc-500">
             Dividend cuts are a major risk signal. They often precede further financial stress and can cause significant price drops — monitoring them helps avoid yield traps.
+            Live detection monitors a watchlist of commonly-held names and auto-detects when recent payouts drop &gt;10% vs prior average. Data refreshes daily.
           </p>
           {liveCuts.length > 0 && (
             <div className="flex shrink-0 items-center gap-1.5">
@@ -1182,8 +1229,8 @@ function OverviewTab() {
             <XAxis dataKey="year" tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: "#71717a", fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
             <Tooltip content={<ChartTooltip />} wrapperStyle={TOOLTIP_WRAPPER} />
-            <Line type="monotone" dataKey="sp500" name="S&P Div Yield" stroke="var(--accent-color)" strokeWidth={2} dot={false} />
             <Line type="monotone" dataKey="treasury" name="10Y Treasury" stroke="#3b82f6" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="sp500" name="S&P Div Yield" stroke="var(--accent-color)" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
         <div className="mt-2 flex gap-4 text-xs text-zinc-400">
@@ -1226,7 +1273,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function DividendsView() {
   const [activeTab, setActiveTab] = useState<Tab>("calendar");
-  const [calendarData, setCalendarData] = useState<CalendarEntry[]>(DEFAULT_CALENDAR);
+  const [calendarData, setCalendarData] = useState<CalendarEntry[]>([]);
   const [modalSymbol, setModalSymbol] = useState<string | null>(null);
   const [liveEtf, setLiveEtf] = useState<LiveEtf[]>([]);
   const [liveCuts, setLiveCuts] = useState<LiveCut[]>([]);

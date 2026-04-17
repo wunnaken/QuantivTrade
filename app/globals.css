@@ -795,3 +795,64 @@ input[type="number"] {
   -moz-appearance: textfield;
 }
 
+/* ── Loading skeletons ──────────────────────────────────────────────────────
+   Tailwind's default `animate-pulse` swings opacity 1 → 0.5 over a hard
+   cubic-bezier, which reads as choppy on dark backgrounds. Override with a
+   gentler curve (smaller swing, smoother easing). Adds a `.skeleton` class
+   that layers a moving sheen — use it for new skeletons. */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.78; }
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: -150% 0; }
+  100% { background-position: 150% 0; }
+}
+
+/* Tailwind utility — kept named the same so existing `animate-pulse` calls
+   pick up the smoother timing automatically. */
+.animate-pulse {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.8s ease-in-out infinite;
+}
+
+html[data-theme="light"] .skeleton {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+html[data-theme="light"] .skeleton::after {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.05) 50%,
+    transparent 100%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-pulse,
+  .skeleton::after {
+    animation: none;
+  }
+}
+

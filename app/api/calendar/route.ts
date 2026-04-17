@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchEconomicEvents } from "./economic/route";
+import type { EarningsItem, EconomicItem } from "@/lib/calendar/types";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -8,29 +9,7 @@ function dateStr(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-export type EarningsItem = {
-  id: string;
-  ticker: string;
-  name: string;
-  date: string;
-  epsEstimate: number | null;
-  revenueEstimate: number | null;
-  epsActual: number | null;
-  revenueActual: number | null;
-  bmoAmc: "BMO" | "AMC" | null;
-};
-
-export type EconomicItem = {
-  id: string;
-  name: string;
-  date: string;
-  dateTimeET: string;
-  impact: "HIGH" | "MEDIUM" | "LOW";
-  country: string;
-  previous?: string;
-  estimate?: string;
-  actual?: string;
-};
+export type { EarningsItem, EconomicItem };
 
 export async function GET(request: NextRequest) {
   const type = request.nextUrl.searchParams.get("type"); // "earnings" | "economic"
@@ -50,72 +29,108 @@ export async function GET(request: NextRequest) {
   const fromStr = dateStr(fromDate);
   const toStr = dateStr(toDate);
 
-  const earnings: EarningsItem[] = [];
-  const economic: EconomicItem[] = [];
+  // Run earnings (Finnhub + FMP backfill) and economic (FRED) fetches in parallel.
+  const wantEarnings = type !== "economic";
+  const wantEconomic = type !== "earnings";
+  const fmpKey = process.env.FMP_API_KEY?.trim();
 
-  if (type !== "economic") {
-    try {
-      const res = await fetch(
+  type FinnhubCalItem = {
+    date?: string;
+    symbol?: string;
+    epsActual?: number | null;
+    epsEstimate?: number | null;
+    revenueActual?: number | null;
+    revenueEstimate?: number | null;
+    hour?: string;
+  };
+
+  type FmpCalItem = {
+    date?: string;
+    symbol?: string;
+    eps?: number | null;
+    epsEstimated?: number | null;
+    revenue?: number | null;
+    revenueEstimated?: number | null;
+    time?: string;
+  };
+
+  const finnhubEarningsPromise = wantEarnings
+    ? fetch(
         `https://finnhub.io/api/v1/calendar/earnings?from=${fromStr}&to=${toStr}&token=${token}`,
-        { next: { revalidate: 0 } }
-      );
-      if (res.ok) {
-        const data = (await res.json()) as { earningsCalendar?: Array<{
-          date?: string;
-          symbol?: string;
-          epsActual?: number | null;
-          epsEstimate?: number | null;
-          revenueActual?: number | null;
-          revenueEstimate?: number | null;
-          quarter?: number;
-          year?: number;
-          hour?: string;
-        }> };
-        const list = (data?.earningsCalendar ?? []) as Array<{
-          date?: string;
-          symbol?: string;
-          epsActual?: number | null;
-          epsEstimate?: number | null;
-          revenueActual?: number | null;
-          revenueEstimate?: number | null;
-          hour?: string;
-        }>;
-        const withRev = list.map((e, i) => ({
+        { next: { revalidate: 60 } }
+      )
+        .then((r) => (r.ok ? r.json() : { earningsCalendar: [] }))
+        .then((d: { earningsCalendar?: FinnhubCalItem[] }) => d.earningsCalendar ?? [])
+        .catch(() => [] as FinnhubCalItem[])
+    : Promise.resolve([] as FinnhubCalItem[]);
+
+  // FMP earning_calendar fills in actuals that Finnhub free tier sometimes omits
+  // for past releases — without this, last-week cards stay grey "no actual yet".
+  const fmpEarningsPromise =
+    wantEarnings && fmpKey
+      ? fetch(
+          `https://financialmodelingprep.com/api/v3/earning_calendar?from=${fromStr}&to=${toStr}&apikey=${fmpKey}`,
+          { next: { revalidate: 300 } }
+        )
+          .then((r) => (r.ok ? r.json() : []))
+          .then((d) => (Array.isArray(d) ? (d as FmpCalItem[]) : []))
+          .catch(() => [] as FmpCalItem[])
+      : Promise.resolve([] as FmpCalItem[]);
+
+  const earningsPromise = Promise.all([finnhubEarningsPromise, fmpEarningsPromise]).then(
+    ([finnhubList, fmpList]) => {
+      // Index FMP by ${symbol}__${date} for O(1) merge.
+      const fmpIndex = new Map<string, FmpCalItem>();
+      for (const f of fmpList) {
+        if (!f.symbol || !f.date) continue;
+        fmpIndex.set(`${f.symbol.toUpperCase()}__${f.date}`, f);
+      }
+      const merged = finnhubList.map((e, i): { item: EarningsItem; rev: number } => {
+        const sym = (e.symbol ?? "").toUpperCase();
+        const fmp = sym && e.date ? fmpIndex.get(`${sym}__${e.date}`) : undefined;
+        // Coalesce: prefer Finnhub when present, fall back to FMP for nulls.
+        const epsActual = e.epsActual ?? fmp?.eps ?? null;
+        const epsEstimate = e.epsEstimate ?? fmp?.epsEstimated ?? null;
+        const revenueActual = e.revenueActual ?? fmp?.revenue ?? null;
+        const revenueEstimate = e.revenueEstimate ?? fmp?.revenueEstimated ?? null;
+        const hour = e.hour ?? fmp?.time ?? null;
+        return {
           item: {
             id: `earn-${e.symbol ?? i}-${e.date ?? ""}`,
             ticker: e.symbol ?? "",
             name: e.symbol ?? "",
             date: e.date ?? "",
-            epsEstimate: e.epsEstimate ?? null,
-            revenueEstimate: e.revenueEstimate ?? null,
-            epsActual: e.epsActual ?? null,
-            revenueActual: e.revenueActual ?? null,
-            bmoAmc: (e.hour === "bmo" ? "BMO" : e.hour === "amc" ? "AMC" : null) as "BMO" | "AMC" | null,
+            epsEstimate,
+            revenueEstimate,
+            epsActual,
+            revenueActual,
+            bmoAmc: (hour === "bmo" ? "BMO" : hour === "amc" ? "AMC" : null) as
+              | "BMO"
+              | "AMC"
+              | null,
           },
-          rev: e.revenueEstimate ?? 0,
-        }));
-        withRev
-          .sort((a, b) => b.rev - a.rev)
-          .slice(0, 20)
-          .forEach(({ item }) => earnings.push(item));
-      }
-    } catch (e) {
-      console.error("[calendar earnings]", e);
+          rev: revenueEstimate ?? 0,
+        };
+      });
+      return merged
+        .sort((a, b) => b.rev - a.rev)
+        .slice(0, 20)
+        .map(({ item }) => item) as EarningsItem[];
     }
-  }
+  );
 
-  let dataSource = "";
-  let economicError: string | undefined;
-  if (type !== "earnings") {
-    try {
-      const result = await fetchEconomicEvents(fromStr, toStr);
-      result.economic.forEach((e) => economic.push(e));
-      dataSource = result.dataSource ?? "";
-      if (result.error) economicError = result.error;
-    } catch (e) {
-      economicError = e instanceof Error ? e.message : "Failed to load economic events";
-    }
-  }
+  const economicPromise = wantEconomic
+    ? fetchEconomicEvents(fromStr, toStr).catch((e) => ({
+        economic: [] as EconomicItem[],
+        dataSource: "",
+        error: e instanceof Error ? e.message : "Failed to load economic events",
+      }))
+    : Promise.resolve({ economic: [] as EconomicItem[], dataSource: "" as string, error: undefined });
+
+  const [earnings, econResult] = await Promise.all([earningsPromise, economicPromise]);
+  const economic = econResult.economic;
+  const dataSource = econResult.dataSource ?? "";
+  const economicError = econResult.error;
 
   return NextResponse.json({
     earnings,

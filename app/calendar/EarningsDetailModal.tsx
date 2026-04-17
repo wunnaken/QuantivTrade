@@ -53,46 +53,61 @@ function fmtPeriod(period?: string, quarter?: number, year?: number): string {
   return "";
 }
 
+function EarningsTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; fill?: string }>;
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ backgroundColor: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
+      <p style={{ color: "#a1a1aa", marginBottom: 4 }}>{label}</p>
+      {payload.map((entry, i) => (
+        <p key={i} style={{ color: entry.name === "actual" ? (entry.value >= 0 ? "#10b981" : "#ef4444") : "#71717a", margin: "2px 0" }}>
+          {entry.name === "actual" ? "Actual EPS" : "Estimate"}: <span style={{ color: "#e4e4e7", fontWeight: 600 }}>${Number(entry.value).toFixed(2)}</span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
 export function EarningsDetailModal({ ticker, companyName, onClose }: Props) {
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [earningsHistory, setEarningsHistory] = useState<EarningsPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const EarningsTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; fill?: string }>; label?: string }) => {
-    if (!active || !payload?.length) return null;
-    return (
-      <div style={{ backgroundColor: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, padding: "8px 12px", fontSize: 12 }}>
-        <p style={{ color: "#a1a1aa", marginBottom: 4 }}>{label}</p>
-        {payload.map((entry, i) => (
-          <p key={i} style={{ color: entry.name === "actual" ? (entry.value >= 0 ? "#10b981" : "#ef4444") : "#71717a", margin: "2px 0" }}>
-            {entry.name === "actual" ? "Actual EPS" : "Estimate"}: <span style={{ color: "#e4e4e7", fontWeight: 600 }}>${Number(entry.value).toFixed(2)}</span>
-          </p>
-        ))}
-      </div>
-    );
-  };
-
+  // Effect resets state inside the async callback (not synchronously in the
+  // effect body) to avoid the cascading-render lint and to gracefully ignore
+  // stale responses if the user clicks through tickers quickly.
   useEffect(() => {
-    setLoading(true);
-    setError(null);
-    fetch(`/api/calendar/company-earnings?symbol=${encodeURIComponent(ticker)}`)
+    const ctrl = new AbortController();
+    fetch(`/api/calendar/company-earnings?symbol=${encodeURIComponent(ticker)}`, {
+      signal: ctrl.signal,
+    })
       .then((r) => r.json())
       .then((data) => {
+        if (ctrl.signal.aborted) return;
+        const sorted = ((data.earningsHistory ?? []) as EarningsPoint[]).sort((a, b) => {
+          const aStr = a.period ?? `${a.year ?? 0}-${String(a.quarter ?? 0).padStart(2, "0")}`;
+          const bStr = b.period ?? `${b.year ?? 0}-${String(b.quarter ?? 0).padStart(2, "0")}`;
+          return aStr.localeCompare(bStr);
+        });
         setProfile(data.profile ?? null);
-        const sorted = ((data.earningsHistory ?? []) as EarningsPoint[]).sort(
-          (a, b) => {
-            const aStr =
-              a.period ?? `${a.year ?? 0}-${String(a.quarter ?? 0).padStart(2, "0")}`;
-            const bStr =
-              b.period ?? `${b.year ?? 0}-${String(b.quarter ?? 0).padStart(2, "0")}`;
-            return aStr.localeCompare(bStr);
-          }
-        );
         setEarningsHistory(sorted);
+        setError(null);
+        setLoading(false);
       })
-      .catch(() => setError("Failed to load earnings data"))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (ctrl.signal.aborted) return;
+        setError("Failed to load earnings data");
+        setLoading(false);
+      });
+    return () => ctrl.abort();
   }, [ticker]);
 
   const chartData = earningsHistory.map((e) => ({

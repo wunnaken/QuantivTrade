@@ -1,48 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getFredSeriesId } from "@/lib/calendar/fred-series";
 
 export const dynamic = "force-dynamic";
-
-/** Map indicator names (partial match) to FRED series IDs for historical charts */
-export const FRED_SERIES_MAP: Record<string, string> = {
-  "cpi": "CPIAUCSL",
-  "consumer price": "CPIAUCSL",
-  "inflation": "CPIAUCSL",
-  "core cpi": "CPILFESL",
-  "fed funds": "FEDFUNDS",
-  "fomc": "FEDFUNDS",
-  "federal reserve": "FEDFUNDS",
-  "unemployment": "UNRATE",
-  "gdp": "A191RL1Q225SBEA",
-  "nonfarm payroll": "PAYEMS",
-  "nfp": "PAYEMS",
-  "jobs report": "PAYEMS",
-  "payrolls": "PAYEMS",
-  "retail sales": "RSXFS",
-  "ppi": "PPIACO",
-  "producer price": "PPIACO",
-  "consumer sentiment": "UMCSENT",
-  "housing starts": "HOUST",
-  "ism manufacturing": "MANEMP",
-  "jobless claims": "ICSA",
-  "10y": "DGS10",
-  "10 year": "DGS10",
-  "treasury 10": "DGS10",
-  "2y": "DGS2",
-  "2 year": "DGS2",
-  "treasury 2": "DGS2",
-  "yield curve": "T10Y2Y",
-  "pce": "PCEPI",
-  "pce inflation": "PCEPI",
-  "core pce": "PCEPILFE",
-};
-
-function getSeriesId(eventName: string): string | null {
-  const n = eventName.toLowerCase();
-  for (const [key, id] of Object.entries(FRED_SERIES_MAP)) {
-    if (n.includes(key)) return id;
-  }
-  return null;
-}
 
 export async function GET(request: NextRequest) {
   const seriesId = request.nextUrl.searchParams.get("series_id");
@@ -51,7 +10,7 @@ export async function GET(request: NextRequest) {
   const eventName = request.nextUrl.searchParams.get("event_name");
 
   const key = process.env.FRED_API_KEY?.trim();
-  const sid = seriesId || (eventName ? getSeriesId(eventName) : null);
+  const sid = seriesId || (eventName ? getFredSeriesId(eventName) : null);
   if (!sid) {
     return NextResponse.json({ observations: [], series_id: null }, { status: 200 });
   }

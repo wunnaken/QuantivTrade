@@ -3,24 +3,33 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 86400; // 24 hours — cuts don't change minute-to-minute
 
-// Watchlist of companies historically prone to dividend issues
-const WATCHLIST = ["INTC", "MPW", "WBA", "PFE", "VFC", "PARA", "DIS", "T", "VZ", "MMM", "MO", "CVS", "F", "NIO", "DISH"];
+// Expanded watchlist of companies historically prone to dividend issues or
+// with recent payout concerns. The route checks whether recent dividends
+// have dropped >10% vs the prior average, flagging potential cuts.
+const WATCHLIST = [
+  "INTC", "MPW", "WBA", "PFE", "VFC", "PARA", "DIS", "T", "VZ", "MMM",
+  "MO", "CVS", "F", "NIO", "DISH", "LUMN", "OXY", "KHC", "GE", "FRC",
+  "NYCB", "KEY", "USB", "SCHW", "C", "BAC", "BMY", "IBM", "LYB", "DOW",
+];
 
 type HistEntry = { date: string; dividend?: number; adjDividend?: number };
 type FmpResponse = { historical?: HistEntry[] };
 
 async function fetchHistory(symbol: string, apiKey: string): Promise<HistEntry[]> {
-  try {
-    const res = await fetch(
-      `https://financialmodelingprep.com/api/v3/historical-price-full/stock_dividend/${encodeURIComponent(symbol)}?apikey=${apiKey}`,
-      { next: { revalidate: 86400 } }
-    );
-    if (!res.ok) return [];
-    const data: FmpResponse = await res.json();
-    return data.historical ?? [];
-  } catch {
-    return [];
+  // Try FMP stable tier first (free-plan compatible), then legacy v3.
+  for (const url of [
+    `https://financialmodelingprep.com/stable/historical-dividends-full/${encodeURIComponent(symbol)}?apikey=${apiKey}`,
+    `https://financialmodelingprep.com/api/v3/historical-price-full/stock_dividend/${encodeURIComponent(symbol)}?apikey=${apiKey}`,
+  ]) {
+    try {
+      const res = await fetch(url, { next: { revalidate: 86400 } });
+      if (!res.ok) continue;
+      const raw = await res.json();
+      const arr: HistEntry[] = Array.isArray(raw) ? raw : (raw as FmpResponse).historical ?? [];
+      if (arr.length > 0) return arr;
+    } catch { continue; }
   }
+  return [];
 }
 
 function detectCut(symbol: string, history: HistEntry[]): {

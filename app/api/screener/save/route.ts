@@ -73,6 +73,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
 
+  // Cap at 10 saved screens per user. Hitting the limit returns 409 so the
+  // client can show a friendly "delete one to add another" message.
+  const { count: existingCount, error: countError } = await supabase
+    .from("saved_screens")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  if (countError) {
+    return NextResponse.json({ error: countError.message }, { status: 500 });
+  }
+  if ((existingCount ?? 0) >= 10) {
+    return NextResponse.json(
+      { error: "Saved-screen limit reached (10). Delete one to add another." },
+      { status: 409 }
+    );
+  }
+
   const { data, error } = await supabase
     .from("saved_screens")
     .insert({

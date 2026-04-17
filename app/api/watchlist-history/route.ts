@@ -52,10 +52,28 @@ function toDateStr(sec: number): string {
   return new Date(sec * 1000).toISOString().slice(0, 10);
 }
 
+/** Format a unix timestamp into a chart-friendly date string.
+ *  Uses US Eastern time (market hours timezone) so a 9:53 AM ET data point
+ *  shows as "Apr 16, 9:53 AM" — NOT as "Apr 17 2:53 AM" (which is what
+ *  toISOString() produces in UTC for that same moment). */
 function formatChartDate(tSec: number, tf: Timeframe): string {
   const d = new Date(tSec * 1000);
-  if (tf === "1D" || tf === "1W") return d.toISOString().slice(0, 16);
-  return d.toISOString().slice(0, 10);
+  if (tf === "1D" || tf === "1W") {
+    // Intraday: "Apr 16, 9:53 AM"
+    return d.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "America/New_York",
+    });
+  }
+  // Daily: "Apr 16"
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "America/New_York",
+  });
 }
 
 function pctPointsFromAnchor(times: number[], closes: number[], periodFromSec: number): PctPoint[] {
@@ -88,8 +106,16 @@ async function fetchFmpEod(fmpSymbol: string, fromSec: number, toSec: number, ap
   const toStr   = toDateStr(toSec);
   try {
     const url = `https://financialmodelingprep.com/stable/historical-price-eod/full?symbol=${fmpSymbol}&from=${fromStr}&to=${toStr}&apikey=${apiKey}`;
-    const res = await fetch(url, { cache: "no-store" });
-    if (!res.ok) return [];
+    // Cache daily EOD data for 1 HOUR. FMP free tier only allows 250
+    // calls/day total across ALL routes. The screener alone can burn 50+
+    // calls per load, leaving nothing for watchlist. Aggressive caching
+    // ensures once a ticker's EOD is fetched, it stays cached for an hour
+    // (daily prices don't change intraday anyway).
+    const res = await fetch(url, { next: { revalidate: 3600 } });
+    if (!res.ok) {
+      console.error(`[watchlist-history] FMP EOD ${fmpSymbol} HTTP ${res.status}`);
+      return [];
+    }
     const data = (await res.json()) as { date: string; close: number }[];
     if (!Array.isArray(data) || data.length === 0) return [];
     // FMP returns descending — sort ascending
@@ -139,10 +165,16 @@ async function fetchFinnhubCandles(
   for (const res of [...new Set(finnhubFallbacks(resolution))]) {
     try {
       const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(ticker)}&resolution=${res}&from=${fromApi}&to=${toSec}&token=${token}`;
-      const r = await fetch(url, { cache: "no-store" });
-      if (!r.ok) continue;
+      const r = await fetch(url, { next: { revalidate: 60 } });
+      if (!r.ok) {
+        console.error(`[watchlist-history] Finnhub candle ${ticker} res=${res} HTTP ${r.status}`);
+        continue;
+      }
       const d = (await r.json()) as { t?: number[]; c?: number[]; s?: string };
-      if (d?.s === "no_data" || !Array.isArray(d.t) || !d.t.length) continue;
+      if (d?.s === "no_data" || !Array.isArray(d.t) || !d.t.length) {
+        console.log(`[watchlist-history] Finnhub candle ${ticker} res=${res} → no_data`);
+        continue;
+      }
       const pts = pctPointsFromAnchor(d.t, d.c!, fromSec);
       if (pts.length > 0) return pts;
     } catch {
@@ -243,11 +275,40 @@ export async function GET(request: NextRequest) {
   const byTicker: Record<string, PctPoint[]> = {};
 
   if (useDaily) {
-    // ── 1M / 1Y: FMP EOD for everything (stocks + crypto) — reliable, no rate issues ──
+    // ── 1M / 1Y: FMP EOD first, Finnhub candle fallback for stocks ──
+    // FMP gets 429 when the free-tier rate limit is exhausted by other pages.
+    // Finnhub /stock/candle is the safety net (free, 60 req/min, cached 5min).
     await Promise.all(
       tickers.map(async (tk) => {
-        const fmpSymbol = CRYPTO_TICKERS.has(tk) ? (FMP_CRYPTO_SYMBOL[tk] ?? null) : tk;
-        byTicker[tk] = fmpSymbol && fmpKey ? await fetchFmpEod(fmpSymbol, fromSec, toSec, fmpKey) : [];
+        const isCrypto = CRYPTO_TICKERS.has(tk);
+        const fmpSymbol = isCrypto ? (FMP_CRYPTO_SYMBOL[tk] ?? null) : tk;
+        // Try FMP first
+        if (fmpSymbol && fmpKey) {
+          const pts = await fetchFmpEod(fmpSymbol, fromSec, toSec, fmpKey);
+          if (pts.length > 0) { byTicker[tk] = pts; return; }
+        }
+        // Finnhub candle fallback (stocks only — crypto uses CoinGecko below)
+        if (!isCrypto && finnhubKey) {
+          try {
+            const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(tk)}&resolution=D&from=${fromSec}&to=${toSec}&token=${finnhubKey}`;
+            const res = await fetch(url, { next: { revalidate: 300 } });
+            if (res.ok) {
+              const data = (await res.json()) as { c?: number[]; t?: number[]; s?: string };
+              if (data.s !== "no_data" && Array.isArray(data.c) && Array.isArray(data.t) && data.c.length > 0) {
+                const times = data.t!;
+                byTicker[tk] = pctPointsFromAnchor(times, data.c, fromSec);
+                return;
+              }
+            }
+          } catch { /* fall through */ }
+        }
+        // Crypto fallback for daily: CoinGecko
+        if (isCrypto) {
+          const cgDays = timeframe === "1Y" ? 365 : 30;
+          byTicker[tk] = await fetchCoinGeckoIntraday(tk, cgDays, fromSec);
+          return;
+        }
+        byTicker[tk] = [];
       }),
     );
   } else {
@@ -270,7 +331,7 @@ export async function GET(request: NextRequest) {
       }),
     );
 
-    // Fallback: any ticker still empty → use FMP daily (5–7 data points for 1W, recent close for 1D)
+    // Fallback 1: FMP daily (may 429 if rate-limited)
     if (fmpKey) {
       await Promise.all(
         tickers
@@ -278,6 +339,25 @@ export async function GET(request: NextRequest) {
           .map(async (tk) => {
             const fmpSymbol = CRYPTO_TICKERS.has(tk) ? (FMP_CRYPTO_SYMBOL[tk] ?? null) : tk;
             if (fmpSymbol) byTicker[tk] = await fetchFmpEod(fmpSymbol, fromSec, toSec, fmpKey);
+          }),
+      );
+    }
+
+    // Fallback 2: Finnhub daily candle for stocks still missing (FMP 429'd)
+    if (finnhubKey) {
+      await Promise.all(
+        tickers
+          .filter((tk) => (byTicker[tk] ?? []).length === 0 && !CRYPTO_TICKERS.has(tk))
+          .map(async (tk) => {
+            try {
+              const url = `https://finnhub.io/api/v1/stock/candle?symbol=${encodeURIComponent(tk)}&resolution=D&from=${fromSec - LOOKBACK_SEC}&to=${toSec}&token=${finnhubKey}`;
+              const res = await fetch(url, { next: { revalidate: 300 } });
+              if (!res.ok) return;
+              const d = (await res.json()) as { c?: number[]; t?: number[]; s?: string };
+              if (d.s !== "no_data" && Array.isArray(d.c) && Array.isArray(d.t) && d.c.length > 0) {
+                byTicker[tk] = pctPointsFromAnchor(d.t, d.c, fromSec);
+              }
+            } catch { /* ignore */ }
           }),
       );
     }

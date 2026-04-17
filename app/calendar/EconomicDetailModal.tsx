@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   ReferenceLine,
 } from "recharts";
+import { getFredSeriesId } from "@/lib/calendar/fred-series";
 
 type EconomicEventDetail = {
   id: string;
@@ -52,38 +53,11 @@ function saveCache(seriesId: string, start: string, end: string, data: { date: s
   } catch {}
 }
 
-const EVENT_TO_FRED: Record<string, string> = {
-  "cpi": "CPIAUCSL", "consumer price": "CPIAUCSL", "inflation": "CPIAUCSL",
-  "core cpi": "CPILFESL", "fed funds": "FEDFUNDS", "fomc": "FEDFUNDS", "federal reserve": "FEDFUNDS",
-  "rate decision": "FEDFUNDS",
-  "unemployment": "UNRATE", "gdp": "A191RL1Q225SBEA", "nonfarm payroll": "PAYEMS", "nfp": "PAYEMS",
-  "jobs report": "PAYEMS", "payrolls": "PAYEMS", "retail sales": "RSXFS", "ppi": "PPIACO",
-  "producer price": "PPIACO", "consumer sentiment": "UMCSENT", "housing starts": "HOUST",
-  "ism manufacturing": "MANEMP", "jobless claims": "ICSA", "10y": "DGS10", "10 year": "DGS10",
-  "treasury 10": "DGS10", "2y": "DGS2", "2 year": "DGS2", "treasury 2": "DGS2",
-  "yield curve": "T10Y2Y", "pce": "PCEPI", "pce inflation": "PCEPI", "core pce": "PCEPILFE",
-  "nonfarm payrolls": "PAYEMS",
-  "initial jobless claims": "ICSA",
-  "state unemployment": "ICSA",
-  "advance trade": "BOPTEXP",
-  "chicago fed": "CFNAI",
-  "industrial production": "INDPRO",
-  "ism manufacturing pmi": "MANEMP",
-  "ism services pmi": "NMFBAI",
-  "trade balance": "BOPGSTB",
-  "durable goods": "DGORDER",
-  "personal income": "PCEPI",
-};
+// Shared map lives in lib/calendar/fred-series.ts so the API route, this modal,
+// and the economic events route all stay in sync.
+const getSeriesId = getFredSeriesId;
 
-function getSeriesId(eventName: string): string | null {
-  const n = eventName.toLowerCase();
-  for (const [key, id] of Object.entries(EVENT_TO_FRED)) {
-    if (n.includes(key)) return id;
-  }
-  return null;
-}
-
-type RangeKey = "1Y" | "3Y" | "5Y" | "10Y" | "Max";
+type RangeKey = "1Y" | "3Y" | "5Y" | "10Y";
 
 function getStartEnd(range: RangeKey): { start: string; end: string } {
   const end = new Date();
@@ -91,7 +65,7 @@ function getStartEnd(range: RangeKey): { start: string; end: string } {
   if (range === "1Y") start.setFullYear(start.getFullYear() - 1);
   else if (range === "3Y") start.setFullYear(start.getFullYear() - 3);
   else if (range === "5Y") start.setFullYear(start.getFullYear() - 5);
-  else if (range === "10Y" || range === "Max") start.setFullYear(start.getFullYear() - 10);
+  else if (range === "10Y") start.setFullYear(start.getFullYear() - 10);
   return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
 }
 
@@ -122,7 +96,7 @@ const COMPARE_OPTIONS: { label: string; id: string }[] = [
 ];
 
 export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps) {
-  const [range, setRange] = useState<RangeKey>("10Y");
+  const [range, setRange] = useState<RangeKey>("1Y");
   const [observations, setObservations] = useState<{ date: string; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
@@ -307,7 +281,7 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
 
           {/* Range selectors only — no compare dropdown */}
           <div className="flex flex-wrap items-center gap-2">
-            {(["1Y", "3Y", "5Y", "10Y", "Max"] as RangeKey[]).map((r) => (
+            {(["1Y", "3Y", "5Y", "10Y"] as RangeKey[]).map((r) => (
               <button
                 key={r}
                 type="button"
@@ -423,7 +397,7 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
             {/* Compare-with chip selector */}
             <div>
               <p className="mb-2 text-xs font-medium text-zinc-400">
-                Compare with (AI will analyze relationship)
+                Compare with (analyzes relationship)
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {COMPARE_OPTIONS.filter((o) => o.id !== getSeriesId(event.name)).map((o) => (
@@ -453,7 +427,7 @@ export function EconomicDetailModal({ event, onClose }: EconomicDetailModalProps
                 ? "Analyzing…"
                 : compareLabel
                 ? `Analyze ${event.name} vs ${compareLabel}`
-                : "Get AI Analysis"}
+                : "Get Analysis"}
             </button>
 
             {aiAnalysis && (

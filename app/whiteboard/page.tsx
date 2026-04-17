@@ -11,7 +11,6 @@ import { setLastWorkspaceTab } from "../../lib/workspace-tab";
 import { useAuth } from "../../components/AuthContext";
 import { createClient } from "../../lib/supabase/client";
 
-const TOP_BAR_BG = "#080B14";
 const DEFAULT_APP_STATE = { viewBackgroundColor: "#1e1e2e" };
 const USER_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#e879f9", "#f87171", "#34d399"];
 const CURSOR_THROTTLE_MS = 50;
@@ -1238,8 +1237,7 @@ export default function WhiteboardPage() {
       <div className="flex h-[calc(100vh-3.5rem)] min-h-0 flex-col overflow-hidden bg-[var(--app-bg)]">
         {/* Header */}
         <header
-          className="relative flex h-12 shrink-0 items-center justify-between gap-4 border-b border-white/10 px-4"
-          style={{ backgroundColor: TOP_BAR_BG }}
+          className="relative flex h-12 shrink-0 items-center justify-between gap-4 border-b border-white/10 bg-[#080B14] px-4"
         >
           <div className="flex min-w-0 items-center gap-0 rounded-lg border border-white/10 bg-white/5 p-0.5">
             <Link href="/ai" className="rounded-md px-3 py-1.5 text-sm font-medium text-zinc-400 transition hover:bg-white/5 hover:text-[var(--accent-color)]">AI Chat</Link>
