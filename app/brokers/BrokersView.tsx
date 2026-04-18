@@ -547,7 +547,7 @@ export default function BrokersView() {
                           wrapperStyle={{ zIndex: 50 }}
                           isAnimationActive={false}
                         />
-                        <Line type="linear" dataKey="pnl" stroke={TEAL} strokeWidth={2} dot={false} activeDot={{ r: 4, fill: TEAL, stroke: "#18181b", strokeWidth: 2 }} />
+                        <Line type="monotone" dataKey="pnl" stroke={TEAL} strokeWidth={2} dot={false} activeDot={{ r: 4, fill: TEAL, stroke: "#18181b", strokeWidth: 2 }} />
                       </LineChart>
                     </ResponsiveContainer>
                   </div>

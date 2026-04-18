@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   AreaChart,
   Area,
@@ -18,6 +18,7 @@ import {
   Treemap,
   ReferenceLine,
 } from "recharts";
+import { useRouter } from "next/navigation";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -171,6 +172,7 @@ function GlobalStatsBar({ global }: { global: GlobalData | null }) {
 // ─── FearGreedCard ────────────────────────────────────────────────────────────
 
 function FearGreedCard({ data }: { data: FearGreedPoint[] }) {
+  const [showInfo, setShowInfo] = useState(false);
   const current = data[0];
   const score = current ? parseInt(current.value) : 50;
   const label = current?.value_classification ?? "Neutral";
@@ -183,7 +185,30 @@ function FearGreedCard({ data }: { data: FearGreedPoint[] }) {
 
   return (
     <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-      <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Fear & Greed Index</p>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">Fear & Greed Index</p>
+        <button
+          onClick={() => setShowInfo(!showInfo)}
+          className="flex h-4 w-4 items-center justify-center rounded-full border border-white/10 text-[9px] text-zinc-500 hover:text-zinc-300 hover:border-white/20 transition-colors"
+        >
+          ?
+        </button>
+      </div>
+      {showInfo && (
+        <div className="mb-3 rounded-lg bg-white/[0.04] border border-white/5 p-2.5 text-[10px] leading-relaxed text-zinc-400">
+          <p className="mb-1.5 font-medium text-zinc-300">How is it measured?</p>
+          <p>The index (0–100) aggregates six weighted factors daily:</p>
+          <ul className="mt-1 space-y-0.5 pl-3">
+            <li><span className="text-zinc-300">Volatility (25%)</span> — current vs 30/90-day avg drawdowns</li>
+            <li><span className="text-zinc-300">Momentum/Volume (25%)</span> — volume & momentum vs averages</li>
+            <li><span className="text-zinc-300">Social Media (15%)</span> — crypto mentions & engagement rate</li>
+            <li><span className="text-zinc-300">Surveys (15%)</span> — weekly polling of crypto investors</li>
+            <li><span className="text-zinc-300">BTC Dominance (10%)</span> — rising dominance signals fear</li>
+            <li><span className="text-zinc-300">Google Trends (10%)</span> — search interest for crypto terms</li>
+          </ul>
+          <p className="mt-1.5 text-zinc-500">0 = Extreme Fear · 100 = Extreme Greed</p>
+        </div>
+      )}
       <div className="flex items-center gap-4">
         <div className="relative flex h-24 w-24 flex-shrink-0 items-center justify-center">
           <PieChart width={96} height={96}>
@@ -218,29 +243,48 @@ function FearGreedCard({ data }: { data: FearGreedPoint[] }) {
   );
 }
 
-// ─── TrendingRow ──────────────────────────────────────────────────────────────
+// ─── GainersLosersRow ─────────────────────────────────────────────────────────
 
-function TrendingRow({ coins }: { coins: TrendingCoin[] }) {
+function GainersLosersRow({ coins }: { coins: CoinMarket[] }) {
   if (!coins.length) return null;
+  const router = useRouter();
+  const sorted = [...coins].sort(
+    (a, b) => (b.price_change_percentage_24h_in_currency ?? 0) - (a.price_change_percentage_24h_in_currency ?? 0)
+  );
+  const gainers = sorted.slice(0, 5);
+  const losers = sorted.slice(-5).reverse();
+
+  const CoinPill = ({ c }: { c: CoinMarket }) => {
+    const chg = c.price_change_percentage_24h_in_currency ?? 0;
+    return (
+      <button
+        onClick={() => router.push(`/search/${encodeURIComponent(c.symbol.toUpperCase())}`)}
+        className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-3 py-1.5 transition-colors hover:bg-white/[0.07]"
+      >
+        <img src={c.image} alt={c.name} className="h-5 w-5 rounded-full" />
+        <span className="text-xs font-medium text-zinc-200">{c.symbol.toUpperCase()}</span>
+        <span className={`text-[10px] font-medium ${pctColor(chg)}`}>
+          {pctArrow(chg)}{Math.abs(chg).toFixed(1)}%
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div className="mb-4 rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-      <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Trending</p>
-      <div className="flex flex-wrap gap-2">
-        {coins.map((c) => {
-          const chg = c.item.data?.price_change_percentage_24h?.usd ?? 0;
-          return (
-            <div
-              key={c.item.id}
-              className="flex items-center gap-2 rounded-xl border border-white/5 bg-white/[0.04] px-3 py-1.5"
-            >
-              <img src={c.item.thumb} alt={c.item.name} className="h-5 w-5 rounded-full" />
-              <span className="text-xs font-medium text-zinc-200">{c.item.symbol.toUpperCase()}</span>
-              <span className={`text-[10px] font-medium ${pctColor(chg)}`}>
-                {pctArrow(chg)}{Math.abs(chg).toFixed(1)}%
-              </span>
-            </div>
-          );
-        })}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-emerald-500/70">Top Gainers (24h)</p>
+          <div className="flex flex-wrap gap-2">
+            {gainers.map((c) => <CoinPill key={c.id} c={c} />)}
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-red-400/70">Top Losers (24h)</p>
+          <div className="flex flex-wrap gap-2">
+            {losers.map((c) => <CoinPill key={c.id} c={c} />)}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -250,10 +294,14 @@ function TrendingRow({ coins }: { coins: TrendingCoin[] }) {
 
 function MiniSparkline({ prices, positive }: { prices: number[]; positive: boolean }) {
   if (!prices?.length) return <div className="h-8 w-20" />;
-  const data = prices.map((v, i) => ({ i, v }));
+  // Sample down to ~28 points so the sparkline is snappy
+  const step = Math.max(1, Math.floor(prices.length / 28));
+  const sampled = prices.filter((_, i) => i % step === 0 || i === prices.length - 1);
+  const data = sampled.map((v, i) => ({ i, v }));
   return (
     <ResponsiveContainer width={80} height={32}>
       <LineChart data={data}>
+        <YAxis domain={["dataMin", "dataMax"]} hide />
         <Line
           type="monotone"
           dataKey="v"
@@ -268,10 +316,52 @@ function MiniSparkline({ prices, positive }: { prices: number[]; positive: boole
 
 // ─── MarketsTab ───────────────────────────────────────────────────────────────
 
+interface SearchResult {
+  id: string;
+  name: string;
+  symbol: string;
+  thumb: string;
+  market_cap_rank: number | null;
+}
+
 function MarketsTab({ coins }: { coins: CoinMarket[] }) {
+  const router = useRouter();
   const [sort, setSort] = useState<"rank" | "price" | "change24h" | "mcap" | "volume">("rank");
   const [dir, setDir] = useState<1 | -1>(1);
   const [search, setSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSearch = (q: string) => {
+    setSearch(q);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (q.length < 2) {
+      setSearchResults([]);
+      setShowDropdown(false);
+      return;
+    }
+    // Only query API if local results are sparse
+    const localMatches = coins.filter(
+      (c) => c.name.toLowerCase().includes(q.toLowerCase()) || c.symbol.toLowerCase().includes(q.toLowerCase())
+    );
+    if (localMatches.length >= 5) {
+      setShowDropdown(false);
+      return;
+    }
+    searchTimerRef.current = setTimeout(() => {
+      fetch(`/api/crypto/search?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          // Filter out coins already in the top 100 list
+          const localIds = new Set(coins.map((c) => c.id));
+          const extra = (d.coins ?? []).filter((c: SearchResult) => !localIds.has(c.id));
+          setSearchResults(extra);
+          setShowDropdown(extra.length > 0);
+        })
+        .catch(() => setShowDropdown(false));
+    }, 300);
+  };
 
   const toggle = (col: typeof sort) => {
     if (sort === col) setDir((d) => (d === 1 ? -1 : 1));
@@ -302,13 +392,34 @@ function MarketsTab({ coins }: { coins: CoinMarket[] }) {
 
   return (
     <div>
-      <div className="mb-3">
+      <div className="relative mb-3">
         <input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search coins…"
+          onChange={(e) => handleSearch(e.target.value)}
+          onFocus={() => searchResults.length > 0 && setShowDropdown(true)}
+          onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+          placeholder="Search all coins…"
           className="w-full max-w-xs rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-600 outline-none focus:border-[var(--accent-color)]/50"
         />
+        {showDropdown && searchResults.length > 0 && (
+          <div className="absolute left-0 top-full z-50 mt-1 w-full max-w-xs rounded-lg border border-white/10 bg-zinc-900 shadow-xl">
+            <p className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-zinc-500">More results</p>
+            {searchResults.map((c) => (
+              <button
+                key={c.id}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-white/[0.05] transition-colors"
+                onMouseDown={() => router.push(`/search/${encodeURIComponent(c.symbol.toUpperCase())}`)}
+              >
+                <img src={c.thumb} alt={c.name} className="h-5 w-5 rounded-full" />
+                <span className="text-xs font-medium text-zinc-200">{c.name}</span>
+                <span className="text-[10px] text-zinc-500">{c.symbol.toUpperCase()}</span>
+                {c.market_cap_rank && (
+                  <span className="ml-auto text-[10px] text-zinc-600">#{c.market_cap_rank}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="overflow-x-auto rounded-2xl border border-white/5">
         <table className="w-full min-w-[700px]">
@@ -331,7 +442,7 @@ function MarketsTab({ coins }: { coins: CoinMarket[] }) {
               const chg1h = c.price_change_percentage_1h_in_currency ?? 0;
               const chg7d = c.price_change_percentage_7d_in_currency ?? 0;
               return (
-                <tr key={c.id} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                <tr key={c.id} className="border-b border-white/[0.03] hover:bg-white/[0.02] cursor-pointer" onClick={() => router.push(`/search/${encodeURIComponent(c.symbol.toUpperCase())}`)}>
                   <td className="px-3 py-2 text-xs text-zinc-500">{c.market_cap_rank}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
@@ -368,6 +479,7 @@ function MarketsTab({ coins }: { coins: CoinMarket[] }) {
 // ─── DeFiTab ──────────────────────────────────────────────────────────────────
 
 function DeFiTab({ protocols, history }: { protocols: DefiProtocol[]; history: DefiHistoryPoint[] }) {
+  const [showInfo, setShowInfo] = useState(false);
   const histData = history.map((d) => ({
     date: new Date(d.date * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     tvl: d.tvl / 1e9,
@@ -375,6 +487,36 @@ function DeFiTab({ protocols, history }: { protocols: DefiProtocol[]; history: D
 
   return (
     <div className="space-y-4">
+      {/* DeFi explainer */}
+      <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">Decentralized Finance (DeFi)</p>
+          <button
+            onClick={() => setShowInfo(!showInfo)}
+            className="flex h-4 w-4 items-center justify-center rounded-full border border-white/10 text-[9px] text-zinc-500 hover:text-zinc-300 hover:border-white/20 transition-colors"
+          >
+            ?
+          </button>
+        </div>
+        {showInfo && (
+          <div className="mt-3 rounded-lg bg-white/[0.04] border border-white/5 p-2.5 text-[10px] leading-relaxed text-zinc-400">
+            <p className="mb-1.5 font-medium text-zinc-300">What is DeFi?</p>
+            <p>
+              DeFi (Decentralized Finance) refers to financial services built on blockchain smart contracts
+              that operate without traditional intermediaries like banks or brokerages. Users can lend, borrow,
+              trade, and earn yield directly through protocols.
+            </p>
+            <p className="mt-2 font-medium text-zinc-300">Why these protocols?</p>
+            <p>
+              The table below shows the <span className="text-zinc-300">top 20 protocols ranked by TVL</span> (Total Value Locked) —
+              the total amount of crypto assets deposited into each protocol. TVL is the primary measure of a DeFi
+              protocol&apos;s adoption and trust. These span categories like lending (Aave, JustLend), DEXes (Uniswap, Curve),
+              liquid staking (Lido), and bridges — representing the most significant protocols in the ecosystem.
+            </p>
+          </div>
+        )}
+      </div>
+
       <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
         <p className="mb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">Total DeFi TVL (90d)</p>
         <ResponsiveContainer width="100%" height={180}>
@@ -446,19 +588,23 @@ function DominanceTab({
   coins: CoinMarket[];
 }) {
   const sorted = Object.entries(dominance)
+    .filter(([sym]) => !sym.includes("_") && sym.length <= 5)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10);
 
-  const pieData = sorted.map(([sym, pct]) => ({ name: sym.toUpperCase(), value: parseFloat(pct.toFixed(2)) }));
+  const pieData = sorted.map(([sym, pct]) => {
+    const coin = coins.find((c) => c.symbol.toLowerCase() === sym);
+    const chg24 = coin?.price_change_percentage_24h_in_currency ?? 0;
+    return { name: sym.toUpperCase(), value: parseFloat(pct.toFixed(2)), change24h: chg24 };
+  });
 
-  // Market cap gain/loss 24h for top 10 coins by rank
-  const gainLoss = coins
-    .slice(0, 10)
-    .map((c) => ({
-      name: c.symbol.toUpperCase(),
-      change: c.market_cap_change_24h ?? 0,
-    }))
-    .sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+  // Top 5 biggest gainers + top 5 biggest losers by absolute 24h market cap change (exclude BTC — it dwarfs everything and already has its own chart)
+  const withChange = coins
+    .filter((c) => c.market_cap_change_24h != null && c.symbol.toLowerCase() !== "btc")
+    .map((c) => ({ name: c.symbol.toUpperCase(), change: c.market_cap_change_24h ?? 0 }));
+  const topGainers = [...withChange].sort((a, b) => b.change - a.change).slice(0, 5);
+  const topLosers = [...withChange].sort((a, b) => a.change - b.change).slice(0, 5);
+  const gainLoss = [...topGainers, ...topLosers];
 
   const histMin = history.length ? Math.min(...history.map((d) => d.value)) * 0.98 : 0;
   const histMax = history.length ? Math.max(...history.map((d) => d.value)) * 1.02 : undefined;
@@ -486,7 +632,7 @@ function DominanceTab({
                 tickFormatter={(v) => `$${(v / 1e12).toFixed(2)}T`}
               />
               <Tooltip
-                contentStyle={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, fontSize: 11 }}
+                contentStyle={{ background: "#18181b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11 }}
                 formatter={(v) => [`$${((v as number) / 1e12).toFixed(3)}T`, "Market Cap"]}
               />
               <Area type="monotone" dataKey="value" stroke="var(--accent-color)" fill="url(#domGrad)" strokeWidth={1.5} dot={false} />
@@ -497,49 +643,50 @@ function DominanceTab({
         )}
       </div>
 
-      {/* Pie + breakdown */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Market Cap Dominance</p>
-          <ResponsiveContainer width="100%" height={260}>
-            <PieChart>
-              <Pie data={pieData} cx="50%" cy="50%" outerRadius={110} dataKey="value" strokeWidth={1} stroke="rgba(0,0,0,0.3)" isAnimationActive={false}>
-                {pieData.map((_, i) => (
-                  <Cell key={i} fill={DOM_COLORS[i % DOM_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, fontSize: 11 }}
-                formatter={(v) => [`${v}%`, ""]}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Breakdown</p>
-          <div className="space-y-2">
-            {sorted.map(([sym, pct], i) => (
-              <div key={sym} className="flex items-center gap-3">
-                <div className="h-2.5 w-2.5 rounded-full flex-shrink-0" style={{ background: DOM_COLORS[i % DOM_COLORS.length] }} />
-                <span className="w-12 text-xs font-medium text-zinc-200">{sym.toUpperCase()}</span>
-                <div className="flex-1 rounded-full bg-white/5">
-                  <div
-                    className="h-1.5 rounded-full"
-                    style={{ width: `${Math.min(pct, 100)}%`, background: DOM_COLORS[i % DOM_COLORS.length] }}
-                  />
-                </div>
-                <span className="w-14 text-right text-xs text-zinc-400">{pct.toFixed(2)}%</span>
+      {/* Pie chart + legend side by side */}
+      <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+        <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Market Cap Dominance</p>
+        <div className="flex flex-col items-center gap-4 md:flex-row">
+          <div className="flex-shrink-0">
+            <ResponsiveContainer width={260} height={260}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" outerRadius={110} dataKey="value" nameKey="name" strokeWidth={1} stroke="rgba(0,0,0,0.3)" isAnimationActive={false}>
+                  {pieData.map((_, i) => (
+                    <Cell key={i} fill={DOM_COLORS[i % DOM_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ background: "#18181b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11, color: "#e4e4e7" }}
+                  formatter={(value, _name, props) => {
+                    const entry = props.payload;
+                    const chg = entry?.change24h ?? 0;
+                    const chgStr = `${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%`;
+                    return [`${value}% dominance  (24h: ${chgStr})`, entry?.name ?? ""];
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex-1 space-y-1.5">
+            {pieData.map((d, i) => (
+              <div key={d.name} className="flex items-center gap-2">
+                <div className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: DOM_COLORS[i % DOM_COLORS.length] }} />
+                <span className="w-10 text-xs font-medium text-zinc-200">{d.name}</span>
+                <span className="text-xs text-zinc-400">{d.value}%</span>
+                <span className={`ml-auto text-[10px] font-medium ${pctColor(d.change24h)}`}>
+                  24h {pctArrow(d.change24h)}{Math.abs(d.change24h).toFixed(2)}%
+                </span>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* 24h market cap gain / loss */}
+      {/* 24h market cap gain / loss — biggest movers */}
       <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
-        <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">24h Market Cap Gain / Loss — Top 10</p>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={gainLoss} barCategoryGap="30%">
+        <p className="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">24h Market Cap — Biggest Gainers & Losers <span className="normal-case text-zinc-600">(excl. BTC)</span></p>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={gainLoss} barCategoryGap="20%">
             <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#71717a" }} tickLine={false} axisLine={false} />
             <YAxis
               tick={{ fontSize: 9, fill: "#71717a" }}
@@ -553,7 +700,10 @@ function DominanceTab({
               }}
             />
             <Tooltip
-              contentStyle={{ background: "var(--app-card)", border: "1px solid var(--app-border)", borderRadius: 8, fontSize: 11 }}
+              cursor={false}
+              contentStyle={{ background: "#18181b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 11, color: "#e4e4e7" }}
+              labelStyle={{ color: "#e4e4e7" }}
+              itemStyle={{ color: "#e4e4e7" }}
               formatter={(v) => {
                 const n = v as number;
                 const abs = Math.abs(n);
@@ -578,38 +728,59 @@ function DominanceTab({
 
 interface HeatmapNode {
   name: string;
+  coinName: string;
+  price: number;
   size: number;
   change: number;
   [key: string]: unknown;
 }
 
-interface HeatmapContentProps {
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  name?: string;
-  change?: number;
+/** Terminal-style green-to-red gradient matching the screener heatmap palette */
+function getHeatColor(pct: number): string {
+  if (pct <= -5) return "#5f1d1d";   // burgundy
+  if (pct <= -3) return "#8a2a2a";   // brick
+  if (pct <= -1) return "#b04a4a";   // muted red
+  if (pct < 0)   return "#c98080";   // dusty rose
+  if (pct === 0) return "#5a5e66";   // slate
+  if (pct < 1)   return "#7fa991";   // pale jade
+  if (pct < 3)   return "#3f8060";   // jade
+  if (pct < 5)   return "#266049";   // forest
+  return "#1b4435";                  // deep forest
 }
 
-function HeatmapContent(props: HeatmapContentProps) {
-  const { x = 0, y = 0, width = 0, height = 0, name = "", change = 0 } = props;
-  const color = change > 5 ? "#166534" : change > 2 ? "#15803d" : change > 0 ? "#16a34a" : change > -2 ? "#dc2626" : change > -5 ? "#b91c1c" : "#991b1b";
-  const textColor = "#e4e4e7";
+function HeatmapContent(props: Record<string, unknown>) {
+  const x = (props.x as number) ?? 0;
+  const y = (props.y as number) ?? 0;
+  const width = (props.width as number) ?? 0;
+  const height = (props.height as number) ?? 0;
+  const name = (props.name as string) ?? "";
+  const change = (props.change as number) ?? 0;
+  const price = (props.price as number) ?? 0;
+  const coinName = props.coinName as string | undefined;
 
-  if (width < 30 || height < 20) return <g />;
+  // Skip the synthetic root node Recharts passes through (has no coinName)
+  if (!coinName) return null;
+
+  const color = getHeatColor(change);
+  const showText = width > 40 && height > 30;
+  const roomy = width > 80 && height > 50;
 
   return (
-    <g>
-      <rect x={x + 1} y={y + 1} width={width - 2} height={height - 2} rx={4} fill={color} />
-      {height > 30 && (
+    <g style={{ cursor: "pointer" }}>
+      <rect x={x} y={y} width={width} height={height} fill={color} fillOpacity={0.85} stroke="var(--app-bg, #09090b)" strokeWidth={2} rx={4} />
+      {showText && (
         <>
-          <text x={x + width / 2} y={y + height / 2 - 5} textAnchor="middle" fill={textColor} fontSize={Math.min(12, width / 4)} fontWeight={600}>
+          <text x={x + width / 2} y={y + height / 2 - 6} textAnchor="middle" dominantBaseline="middle" fill="white" fontSize={Math.min(14, width / 4)} fontWeight={700}>
             {name}
           </text>
-          <text x={x + width / 2} y={y + height / 2 + 10} textAnchor="middle" fill={textColor} fontSize={Math.min(10, width / 5)} opacity={0.8}>
+          <text x={x + width / 2} y={y + height / 2 + 10} textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.85)" fontSize={Math.min(11, width / 6)} fontWeight={600}>
             {change >= 0 ? "+" : ""}{change.toFixed(2)}%
           </text>
+          {roomy && price > 0 && (
+            <text x={x + width / 2} y={y + height / 2 + 24} textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.6)" fontSize={Math.min(9, width / 8)}>
+              {fmtPrice(price)}
+            </text>
+          )}
         </>
       )}
     </g>
@@ -619,7 +790,27 @@ function HeatmapContent(props: HeatmapContentProps) {
 type HeatmapTf = "1h" | "24h" | "7d";
 type HeatmapSize = 25 | 50 | 100;
 
+interface HeatmapTooltipPayload {
+  payload?: HeatmapNode;
+}
+
+function HeatmapTooltip({ active, payload }: { active?: boolean; payload?: HeatmapTooltipPayload[] }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload;
+  if (!d) return null;
+  return (
+    <div className="rounded-lg border border-white/10 bg-zinc-900 p-3 shadow-xl text-xs">
+      <p className="font-bold text-zinc-50">{d.name} — {d.coinName}</p>
+      <p className="text-zinc-400 mt-1">{fmtPrice(d.price)}</p>
+      <p className={d.change >= 0 ? "text-green-400" : "text-red-400"}>
+        {d.change >= 0 ? "+" : ""}{d.change.toFixed(2)}%
+      </p>
+    </div>
+  );
+}
+
 function HeatmapTab({ coins }: { coins: CoinMarket[] }) {
+  const router = useRouter();
   const [tf, setTf] = useState<HeatmapTf>("24h");
   const [size, setSize] = useState<HeatmapSize>(50);
 
@@ -629,8 +820,14 @@ function HeatmapTab({ coins }: { coins: CoinMarket[] }) {
     "7d": "price_change_percentage_7d_in_currency",
   };
 
-  const data: HeatmapNode[] = coins.slice(0, size).map((c) => ({
+  // Sort by market cap descending and take exactly `size` coins
+  const sorted = [...coins].sort((a, b) => (b.market_cap ?? 0) - (a.market_cap ?? 0));
+  const sliced = sorted.slice(0, size);
+
+  const data: HeatmapNode[] = sliced.map((c) => ({
     name: c.symbol.toUpperCase(),
+    coinName: c.name,
+    price: c.current_price,
     size: Math.max(c.market_cap, 1),
     change: (c[changeField[tf]] as number) ?? 0,
   }));
@@ -660,16 +857,29 @@ function HeatmapTab({ coins }: { coins: CoinMarket[] }) {
         </div>
       </div>
 
-      {/* Legend */}
-      <div className="mb-2 flex items-center gap-4 text-[10px] text-zinc-500">
-        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-green-800" /> &gt;+5%</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-green-600" /> 0–5%</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-red-600" /> 0–(−5)%</span>
-        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-red-900" /> &lt;−5%</span>
+      {/* Legend — gradient bar matching screener */}
+      <div className="mb-2 flex items-center gap-2 text-xs text-zinc-500">
+        <span>−5%</span>
+        <div
+          className="h-3 flex-1 rounded"
+          style={{ background: "linear-gradient(to right, #5f1d1d, #8a2a2a, #b04a4a, #c98080, #7fa991, #3f8060, #266049, #1b4435)" }}
+        />
+        <span>+5%</span>
       </div>
 
-      <ResponsiveContainer width="100%" height={500}>
-        <Treemap data={data} dataKey="size" isAnimationActive={false} content={<HeatmapContent />} />
+      <ResponsiveContainer width="100%" height={600}>
+        <Treemap
+          data={data}
+          dataKey="size"
+          isAnimationActive={false}
+          animationDuration={0}
+          content={<HeatmapContent />}
+          onClick={(node) => {
+            if (node?.name) router.push(`/search/${encodeURIComponent(node.name)}`);
+          }}
+        >
+          <Tooltip content={<HeatmapTooltip />} />
+        </Treemap>
       </ResponsiveContainer>
     </div>
   );
@@ -725,10 +935,10 @@ type TabId = "markets" | "defi" | "dominance" | "heatmap" | "news";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "markets", label: "Markets" },
-  { id: "defi", label: "DeFi" },
-  { id: "dominance", label: "Dominance" },
   { id: "heatmap", label: "Heatmap" },
+  { id: "dominance", label: "Dominance" },
   { id: "news", label: "News" },
+  { id: "defi", label: "DeFi" },
 ];
 
 export default function CryptoView() {
@@ -746,19 +956,32 @@ export default function CryptoView() {
   const [loadingDom, setLoadingDom] = useState(false);
   const [loadingNews, setLoadingNews] = useState(false);
 
-  useEffect(() => {
+  const fetchMarkets = useCallback(() => {
     fetch("/api/crypto/markets")
       .then((r) => r.json())
       .then(setMarkets)
       .catch(console.error)
       .finally(() => setLoadingMarkets(false));
+  }, []);
 
+  const fetchFng = useCallback(() => {
     fetch("/api/crypto/fear-greed")
       .then((r) => r.json())
       .then((d) => setFng(d.data ?? []))
       .catch(console.error)
       .finally(() => setLoadingFng(false));
   }, []);
+
+  // Initial load + auto-refresh every 60s
+  useEffect(() => {
+    fetchMarkets();
+    fetchFng();
+    const interval = setInterval(() => {
+      fetchMarkets();
+      fetchFng();
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, [fetchMarkets, fetchFng]);
 
   const loadDefi = useCallback(() => {
     if (defi) return;
@@ -806,7 +1029,7 @@ export default function CryptoView() {
           {loadingMarkets ? (
             <div className="h-20 rounded-2xl bg-white/5 animate-pulse" />
           ) : (
-            <TrendingRow coins={markets?.trending ?? []} />
+            <GainersLosersRow coins={markets?.coins ?? []} />
           )}
         </div>
         <div>

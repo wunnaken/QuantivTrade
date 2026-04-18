@@ -4,19 +4,35 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const res = await fetch(
-      "https://api.coingecko.com/api/v3/global/market_cap_chart?vs_currency=usd&days=30",
-      { next: { revalidate: 3600 } }
-    );
-    if (!res.ok) throw new Error("Dominance fetch failed");
-    const json = await res.json();
+    // global/market_cap_chart is a CoinGecko Pro endpoint. Instead, derive
+    // total market cap from BTC's market cap history + BTC dominance.
+    const [btcChartRes, globalRes] = await Promise.all([
+      fetch(
+        "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=30",
+        { next: { revalidate: 3600 } }
+      ),
+      fetch("https://api.coingecko.com/api/v3/global", {
+        next: { revalidate: 300 },
+      }),
+    ]);
 
-    // market_cap_chart.market_cap = [[timestamp_ms, value], ...]
-    const rawMcap: [number, number][] = json.market_cap_chart?.market_cap ?? [];
-    const history = rawMcap.map(([ts, value]) => ({
-      date: new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      value,
-    }));
+    const [btcChart, globalData] = await Promise.all([
+      btcChartRes.ok ? btcChartRes.json() : { market_caps: [] },
+      globalRes.ok ? globalRes.json() : { data: null },
+    ]);
+
+    const btcDominance = (globalData?.data?.market_cap_percentage?.btc ?? 60) / 100;
+    const rawMcap: [number, number][] = btcChart.market_caps ?? [];
+
+    // Derive total market cap: BTC market cap / BTC dominance fraction
+    // Sample down to ~30 points for clean chart
+    const step = Math.max(1, Math.floor(rawMcap.length / 30));
+    const history = rawMcap
+      .filter((_: [number, number], i: number) => i % step === 0 || i === rawMcap.length - 1)
+      .map(([ts, btcMcap]: [number, number]) => ({
+        date: new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        value: btcMcap / btcDominance,
+      }));
 
     return NextResponse.json({ history });
   } catch (e) {
