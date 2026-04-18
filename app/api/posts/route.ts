@@ -11,11 +11,14 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get("limit") ?? "20", 10)));
   const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10));
 
-  const { data: postsRows, error: postsError } = await supabase
+  const authorFilter = url.searchParams.get("author");
+  let query = supabase
     .from("posts")
     .select("id, user_id, content, created_at, comments_count, ticker, image_url")
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
+  if (authorFilter) query = query.eq("user_id", authorFilter);
+  const { data: postsRows, error: postsError } = await query;
 
   if (postsError) {
     console.error("[posts] GET error:", postsError);

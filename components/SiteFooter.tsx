@@ -19,9 +19,6 @@ const PLATFORM_LINKS = [
   { label: "Dashboard", href: "/feed" },
   { label: "Communities", href: "/communities" },
   { label: "Trade Journal", href: "/journal" },
-
-  { label: "Morning Briefing", href: "/feed" },
-  { label: "Market Map", href: "/map" },
 ];
 
 const PLANS_LINKS = [
@@ -34,9 +31,6 @@ const PLANS_LINKS = [
 
 const RESOURCES_LINKS = [
   { label: "Getting Started (coming soon)", href: "#" },
-  { label: "How to Use the Journal (coming soon)", href: "#" },
-  { label: "API & Data Sources (coming soon)", href: "#" },
-  { label: "Changelog (coming soon)", href: "#" },
   { label: "Trading Ethics & Conduct", href: "/ethics" },
   { label: "Idle", href: "/idle" },
 ];

@@ -75,7 +75,7 @@ export function SiteHelpBot() {
   const pathname = usePathname();
   const pageLabel = getPageLabel(pathname);
   const isWhiteboard = pathname === "/whiteboard" || pathname.startsWith("/whiteboard/");
-
+  const isMessages = pathname === "/messages" || pathname.startsWith("/messages/");
   const [open, setOpen] = useState(pathname === "/feedback");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -134,6 +134,8 @@ export function SiteHelpBot() {
       setLoading(false);
     }
   }
+
+  if (isMessages) return <></>;
 
   return (
     <>

@@ -19,7 +19,14 @@ export async function GET() {
     .select('room_id')
     .eq('user_id', authUid);
 
-  const roomIds = (memberRows ?? []).map((r) => r.room_id);
+  // Also include rooms where user is the host (even if not in room_members)
+  const { data: hostedRows } = profileId
+    ? await supabase.from('rooms').select('id').eq('host_user_id', profileId)
+    : { data: null };
+
+  const memberRoomIds = (memberRows ?? []).map((r) => r.room_id);
+  const hostedRoomIds = (hostedRows ?? []).map((r: { id: number }) => r.id);
+  const roomIds = [...new Set([...memberRoomIds, ...hostedRoomIds])];
   if (!roomIds.length) return NextResponse.json({ rooms: [] });
 
   const { data: roomRows } = await supabase

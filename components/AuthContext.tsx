@@ -74,7 +74,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .then((res) => res.json())
       .then(({ user: serverUser }) => {
         if (serverUser) {
-          setUser(serverUser as User);
+          const u = serverUser as User;
+          setUser(u);
+          // Auto-upgrade to elite if user unlocked via access code
+          try {
+            if (typeof window !== "undefined" && localStorage.getItem("quantivtrade-access-elite") === "1" && u.subscription_tier !== "elite") {
+              fetch("/api/access/upgrade", { method: "POST" }).then(r => {
+                if (r.ok) {
+                  localStorage.removeItem("quantivtrade-access-elite");
+                  setUser(prev => prev ? { ...prev, subscription_tier: "elite", isVerified: true } : prev);
+                }
+              }).catch(() => {});
+            }
+          } catch {}
           Promise.all([
             loadXPFromDB(),
             loadStreaksFromDB(),

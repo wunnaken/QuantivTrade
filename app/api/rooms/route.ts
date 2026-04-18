@@ -9,6 +9,33 @@ function rand(len = 8): string {
   return Math.random().toString(36).substring(2, 2 + len).toUpperCase();
 }
 
+export async function GET() {
+  const supabase = createServerClient();
+  const { data: rooms, error: roomsErr } = await supabase
+    .from("rooms")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  if (roomsErr) {
+    return NextResponse.json({ rooms: [], error: roomsErr.message });
+  }
+
+  return NextResponse.json({
+    rooms: (rooms ?? []).map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      slug: r.slug,
+      member_count: r.member_count ?? 0,
+      host_name: null,
+      is_paid: r.is_paid ?? false,
+      monthly_price: r.monthly_price ?? null,
+      category: r.category ?? null,
+    })),
+  });
+}
+
 export async function POST(req: Request) {
   const routeClient = await createRouteHandlerClient();
 

@@ -41,6 +41,7 @@ type Message = {
   reactions?: Reaction[];
   is_pinned?: boolean;
   edited_at?: string | null;
+  type?: string;
 };
 
 type ActiveTab = "community" | "direct";
@@ -350,6 +351,7 @@ function MessagesContent() {
   const searchParams = useSearchParams();
   const withHandle = searchParams.get("with");
   const withDmId = searchParams.get("dm");
+  const withRoomId = searchParams.get("room");
   const { user } = useAuth();
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("direct");
@@ -432,18 +434,27 @@ function MessagesContent() {
     if (dm) { setActiveTab("direct"); setSelectedId(dm.id); }
   }, [withDmId, loading, conversations.dms]);
 
+  // Handle ?room= param (navigate to community room)
+  useEffect(() => {
+    if (!withRoomId || loading) return;
+    const room = conversations.community.find((c: any) => c.room_id === Number(withRoomId) || c.id === `room-${withRoomId}`);
+    if (room) { setActiveTab("community"); setSelectedId(room.id); }
+  }, [withRoomId, loading, conversations.community]);
+
   // Load messages + realtime subscription
+
   useEffect(() => {
     if (!selectedId) { setMessages([]); setTypingUsers([]); setOtherLastRead(null); return; }
 
     setMsgLoading(true);
+
     fetch(`/api/conversations/${selectedId}/messages`)
       .then((r) => r.json())
       .then((data: { messages: Message[] }) => {
         setMessages(data.messages ?? []);
-        setMsgLoading(false);
-      })
-      .catch(() => setMsgLoading(false));
+          setMsgLoading(false);
+        })
+        .catch(() => setMsgLoading(false));
 
     // Realtime
     const supabase = createClient();
@@ -616,11 +627,9 @@ function MessagesContent() {
       if (res.ok) {
         const { message } = await res.json() as { message: Message };
         setMessages((prev) => {
-          // If realtime already added the real message, just remove the optimistic one
           if (prev.some((m) => m.id === message.id)) return prev.filter((m) => m.id !== tempId);
           return prev.map((m) => m.id === tempId ? { ...message, reply_to: message.reply_to ?? optimistic.reply_to ?? null } : m);
         });
-        // Update preview in conversation list
         setConversations((prev) => {
           const update = (list: Conversation[]) =>
             list.map((c) => c.id === selectedId ? { ...c, last_message_preview: text, last_message_at: new Date().toISOString() } : c);
@@ -964,7 +973,11 @@ Find a Community
                         {c.type === "dm" && c.other_user?.is_verified && <VerifiedBadge size={12} />}
                         {c.type === "dm" && c.other_user?.is_founder && <FounderBadge size={13} />}
                       </div>
-                      <p className="truncate text-xs text-zinc-500">{c.last_message_preview ?? (c.type === "community" ? "Public room" : "No messages yet")}</p>
+                      <p className="truncate text-xs text-zinc-500">
+                        {c.type === "community" && (c as any).is_paid && <span className="mr-1 inline-flex items-center rounded border border-amber-400/30 bg-amber-400/10 px-1 py-0 text-[8px] font-bold text-amber-400">Private</span>}
+                        {c.type === "community" && !(c as any).is_paid && (c as any).is_room && <span className="mr-1 inline-flex items-center rounded border border-emerald-500/30 bg-emerald-500/10 px-1 py-0 text-[8px] font-bold text-emerald-400">Public</span>}
+                        {c.last_message_preview ?? (c.type === "community" ? "Community room" : "No messages yet")}
+                      </p>
                     </div>
                     <div className="shrink-0 text-right">
                       <p className="text-[10px] text-zinc-600">{fmtTime(c.last_message_at)}</p>
@@ -1034,7 +1047,7 @@ Find a Community
                     {selectedConv.type === "dm"
                       ? `@${(selectedConv.other_user?.username ?? "").toLowerCase()}`
                       : selectedConv.type === "community"
-                      ? "Community room · open to all"
+                      ? (selectedConv as any).is_paid ? "Private room · paid membership" : "Community room · open to all"
                       : "Private group"}
                   </p>
                 </div>
@@ -1105,6 +1118,15 @@ Find a Community
                 {!msgLoading && (() => {
                   const lastSentIdx = messages.reduce((acc, m, i) => m.is_mine && !m.id.startsWith("opt-") ? i : acc, -1);
                   return messages.map((msg, i) => {
+                    // System messages (join/leave/kick)
+                    if ((msg as any).type === "system") {
+                      return (
+                        <div key={msg.id} className="flex justify-center py-1">
+                          <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] text-zinc-500">{msg.content}</span>
+                        </div>
+                      );
+                    }
+
                     const prevMsg = messages[i - 1];
                     const showAuthor = !msg.is_mine && selectedConv.type !== "dm" && msg.author && prevMsg?.user_id !== msg.user_id;
                     const isLastSent = msg.is_mine && i === lastSentIdx;
@@ -1295,6 +1317,15 @@ Find a Community
 
               {/* Input */}
               <div className="shrink-0 border-t border-white/10 p-4">
+                {selectedConv.type === "community" && !user?.isVerified ? (
+                  <div className="flex items-center gap-3 rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3">
+                    <svg className="h-4 w-4 shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-amber-300">Verified traders only</p>
+                      <p className="text-[10px] text-zinc-500">Only verified traders can send messages in community rooms. <a href="/verify" className="text-amber-400 hover:underline">Get verified</a></p>
+                    </div>
+                  </div>
+                ) : (<>
                 {/* Reply-to bar */}
                 {replyingTo && (
                   <div className="mb-2 flex items-center gap-2 rounded-lg border-l-2 border-[var(--accent-color)]/60 bg-white/5 px-3 py-1.5">
@@ -1374,6 +1405,7 @@ Find a Community
                     </svg>
                   </button>
                 </div>
+                </>)}
               </div>
             </>
           ) : (

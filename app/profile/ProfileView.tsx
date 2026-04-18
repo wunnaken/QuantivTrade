@@ -210,22 +210,6 @@ function ProfilePerformanceCard() {
   );
 }
 
-function ProfileMonetizeSection() {
-  return (
-    <section className="mb-6 rounded-xl border border-white/10 bg-white/5 p-4" aria-label="My Community">
-      <h2 className="text-sm font-semibold text-zinc-50">Create a paid community</h2>
-      <p className="mt-1 text-xs text-zinc-400">Set your community name, monthly price ($5 – $100), and description. <Link href="/monetization" className="text-[var(--accent-color)] hover:underline">View our monetization policy</Link> for details on revenue share and payouts.</p>
-      <div className="mt-4 space-y-3">
-        <input type="text" placeholder="Community name" className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500" readOnly aria-hidden />
-        <input type="number" placeholder="Monthly price ($)" className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500" readOnly aria-hidden />
-        <textarea placeholder="Description" rows={2} className="w-full rounded-lg border border-white/20 bg-black/40 px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-500" readOnly aria-hidden />
-        <button type="button" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm font-medium text-amber-200">
-          Coming with full launch
-        </button>
-      </div>
-    </section>
-  );
-}
 
 // ─── All Platform Badges ───────────────────────────────────────────────────────
 
@@ -386,8 +370,21 @@ export default function ProfileView() {
   const { user, signOut, updateProfile } = useAuth();
   const { accentColor, setAccentColor, previewAccentColor } = useTheme();
   const router = useRouter();
-  type JoinedRoom = { id: string; name: string };
+  type JoinedRoom = { id: string; name: string; is_host?: boolean; is_paid?: boolean; monthly_price?: number | null };
   const [joinedGroups, setJoinedGroups] = useState<JoinedRoom[]>([]);
+  const [deleteRoomConfirm, setDeleteRoomConfirm] = useState<JoinedRoom | null>(null);
+  const [deletingRoom, setDeletingRoom] = useState(false);
+  const [leaveRoomConfirm, setLeaveRoomConfirm] = useState<JoinedRoom | null>(null);
+  const [profileTab, setProfileTab] = useState<"overview" | "posts">("overview");
+  type UserPost = {
+    id: string; content: string; timestamp: string; ticker?: string | null; image?: string | null; comments: number;
+    author: { name: string; handle: string; avatar: string | null; verified: boolean; isFounder: boolean };
+    reactions?: Record<string, number>;
+    userReacted?: Record<string, boolean>;
+  };
+  const [userPosts, setUserPosts] = useState<UserPost[]>([]);
+  const [userPostsLoading, setUserPostsLoading] = useState(false);
+  const [userPostsLoaded, setUserPostsLoaded] = useState(false);
   type FollowedProfile = { id: string; name: string; username: string };
   const [followedProfiles, setFollowedProfiles] = useState<FollowedProfile[]>([]);
   const [selfFollowersCount, setSelfFollowersCount] = useState<number | null>(null);
@@ -1199,10 +1196,42 @@ export default function ProfileView() {
         {/* Spacer so content below doesn't sit under overlap */}
         <div className="h-4" />
 
+        {/* Tabs */}
+        <div className="mt-8 mb-4 flex gap-6 border-b border-white/10">
+          {(["overview", "posts"] as const).map((tab) => (
+            <button key={tab} type="button"
+              onClick={() => {
+                setProfileTab(tab);
+                if (tab === "posts" && !userPostsLoaded && user?.id) {
+                  setUserPostsLoading(true);
+                  fetch(`/api/posts?author=${user.id}&limit=50`, { credentials: "include" })
+                    .then((r) => r.ok ? r.json() : { posts: [], reactionCounts: {}, userReactions: {} })
+                    .then((data: { posts?: UserPost[]; reactionCounts?: Record<string, Record<string, number>>; userReactions?: Record<string, Record<string, boolean>> }) => {
+                      const rc = data.reactionCounts ?? {};
+                      const ur = data.userReactions ?? {};
+                      setUserPosts((data.posts ?? []).map((p) => ({ ...p, reactions: rc[p.id], userReacted: ur[p.id] })));
+                    })
+                    .catch(() => {})
+                    .finally(() => { setUserPostsLoading(false); setUserPostsLoaded(true); });
+                }
+              }}
+              className={`relative pb-3 text-sm font-medium transition-colors ${
+                profileTab === tab
+                  ? "text-[var(--accent-color)]"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}>
+              {tab === "overview" ? "Overview" : "Posts"}
+              {profileTab === tab && (
+                <span className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-[var(--accent-color)]" />
+              )}
+            </button>
+          ))}
+        </div>
+
         {/* Card wrapper for rest of profile — full rounded card with spacing from content above and footer */}
-        <div className="mb-12 mt-8 rounded-2xl border px-6 pb-8 pt-6 transition-colors duration-300 sm:rounded-3xl sm:px-8" style={{ backgroundColor: "var(--app-card-alt)", borderColor: "var(--app-border)" }}>
+        {profileTab === "overview" ? (
+        <div className="mb-12 rounded-2xl border px-6 pb-8 pt-6 transition-colors duration-300 sm:rounded-3xl sm:px-8" style={{ backgroundColor: "var(--app-card-alt)", borderColor: "var(--app-border)" }}>
         {user?.isVerified && <ProfilePerformanceCard />}
-        {user?.isVerified && <ProfileMonetizeSection />}
 
         {/* Badges */}
         <BadgesSection user={user} streakData={streakData} />
@@ -1346,34 +1375,6 @@ export default function ProfileView() {
             <BriefingPreferencesSection />
           )}
 
-        {/* Posts */}
-        <section className="mt-6 rounded-2xl border p-5 transition-colors duration-300" style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}>
-          <h2 className="text-sm font-semibold text-zinc-50">Your posts</h2>
-          {posts.length === 0 ? (
-            <p className="mt-3 text-xs text-zinc-400">
-              You haven&apos;t posted in any community yet. Join a room and share your first idea.
-            </p>
-          ) : (
-            <ul className="mt-3 space-y-3">
-              {posts.map((post) => (
-                <li
-                  key={post.id}
-                  className="rounded-xl border border-white/5 bg-black/30 p-3 text-xs text-zinc-300"
-                >
-                  <p className="text-zinc-200">{post.text}</p>
-                  <p className="mt-2 text-[10px] text-zinc-500">
-                    {post.groupName && (
-                      <span className="text-[var(--accent-color)]/90">{post.groupName}</span>
-                    )}
-                    {post.groupName && " · "}
-                    {new Date(post.date).toLocaleDateString()}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
         {/* Groups */}
         <section className="mt-6 rounded-2xl border p-5 transition-colors duration-300" style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}>
           <h2 className="text-sm font-semibold text-zinc-50">Groups you&apos;re in</h2>
@@ -1384,25 +1385,140 @@ export default function ProfileView() {
                 href="/communities"
                 className="font-semibold text-zinc-300 transition-colors duration-200 hover:text-[var(--accent-color)]"
               >
-                Explore Smart Communities
+                Explore Communities
               </Link>{" "}
               to join rooms and see them here.
             </p>
           ) : (
             <ul className="mt-3 space-y-2">
               {joinedGroups.map((room) => (
-                <li key={room.id}>
+                <li key={room.id} className="flex items-center gap-2">
                   <Link
                     href="/communities"
-                    className="block rounded-lg border border-white/5 bg-black/30 px-3 py-2 text-xs text-zinc-200 transition-colors duration-200 hover:border-[var(--accent-color)]/30 hover:bg-white/5"
+                    className="flex-1 rounded-lg border border-white/5 bg-black/30 px-3 py-2 text-xs text-zinc-200 transition-colors duration-200 hover:border-[var(--accent-color)]/30 hover:bg-white/5"
                   >
-                    {room.name}
+                    <span className="flex items-center gap-2 flex-wrap">
+                      {room.name}
+                      {room.is_host && (
+                        <span className="rounded border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-1.5 py-0.5 text-[9px] font-bold text-[var(--accent-color)]">Host</span>
+                      )}
+                      {room.is_paid ? (
+                        <span className="rounded border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-400">
+                          Private · ${room.monthly_price}/mo
+                        </span>
+                      ) : (
+                        <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-bold text-emerald-400">
+                          Public
+                        </span>
+                      )}
+                    </span>
                   </Link>
+                  {room.is_host ? (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteRoomConfirm(room)}
+                      className="shrink-0 rounded-lg border border-red-500/20 bg-red-500/5 p-1.5 text-red-400 transition hover:bg-red-500/15"
+                      title="Delete community"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setLeaveRoomConfirm(room)}
+                      className="shrink-0 rounded-lg border border-white/10 bg-white/5 p-1.5 text-zinc-500 transition hover:border-red-500/20 hover:bg-red-500/5 hover:text-red-400"
+                      title="Leave room"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
           )}
         </section>
+
+        {/* Delete room confirmation modal */}
+        {deleteRoomConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !deletingRoom && setDeleteRoomConfirm(null)} />
+            <div className="relative w-full max-w-sm rounded-2xl border border-red-500/20 bg-[var(--app-bg)] p-6 shadow-2xl">
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-red-500/10">
+                  <svg className="h-5 w-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.962-.833-2.732 0L4.072 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-zinc-50">Delete community?</h3>
+                  <p className="text-xs text-zinc-500">This cannot be undone.</p>
+                </div>
+              </div>
+              <p className="mb-5 text-sm text-zinc-400">
+                Are you sure you want to permanently delete <span className="font-semibold text-zinc-200">{deleteRoomConfirm.name}</span>? All members will be removed and the room will no longer appear on the platform.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button type="button" onClick={() => setDeleteRoomConfirm(null)} disabled={deletingRoom}
+                  className="rounded-xl border border-white/15 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-white/5 disabled:opacity-50">
+                  Cancel
+                </button>
+                <button type="button" disabled={deletingRoom}
+                  onClick={async () => {
+                    setDeletingRoom(true);
+                    try {
+                      const res = await fetch(`/api/rooms/${deleteRoomConfirm.id}`, { method: "DELETE", credentials: "include" });
+                      if (res.ok) {
+                        setJoinedGroups((prev) => prev.filter((r) => r.id !== deleteRoomConfirm.id));
+                        setDeleteRoomConfirm(null);
+                      } else {
+                        const data = await res.json().catch(() => ({})) as { error?: string };
+                        alert(data.error ?? "Failed to delete");
+                      }
+                    } catch {
+                      alert("Network error");
+                    } finally {
+                      setDeletingRoom(false);
+                    }
+                  }}
+                  className="rounded-xl bg-red-500 px-4 py-2 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50">
+                  {deletingRoom ? "Deleting..." : "Delete Community"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Leave room confirmation modal */}
+        {leaveRoomConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setLeaveRoomConfirm(null)} />
+            <div className="relative w-full max-w-sm rounded-2xl border border-white/10 bg-[var(--app-bg)] p-6 shadow-2xl">
+              <h3 className="text-lg font-semibold text-zinc-50">Leave room?</h3>
+              <p className="mt-2 text-sm text-zinc-400">
+                Are you sure you want to leave <span className="font-medium text-zinc-200">{leaveRoomConfirm.name}</span>? You can rejoin anytime from the Communities page.
+              </p>
+              <div className="mt-6 flex justify-end gap-3">
+                <button type="button" onClick={() => setLeaveRoomConfirm(null)}
+                  className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-white/5">
+                  Cancel
+                </button>
+                <button type="button"
+                  onClick={async () => {
+                    await fetch(`/api/rooms/${leaveRoomConfirm.id}/leave`, { method: "DELETE", credentials: "include" });
+                    setJoinedGroups((prev) => prev.filter((r) => r.id !== leaveRoomConfirm.id));
+                    setLeaveRoomConfirm(null);
+                  }}
+                  className="rounded-full bg-red-500/90 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500">
+                  Yes, leave
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Following */}
         <section className="mt-6 rounded-2xl border p-5 transition-colors duration-300" style={{ borderColor: "var(--app-border)", backgroundColor: "var(--app-card)" }}>
@@ -1435,6 +1551,94 @@ export default function ProfileView() {
         </section>
 
         </div>
+        ) : (
+        /* Posts tab — compact grid */
+        <div className="mb-12">
+          {userPostsLoading ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {[...Array(4)].map((_, i) => <div key={i} className="h-40 animate-pulse rounded-2xl bg-white/5" />)}
+            </div>
+          ) : userPosts.length === 0 ? (
+            <div className="rounded-2xl border border-white/10 bg-[var(--app-card-alt)] py-12 text-center">
+              <p className="text-sm text-zinc-400">No posts yet.</p>
+              <p className="mt-1 text-xs text-zinc-600">
+                Head to the{" "}
+                <Link href="/social-feed" className="text-[var(--accent-color)] hover:underline">Social Feed</Link>{" "}
+                to share your first post.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {userPosts.map((post) => {
+                const totalReactions = Object.values(post.reactions ?? {}).reduce((s, n) => s + n, 0);
+                return (
+                  <Link key={post.id} href="/social-feed"
+                    className="group relative flex flex-col rounded-2xl border border-white/10 p-4 transition-colors hover:border-white/20"
+                    style={{ backgroundColor: "var(--app-card)" }}>
+                    {/* Ticker */}
+                    {post.ticker && (
+                      <span className="absolute right-3 top-3 rounded-full border border-[var(--accent-color)]/30 bg-[var(--accent-color)]/10 px-2 py-0.5 text-[10px] font-bold text-[var(--accent-color)]">
+                        ${post.ticker}
+                      </span>
+                    )}
+                    {/* Content — truncated */}
+                    <p className="mb-3 line-clamp-3 text-sm text-zinc-300 pr-16">
+                      {post.content.split(/(\$[A-Z]{1,6})/g).map((part, i) =>
+                        /^\$[A-Z]{1,6}$/.test(part) ? (
+                          <span key={i} className="font-semibold text-[var(--accent-color)]">{part}</span>
+                        ) : <span key={i}>{part}</span>
+                      )}
+                    </p>
+                    {/* Image thumbnail */}
+                    {post.image && (
+                      <div className="mb-3 overflow-hidden rounded-lg border border-white/10">
+                        <Image src={post.image} alt="" width={400} height={160} className="w-full object-cover" style={{ maxHeight: 120 }} unoptimized />
+                      </div>
+                    )}
+                    {/* Footer — reactions + comments + time */}
+                    <div className="mt-auto flex items-center gap-3 text-[10px] text-zinc-500">
+                      <time dateTime={post.timestamp}>
+                        {(() => {
+                          const d = new Date(post.timestamp);
+                          const diff = Math.floor((Date.now() - d.getTime()) / 60000);
+                          if (diff < 1) return "Now";
+                          if (diff < 60) return `${diff}m`;
+                          if (diff < 1440) return `${Math.floor(diff / 60)}h`;
+                          const diffD = Math.floor(diff / 1440);
+                          if (diffD < 7) return `${diffD}d`;
+                          return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                        })()}
+                      </time>
+                      {totalReactions > 0 && (
+                        <span className="flex items-center gap-1">
+                          {/* Show top 3 reaction emojis that have counts */}
+                          {([
+                            { key: "bullish", emoji: "📈" },
+                            { key: "bearish", emoji: "📉" },
+                            { key: "informative", emoji: "💡" },
+                            { key: "risky", emoji: "⚠️" },
+                            { key: "interesting", emoji: "⭐" },
+                          ] as const)
+                            .filter(({ key }) => (post.reactions?.[key] ?? 0) > 0)
+                            .slice(0, 3)
+                            .map(({ key, emoji }) => <span key={key}>{emoji}</span>)}
+                          <span className="text-zinc-400">{totalReactions}</span>
+                        </span>
+                      )}
+                      {post.comments > 0 && (
+                        <span className="flex items-center gap-1">
+                          <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                          {post.comments}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        )}
       </div>
     </div>
 

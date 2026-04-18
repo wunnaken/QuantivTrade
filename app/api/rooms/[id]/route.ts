@@ -99,3 +99,31 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     tradeCalls: tradeCalls ?? [],
   });
 }
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const routeClient = await createRouteHandlerClient();
+
+  const { data: { user } } = await routeClient.auth.getUser();
+  if (!user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const profileId = await getProfileId(routeClient);
+  if (!profileId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const supabase = createServerClient();
+  const roomId = Number(id);
+
+  // Verify the user is the host
+  const { data: room } = await supabase.from("rooms").select("id, host_user_id, name").eq("id", roomId).single();
+  if (!room) return NextResponse.json({ error: "Room not found" }, { status: 404 });
+  if (room.host_user_id !== profileId) return NextResponse.json({ error: "Only the host can delete this community" }, { status: 403 });
+
+  // Delete members, messages, trade calls, then the room
+  await supabase.from("room_messages").delete().eq("room_id", roomId);
+  await supabase.from("room_trade_calls").delete().eq("room_id", roomId);
+  await supabase.from("room_members").delete().eq("room_id", roomId);
+  const { error: delErr } = await supabase.from("rooms").delete().eq("id", roomId);
+
+  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

@@ -74,8 +74,9 @@ export function LandingNavbar() {
                   style={{ backgroundColor: "var(--app-card)" }}
                   role="menu"
                 >
-                  {/* User info + badges */}
-                  <div className="px-4 py-3">
+                  {/* User info + badges — clickable to profile */}
+                  <Link href="/profile" onClick={() => setProfileOpen(false)}
+                    className="block px-4 py-3 rounded-lg transition-colors hover:bg-white/5 cursor-pointer">
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)]">
                         {getInitials(user)}
@@ -126,7 +127,7 @@ export function LandingNavbar() {
                         </div>
                       );
                     })()}
-                  </div>
+                  </Link>
 
                   <div className="my-2 h-px bg-white/10" />
 
@@ -142,17 +143,6 @@ export function LandingNavbar() {
                       </svg>
                     </span>
                     <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">Dashboard</span>
-                  </Link>
-                  <Link
-                    href="/profile"
-                    onClick={() => setProfileOpen(false)}
-                    className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
-                    role="menuitem"
-                  >
-                    <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
-                      <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 opacity-40 transition-transform transition-opacity duration-200 group-hover:opacity-100 group-hover:scale-125" />
-                    </span>
-                    <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">View Profile</span>
                   </Link>
                   <button
                     type="button"

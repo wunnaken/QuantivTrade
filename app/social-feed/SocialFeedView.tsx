@@ -501,7 +501,10 @@ export default function SocialFeedView() {
       }
       if (res.ok && Array.isArray(data.posts) && data.posts.length > 0) {
         const postsList = data.posts as FeedPost[];
-        setPosts((prev) => [...prev, ...postsList]);
+        setPosts((prev) => {
+          const seen = new Set(prev.map((p) => p.id));
+          return [...prev, ...postsList.filter((p) => !seen.has(p.id))];
+        });
         setReactionCounts((prev) => ({ ...prev, ...((data.reactionCounts ?? {}) as Record<string, Record<ReactionKey, number>>) }));
         setUserReactions((prev) => ({ ...prev, ...((data.userReactions ?? {}) as Record<string, Partial<Record<ReactionKey, boolean>>>) }));
         if (data.posts.length < 5) setHasMore(false);
@@ -804,9 +807,9 @@ export default function SocialFeedView() {
               ) : (
               [...posts]
                 .sort((a, b) => ((b.author.verified ? 1 : 0) - (a.author.verified ? 1 : 0)))
-                .map((post) => (
+                .map((post, postIdx) => (
                 <article
-                  key={post.id}
+                  key={`${post.id}-${postIdx}`}
                   className="animate-[fadeIn_0.35s_ease-out] relative rounded-2xl border border-white/10 p-4 transition-colors duration-200 hover:border-white/15"
                   style={{
                     backgroundColor: CARD_BG_VAR,

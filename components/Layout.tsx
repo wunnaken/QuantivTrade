@@ -14,7 +14,6 @@ import { SiteFooter } from "./SiteFooter";
 import { SiteHelpBot } from "./SiteHelpBot";
 import { VerifiedBadge } from "./VerifiedBadge";
 import { useLoginStreakTick } from "./StreakProvider";
-import { getPredictNotifications, markPredictNotificationsRead } from "../lib/predict";
 import { getInAppNotifications } from "../lib/price-alerts";
 import { usePriceContext } from "../lib/price-context";
 
@@ -266,7 +265,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }, [user]);
 
   useEffect(() => {
-    const n = inAppNotifs.length + getPredictNotifications().length + boardInvites.length;
+    const n = inAppNotifs.length + boardInvites.length;
     setNotificationCount(Math.min(99, n));
   }, [inAppNotifs.length, boardInvites.length]);
   const hiddenPanelRef = useRef<HTMLDivElement>(null);
@@ -848,13 +847,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 style={{ backgroundColor: "var(--app-card)" }}
                 role="menu"
               >
-                <button
-                  type="button"
-                  onClick={() => { markPredictNotificationsRead(); setNotificationsOpen(false); }}
-                  className="w-full px-4 py-2 text-left text-xs font-medium text-[var(--accent-color)] hover:bg-white/5"
-                >
-                  Mark all as read
-                </button>
+                <div className="flex items-center justify-between px-4 py-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Notifications</span>
+                </div>
                 <div className="my-1 h-px bg-white/10" />
                 {boardInvites.length > 0 && (
                   <>
@@ -898,21 +893,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <div className="my-1 h-px bg-white/10" />
                   </>
                 )}
-                {typeof window !== "undefined" && getPredictNotifications().length > 0 && (
-                  <>
-                    {getPredictNotifications().slice(0, 4).map((n) => (
-                      <Link key={n.id} href={n.link} onClick={() => setNotificationsOpen(false)} className="flex items-start gap-3 px-4 py-2.5 hover:bg-white/5">
-                        <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-amber-500" />
-                        <div>
-                          <p className="text-sm font-medium text-zinc-200">{n.message}</p>
-                          <p className="text-xs text-zinc-500">{new Date(n.time).toLocaleDateString()}</p>
-                        </div>
-                      </Link>
-                    ))}
-                    <div className="my-1 h-px bg-white/10" />
-                  </>
-                )}
-                {inAppNotifs.length === 0 && getPredictNotifications().length === 0 && (
+                {inAppNotifs.length === 0 && boardInvites.length === 0 && (
                   <p className="px-4 py-3 text-sm text-zinc-500">No new notifications</p>
                 )}
               </div>
@@ -1019,8 +1000,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     style={{ backgroundColor: "var(--app-card)" }}
                     role="menu"
                   >
-                    {/* User info + badges */}
-                    <div className="px-4 py-3">
+                    {/* User info + badges — clickable to profile */}
+                    <Link href="/profile" onClick={() => setProfileOpen(false)}
+                      className="block px-4 py-3 rounded-lg transition-colors hover:bg-white/5 cursor-pointer">
                       <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-sm font-semibold text-[var(--accent-color)]">
                           {getInitials(user)}
@@ -1072,7 +1054,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                           </div>
                         );
                       })()}
-                    </div>
+                    </Link>
 
                     <div className="my-2 h-px bg-white/10" />
 
@@ -1086,17 +1068,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         <NavItemIcon icon="home" isActive={false} />
                       </span>
                       <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">Dashboard</span>
-                    </Link>
-                    <Link
-                      href="/profile"
-                      onClick={() => setProfileOpen(false)}
-                      className="group flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-zinc-400 transition-colors duration-200 hover:bg-white/5 hover:text-[var(--accent-color)]"
-                      role="menuitem"
-                    >
-                      <span className="relative flex h-5 w-5 flex-shrink-0 items-center justify-center">
-                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-500 opacity-40 transition-transform transition-opacity duration-200 group-hover:opacity-100 group-hover:scale-125" />
-                      </span>
-                      <span className="truncate transition-transform duration-150 group-hover:translate-x-0.5 group-hover:scale-105">View Profile</span>
                     </Link>
                     <button
                       type="button"

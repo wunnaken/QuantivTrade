@@ -51,7 +51,15 @@ export async function GET(
   const convType = await getConvType(supabase, convId);
   if (!convType) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (convType !== "community" && !(await isMember(supabase, convId, userId))) {
+  if (convType === "community") {
+    // Auto-join conversation_members so realtime works for this user
+    await supabase
+      .from("conversation_members")
+      .upsert(
+        { conversation_id: convId, user_id: userId },
+        { onConflict: "conversation_id,user_id", ignoreDuplicates: true }
+      );
+  } else if (!(await isMember(supabase, convId, userId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -139,6 +147,15 @@ export async function POST(
   if (!convType) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (convType === "community") {
+    // Check if user is verified — only verified traders can send in community rooms
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_verified")
+      .eq("user_id", userId)
+      .single();
+    if (!profile?.is_verified) {
+      return NextResponse.json({ error: "Only verified traders can send messages in community rooms" }, { status: 403 });
+    }
     // Auto-join community on first message
     await supabase
       .from("conversation_members")

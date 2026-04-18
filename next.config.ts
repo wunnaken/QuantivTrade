@@ -45,11 +45,26 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   devIndicators: false,
+  compress: true,
+  poweredByHeader: false,
+  images: {
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 60 * 60 * 24,
+  },
+  experimental: {
+    optimizeCss: true,
+  },
   async headers() {
     return [
       {
         source: "/(.*)",
         headers: securityHeaders,
+      },
+      {
+        source: "/api/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, s-maxage=30, stale-while-revalidate=60" },
+        ],
       },
     ];
   },

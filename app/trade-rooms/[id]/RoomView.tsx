@@ -619,19 +619,33 @@ export default function RoomView({ roomId }: { roomId: number }) {
             ) : (
               messages.map((msg, i) => {
                 const isMe = msg.user_id === authUid;
+                const isAdmin = msg.user_id === hostAuthUid;
+                const isSystem = msg.type === "system";
                 const prevMsg = messages[i - 1];
-                const showName = !prevMsg || prevMsg.user_id !== msg.user_id;
+                const showName = !isSystem && (!prevMsg || prevMsg.user_id !== msg.user_id);
+
+                if (isSystem) {
+                  return (
+                    <div key={msg.id} className="flex justify-center py-1">
+                      <span className="rounded-full bg-white/5 px-3 py-1 text-[10px] text-zinc-500">{msg.content}</span>
+                    </div>
+                  );
+                }
+
                 return (
                   <div key={msg.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
                     {showName && (
-                      <span className={`mb-0.5 text-[10px] font-medium ${isMe ? "text-[var(--accent-color)]" : "text-zinc-500"}`}>
+                      <span className={`mb-0.5 flex items-center gap-1.5 text-[10px] font-medium ${isMe ? "text-[var(--accent-color)]" : isAdmin ? "text-blue-400" : "text-zinc-500"}`}>
                         {msg.username ?? "Unknown"}
+                        {isAdmin && <span className="rounded border border-blue-500/30 bg-blue-500/10 px-1 py-0 text-[8px] font-bold text-blue-400">ADMIN</span>}
                       </span>
                     )}
                     <div
                       className={`max-w-[70%] rounded-2xl px-3 py-2 text-sm ${
                         isMe
                           ? "rounded-tr-sm bg-[var(--accent-color)]/20 text-zinc-100"
+                          : isAdmin
+                          ? "rounded-tl-sm bg-blue-500/10 border border-blue-500/20 text-zinc-100"
                           : "rounded-tl-sm bg-white/5 text-zinc-200"
                       }`}
                     >

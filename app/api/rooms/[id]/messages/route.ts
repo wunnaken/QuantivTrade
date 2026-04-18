@@ -19,14 +19,23 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const supabase = createServerClient();
 
+  // Check membership — try UUID match first, then check if user is host
   const { data: membership } = await supabase
     .from("room_members")
     .select("id")
     .eq("room_id", roomId)
     .eq("user_id", authUid)
-    .single();
+    .maybeSingle();
 
-  if (!membership) return NextResponse.json({ error: "Not a member" }, { status: 403 });
+  if (!membership) {
+    // Fallback: check if user is the room host (hosts can always send)
+    const { data: profile } = await supabase.from("profiles").select("id").eq("user_id", authUid).single();
+    const { data: room } = await supabase.from("rooms").select("host_user_id").eq("id", roomId).single();
+    const isHost = profile && room && room.host_user_id === profile.id;
+    if (!isHost) {
+      return NextResponse.json({ error: "Not a member" }, { status: 403 });
+    }
+  }
 
   const { data: msg, error } = await supabase
     .from("room_messages")

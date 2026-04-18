@@ -25,18 +25,14 @@ export async function GET() {
 
   const supabase = createServerClient();
 
-  // Community conversations (visible to all)
-  const { data: communityRaw } = await supabase
-    .from("conversations")
-    .select("*")
-    .eq("type", "community")
-    .order("last_message_at", { ascending: false });
-
-  // User's memberships
-  const { data: memberships } = await supabase
-    .from("conversation_members")
-    .select("conversation_id, user_id, last_read_at")
-    .eq("user_id", userId);
+  // Fetch community conversations, memberships, and room memberships in parallel
+  const [communityRes, membershipsRes, roomMembersRes] = await Promise.all([
+    supabase.from("conversations").select("*").eq("type", "community").order("last_message_at", { ascending: false }),
+    supabase.from("conversation_members").select("conversation_id, user_id, last_read_at").eq("user_id", userId),
+    supabase.from("room_members").select("room_id").eq("user_id", userId),
+  ]);
+  const communityRaw = communityRes.data;
+  const memberships = membershipsRes.data;
 
   const memberConvIds = (memberships as DbMember[] ?? []).map((m) => m.conversation_id);
 
@@ -82,8 +78,52 @@ export async function GET() {
     }
   }
 
+  // Use pre-fetched room memberships
+  const joinedRoomIds = (roomMembersRes.data ?? []).map((r: { room_id: number }) => r.room_id);
+
+  let joinedRooms: Array<{ id: number; name: string; description: string | null; created_at: string }> = [];
+  if (joinedRoomIds.length > 0) {
+    const { data: roomRows } = await supabase
+      .from("rooms")
+      .select("id, name, description, created_at, is_paid, monthly_price")
+      .in("id", joinedRoomIds)
+      .order("created_at", { ascending: false });
+    joinedRooms = (roomRows ?? []) as typeof joinedRooms;
+  }
+
+  // Enrich community conversations with room data (is_paid, etc.)
+  const communityRoomIds = (communityRaw as any[] ?? []).map((c: any) => c.room_id).filter(Boolean);
+  let roomDataMap: Record<string, { is_paid: boolean; monthly_price: number | null }> = {};
+  if (communityRoomIds.length > 0) {
+    const { data: roomData } = await supabase.from("rooms").select("id, is_paid, monthly_price").in("id", communityRoomIds);
+    for (const r of roomData ?? []) {
+      roomDataMap[String(r.id)] = { is_paid: r.is_paid ?? false, monthly_price: r.monthly_price ?? null };
+    }
+  }
+
+  const communityConvs = (communityRaw as any[] ?? []).map((c: any) => {
+    const rd = c.room_id ? roomDataMap[String(c.room_id)] : null;
+    return { ...c, unread: 0, is_room: !!c.room_id, room_id: c.room_id ?? null, is_paid: rd?.is_paid ?? false, monthly_price: rd?.monthly_price ?? null };
+  });
+  const existingNames = new Set(communityConvs.map((c) => c.name?.toLowerCase()));
+  const roomConvs = joinedRooms
+    .filter((r) => !existingNames.has(r.name?.toLowerCase()))
+    .map((r) => ({
+      id: `room-${r.id}`,
+      name: r.name,
+      type: "community" as const,
+      created_at: r.created_at,
+      last_message_at: r.created_at,
+      last_message_preview: r.description || "Community room",
+      unread: 0,
+      is_room: true,
+      room_id: r.id,
+      is_paid: (r as any).is_paid ?? false,
+      monthly_price: (r as any).monthly_price ?? null,
+    }));
+
   return NextResponse.json({
-    community: (communityRaw as DbConv[] ?? []).map((c) => ({ ...c, unread: 0 })),
+    community: [...communityConvs, ...roomConvs],
     dms: memberConvs
       .filter((c) => c.type === "dm")
       .map((c) => ({ ...c, other_user: otherUserByConv[c.id] ?? null, unread: 0 })),

@@ -78,6 +78,8 @@ export default function AccessPage() {
         body: JSON.stringify({ code: code.trim() }),
       });
       if (res.ok) {
+        // Flag for elite upgrade on next sign-in if not yet logged in
+        try { localStorage.setItem("quantivtrade-access-elite", "1"); } catch {}
         setSuccess(true);
         setTimeout(() => { window.location.href = "/"; }, 600);
       } else {
